@@ -1,0 +1,15 @@
+[package]
+name = "scattering-problems"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+quantum = { path = "../quantum", features = ["faer", "spins"] }
+scattering-solver = { path = "../scattering-solver" }
+abm = { path = "../abm" }
+faer = { workspace = true }
+clebsch-gordan = { workspace = true }
+hhmmss = { workspace = true }
+indicatif = { workspace = true }
+num = { workspace = true }
+rayon = {workspace = true }

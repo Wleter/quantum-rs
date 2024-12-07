@@ -1,0 +1,10 @@
+[package]
+name = "abm-py"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pyo3 = "0.23.3"
+faer = { workspace = true }
+quantum = { path = "../../quantum" }
+abm = { path = "../../abm" }

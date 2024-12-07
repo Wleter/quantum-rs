@@ -1,0 +1,26 @@
+[workspace]
+members = [
+    "quantum",
+    "abm",
+    "pyo3-crates/abm-py",
+    "scattering-solver",
+    "scattering-problems",
+]
+resolver = "2"
+
+[workspace.package]
+name = "quantum-rs"
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+num = "0.4.3"
+num-traits = "0.2.19"
+faer = "0.19.4"
+rayon = "1.10"
+indicatif = { version = "0.17.9", features = ["rayon"] }
+clebsch-gordan = { git = "https://github.com/Wleter/clebsch-gordan" }
+hhmmss = "0.1.0"
+
+[profile.dev.package.faer]
+opt-level = 3

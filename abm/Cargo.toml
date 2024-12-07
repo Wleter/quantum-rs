@@ -1,0 +1,8 @@
+[package]
+name = "abm"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+faer = { workspace = true }
+quantum = { path = "../quantum", features = ["spins", "faer"] }

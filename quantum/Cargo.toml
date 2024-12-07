@@ -1,0 +1,18 @@
+[package]
+name = "quantum"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+num = { workspace = true }
+faer = { workspace = true, optional = true }
+nalgebra = { version = "0.33.0", optional=true }
+ndarray = { version = "0.16.1", optional=true }
+clebsch-gordan = { workspace = true, optional = true }
+
+[features]
+states = []
+spins = ["states", "dep:clebsch-gordan"]
+nalgebra = ["states", "dep:nalgebra"]
+faer = ["states", "dep:faer"]
+ndarray = ["states", "dep:ndarray"]
