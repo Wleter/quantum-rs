@@ -36,8 +36,11 @@ impl Particles {
         }
     }
 
-    /// Mutably borrows particles with given name.
-    pub fn particle_mut(&mut self) -> &mut [Particle] {
+    pub fn particles_mut(&mut self) -> &mut [Particle] {
+        &mut self.particles
+    }
+
+    pub fn particles(&mut self) -> &mut [Particle] {
         &mut self.particles
     }
 

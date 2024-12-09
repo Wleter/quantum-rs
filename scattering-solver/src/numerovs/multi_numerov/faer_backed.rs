@@ -11,10 +11,10 @@ pub struct MultiNumerovDataFaer<'a, P>
 where 
     P: Potential<Space = Mat<f64>>
 {
-    pub(super) r: f64,
-    pub(super) dr: f64,
+    pub r: f64,
+    pub dr: f64,
 
-    pub(super) potential: &'a P,
+    pub potential: &'a P,
     pub(super) centrifugal: Option<Dispersion>,
     pub(super) mass: f64,
     pub(super) energy: f64,
@@ -24,7 +24,7 @@ where
     pub(super) unit: Mat<f64>,
     pub(super) current_g_func: Mat<f64>,
 
-    pub(super) psi1: Mat<f64>,
+    pub psi1: Mat<f64>,
     pub(super) psi2: Mat<f64>,
 
     pub(super) perm: Vec<usize>,

@@ -24,8 +24,6 @@ impl PotassiumBound {
     const GAMMA_I_K41: f64 = 1.091921e-4 * 1e-4;
 
     pub fn hifi_39_41() {
-        println!("Solving hyperfine for K39 - K41");
-
         let a_hifi_1 = Energy(Self::HIFI_K39_MHZ, MHz).to_au();
         let a_hifi_2 = Energy(Self::HIFI_K41_MHZ, MHz).to_au();
         let gamma_i1 = Energy(Self::GAMMA_I_K39, MHz).to_au();
@@ -59,8 +57,6 @@ impl PotassiumBound {
     }
 
     pub fn abm_39_41() {
-        println!("Solving abm for K39 K41...");
-
         let a_hifi_1 = Energy(Self::HIFI_K39_MHZ, MHz).to_au();
         let a_hifi_2 = Energy(Self::HIFI_K41_MHZ, MHz).to_au();
         let gamma_i1 = Energy(Self::GAMMA_I_K39, MHz).to_au();
@@ -101,8 +97,6 @@ impl PotassiumBound {
     }
 
     pub fn hifi_39_39() {
-        println!("Solving hyperfine for K39 - K39...");
-
         let a_hifi = Energy(Self::HIFI_K39_MHZ, MHz).to_au();
         let gamma_i = Energy(Self::GAMMA_I_K39, MHz).to_au() * 1e-4;
 
@@ -130,8 +124,6 @@ impl PotassiumBound {
     }
 
     pub fn abm_39_39() {
-        println!("Solving abm for K39 K39...");
-
         let a_hifi = Energy(Self::HIFI_K39_MHZ, MHz).to_au();
         let gamma_i = Energy(Self::GAMMA_I_K39, MHz).to_au();
 

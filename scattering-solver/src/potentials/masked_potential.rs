@@ -13,6 +13,10 @@ impl<M, P: Potential> MaskedPotential<M, P> {
             masking
         }
     }
+
+    pub fn masking(&self) -> &M {
+        &self.masking
+    }
 }
 
 use faer::unzipped;

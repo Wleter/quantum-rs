@@ -7,7 +7,7 @@ use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
 use num::complex::Complex64;
 use quantum::{params::{particle::Particle, particle_factory::{self, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{energy_units::{Energy, GHz, Kelvin, MHz}, mass_units::{Dalton, Mass}, Au, Unit}, utility::linspace};
-use scattering_problems::{alkali_atoms::{AlkaliAtomsProblem, AlkaliAtomsProblemBuilder}, alkali_diatom_atom::{AlkaliDiatomAtomProblem, AlkaliDiatomAtomProblemBuilder}, utility::{RotorJMax, RotorJTot, RotorLMax}};
+use scattering_problems::{alkali_atoms::{AlkaliAtomsProblem, AlkaliAtomsProblemBuilder}, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder}, utility::{RotorJMax, RotorJTot, RotorLMax}};
 use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::faer_backed::FaerRatioNumerov, propagator::MultiStepRule, single_numerov::SingleRatioNumerov}, observables::s_matrix::HasSMatrix, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::save_data};
 
 use rayon::prelude::*;
@@ -74,11 +74,11 @@ impl Problems {
         let rb = particle_factory::create_atom("Rb87").unwrap();
 
         let mut particles = Particles::new_pair(caf, rb, energy);
-        particles.insert(RotorLMax(10));
-        particles.insert(RotorJMax(10));
+        particles.insert(RotorLMax(2));
+        particles.insert(RotorJMax(2));
         particles.insert(RotorJTot(0));
         particles.insert(RotConst(Energy(10.3, GHz).to_au()));
-
+        
         particles
     }
 
@@ -199,7 +199,7 @@ impl Problems {
             .unwrap()
     }
 
-    fn get_potential(config_triplet: usize, config_singlet: usize, projection: i32, mag_field: f64, particles: &Particles) -> AlkaliDiatomAtomProblem<impl Potential<Space = Mat<f64>>> {
+    fn get_potential(config_triplet: usize, config_singlet: usize, projection: i32, mag_field: f64, particles: &Particles) -> AlkaliRotorAtomProblem<impl Potential<Space = Mat<f64>>> {
         let hifi_caf = HifiProblemBuilder::new(1, 1)
             .with_hyperfine_coupling(Energy(120., MHz).to_au());
 
@@ -215,7 +215,7 @@ impl Problems {
         let triplets = vec![(0, triplet), (2, aniso.clone())];
         let singlets = vec![(0, singlet), (2, aniso)];
 
-        AlkaliDiatomAtomProblemBuilder::new(hifi_problem, triplets, singlets)
+        AlkaliRotorAtomProblemBuilder::new(hifi_problem, triplets, singlets)
             .build(mag_field, particles)
     }
 
@@ -226,7 +226,7 @@ impl Problems {
         let channel = 0;
 
         let config_triplet = 0;
-        let config_singlet = 0;
+        let config_singlet = 2;
 
         let energy_relative = Energy(1e-7, Kelvin);
         let mag_fields = linspace(0., 1000., 4000);
@@ -234,7 +234,6 @@ impl Problems {
         ///////////////////////////////////
 
         let start = Instant::now();
-        
         let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
             let mut caf_rb = Self::get_particles(energy_relative);
             let alkali_problem = Self::get_potential(config_triplet, config_singlet, projection, mag_field, &caf_rb);

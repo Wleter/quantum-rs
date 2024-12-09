@@ -11,8 +11,6 @@ pub struct SimpleABM;
 
 impl SimpleABM {
     pub fn run() {
-        println!("Solving abm for two atoms...");
-
         let a_hifi = 1.0;
         let gamma_e = 2e-2;
         let gamma_i = -1.2e-5;

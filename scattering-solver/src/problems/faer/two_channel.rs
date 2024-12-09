@@ -41,8 +41,6 @@ impl TwoChannel {
     }
 
     fn wave_function() {
-        println!("Calculating wave function...");
-
         let start = Instant::now();
 
         let particles = Self::particles();
@@ -70,8 +68,6 @@ impl TwoChannel {
     }
 
     fn scattering_length() {
-        println!("Calculating scattering length...");
-
         let particles = Self::particles();
         let potential = Self::potential();
 
@@ -94,8 +90,6 @@ impl TwoChannel {
     }
 
     fn mass_scaling() {
-        println!("Calculating scattering length vs mass scaling...");
-
         let mut particles = Self::particles();
         let potential = Self::potential();
         let scalings = linspace(0.8, 1.2, 200);
@@ -129,8 +123,6 @@ impl TwoChannel {
     }
 
     // fn bound_states() {
-    //     println!("Calculating bound states...");
-
     //     let mut collision_params = Self::create_dyn_collision_params();
     //     let mut bounds = MultiBounds::new(&mut collision_params, (6.5, 1000.0));
 

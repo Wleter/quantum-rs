@@ -73,18 +73,18 @@ pub struct SingleNumerovData<'a, P>
 where 
     P: SimplePotential
 {
-    pub(super) r: f64,
-    pub(super) dr: f64,
+    pub r: f64,
+    pub dr: f64,
 
-    pub(super) potential: &'a P,
-    pub(super) mass: f64,
-    pub(super) energy: f64,
-    pub(super) l: AngularSpin,
+    potential: &'a P,
+    mass: f64,
+    energy: f64,
+    pub l: AngularSpin,
     centrifugal: Option<Dispersion>,
 
     current_g_func: f64,
 
-    pub(super) psi1: f64,
+    pub psi1: f64,
     psi2: f64,
 }
 

@@ -77,22 +77,7 @@ mod test {
             .map(|x| (Dispersion::new(x as f64, 0), x, x + 1))
             .collect();
 
-        let coupling = MultiCoupling::<Mat<f64>, _>::new(N, potentials, false);
-
-        let expected = mat![[0., 0., 0., 0.],
-                            [0., 0., 1., 0.],
-                            [0., 0., 0., 2.],
-                            [0., 0., 0., 0.]];
-
-        let mut value = Mat::zeros(4, 4);
-        coupling.value_inplace(1., &mut value);
-        assert_matrix_eq!(value, expected, comp = abs, tol = 1e-12);
-
-        let potentials = (0..(N-1))
-            .map(|x| (Dispersion::new(x as f64, 0), x, x + 1))
-            .collect();
-
-        let coupling = MultiCoupling::<Mat<f64>, _>::new(N, potentials, true);
+        let coupling = MultiCoupling::<Mat<f64>, _>::new(N, potentials);
 
         let expected = mat![[0., 0., 0., 0.],
                             [0., 0., 1., 0.],
@@ -170,13 +155,13 @@ mod test {
             .map(|x| (Dispersion::new(x as f64, 0), x, x + 1))
             .collect();
 
-        let coupling = MultiCoupling::<Matrix4<f64>, _>::new(N, potentials, false);
+        let coupling = MultiCoupling::<Matrix4<f64>, _>::new(N, potentials);
         let combined = PairPotential::new(diagonal, coupling);
 
         let expected = Matrix4::new(0., 0., 0., 0.,
                                     0., 1., 1., 0.,
-                                    0., 0., 2., 2.,
-                                    0., 0., 0., 3.);
+                                    0., 1., 2., 2.,
+                                    0., 0., 2., 3.);
 
         let mut value = Matrix4::zeros();
         combined.value_inplace(1., &mut value);
@@ -194,13 +179,13 @@ mod test {
             .map(|x| (Dispersion::new(x as f64, 0), x, x + 1))
             .collect();
 
-        let coupling = MultiCoupling::<DMatrix<f64>, _>::new(N, potentials, false);
+        let coupling = MultiCoupling::<DMatrix<f64>, _>::new(N, potentials);
         let combined = PairPotential::new(diagonal, coupling);
 
         let expected = DMatrix::from_row_iterator(4, 4, vec![0., 0., 0., 0.,
                                                     0., 1., 1., 0.,
-                                                    0., 0., 2., 2.,
-                                                    0., 0., 0., 3.]);
+                                                    0., 1., 2., 2.,
+                                                    0., 0., 2., 3.]);
 
         let mut value = DMatrix::zeros(4, 4);
         combined.value_inplace(1., &mut value);

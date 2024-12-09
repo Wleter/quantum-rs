@@ -48,7 +48,6 @@ impl ManyChannels {
     }
 
     fn scattering_length() {
-        println!("Calculating scattering length...");
         let start = Instant::now();
 
         let particles = Self::particles();
@@ -74,7 +73,6 @@ impl ManyChannels {
     }
 
     // fn bound_states() {
-    //     println!("Calculating bound states...");
     //     const N: usize = 50;
     //     let mut collision_params = Self::create_dyn_collision_params(N);
 

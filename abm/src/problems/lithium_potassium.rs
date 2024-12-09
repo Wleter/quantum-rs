@@ -18,8 +18,6 @@ impl LithiumPotassium {
     const HIFI_K40_MHZ: f64 = -1285.8 / 4.5;
 
     pub fn hifi() {
-        println!("Solving hyperfine for Li6 - K40...");
-
         // ---------- Li6 ----------
         let a_hifi = Energy(Self::HIFI_LI6_MHZ, MHz).to_au();
 
@@ -62,8 +60,6 @@ impl LithiumPotassium {
     }
 
     pub fn abm() {
-        println!("Solving abm for K39 K41...");
-
         let a_hifi_1 = Energy(Self::HIFI_LI6_MHZ, MHz).to_au();
         let a_hifi_2 = Energy(Self::HIFI_K40_MHZ, MHz).to_au();
 

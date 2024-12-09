@@ -1,6 +1,36 @@
-use quantum::units::{Unit, energy_units::Energy, Au};
+use faer::Mat;
 
-use crate::{boundary::{Boundary, Direction}, collision_params::CollisionParams, defaults::{DynDefaults, SingleDefaults}, numerovs::{propagator::{Numerov, Sampling, SamplingStorage, StepConfig}, ratio_numerov::RatioNumerov}, potentials::potential::Potential, types::DFMatrix};
+use crate::{numerovs::{multi_numerov::faer_backed::MultiNumerovDataFaer, numerov_modifier::PropagatorModifier, single_numerov::SingleNumerovData}, potentials::potential::{Potential, SimplePotential}};
+
+pub struct NodeCounting {
+    node_count: u32
+}
+
+impl NodeCounting {
+    pub fn new() -> Self {
+        Self { node_count: 0 }
+    }
+
+    pub fn result(self) -> u32 {
+        self.node_count
+    }
+}
+
+impl<P: SimplePotential> PropagatorModifier<SingleNumerovData<'_, P>> for NodeCounting {
+    fn after_step(&mut self, data: &mut SingleNumerovData<'_, P>) {
+        if data.psi1 < 0. {
+            self.node_count += 1
+        }
+    }
+}
+
+impl<P: Potential<Space = Mat<f64>>> PropagatorModifier<MultiNumerovDataFaer<'_, P>> for NodeCounting {
+    fn after_step(&mut self, data: &mut MultiNumerovDataFaer<'_, P>) {
+        if data.psi1.determinant() < 0. {
+            self.node_count += 1
+        }
+    }
+}
 
 pub struct SingleBounds<'a, P: Potential<Space = f64>> {
     collision_params: &'a mut CollisionParams<P>,

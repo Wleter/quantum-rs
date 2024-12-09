@@ -5,8 +5,6 @@ pub struct HifiSingle;
 
 impl HifiSingle {
     pub fn run() {
-        println!("Solving hyperfine one atom...");
-
         let hifi = HifiProblemBuilder::new(1, 2)
             .with_custom_bohr_magneton(1e-2)
             .with_nuclear_magneton(-2e-4)

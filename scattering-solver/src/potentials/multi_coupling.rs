@@ -6,7 +6,6 @@ use super::potential::{Potential, SubPotential};
 #[derive(Debug, Clone)]
 pub struct MultiCoupling<A, P: Potential> {
     potentials: Vec<(P, usize, usize)>,
-    symmetric: bool,
     size: usize,
     phantom: PhantomData<A>,
 }
@@ -15,7 +14,7 @@ impl<A, P: Potential> MultiCoupling<A, P>
 {
     /// Creates new multi coupling potential with given vector of potentials with their coupling indices in potential matrix.
     /// If `symmetric` is true, the coupling matrix will be symmetric.
-    pub fn new(size: usize, potentials: Vec<(P, usize, usize)>, symmetric: bool) -> Self {
+    pub fn new(size: usize, potentials: Vec<(P, usize, usize)>) -> Self {
         for p in &potentials {
             assert!(p.1 < size);
             assert!(p.2 < size);
@@ -23,7 +22,6 @@ impl<A, P: Potential> MultiCoupling<A, P>
         
         Self {
             potentials,
-            symmetric,
             size,
             phantom: PhantomData
         }
@@ -38,7 +36,7 @@ impl<A, P: Potential> MultiCoupling<A, P>
             .map(|(i, potential)| (potential, i, i + 1))
             .collect();
 
-        Self::new(size, numbered_potentials, true)
+        Self::new(size, numbered_potentials)
     }
 }
 
@@ -53,10 +51,8 @@ impl<P: Potential<Space = f64>> Potential for MultiCoupling<Mat<f64>, P> {
             p.value_inplace(r, value.get_mut(*i, *j));
         }
 
-        if self.symmetric {
-            for (p, i, j) in &self.potentials {
-                p.value_inplace(r, value.get_mut(*j, *i));
-            }
+        for (p, i, j) in &self.potentials {
+            p.value_inplace(r, value.get_mut(*j, *i));
         }
     }
 
@@ -71,10 +67,8 @@ impl<P: SubPotential<Space = f64>> SubPotential for MultiCoupling<Mat<f64>, P> {
             p.value_add(r, value.get_mut(*i, *j));
         }
 
-        if self.symmetric {
-            for (p, i, j) in &self.potentials {
-                p.value_add(r, value.get_mut(*j, *i));
-            }
+        for (p, i, j) in &self.potentials {
+            p.value_add(r, value.get_mut(*j, *i));
         }
     }
 }

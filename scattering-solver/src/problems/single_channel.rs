@@ -33,7 +33,6 @@ impl SingleChannel {
     }
 
     fn wave_function() {
-        println!("Calculating wave function...");
         let start = Instant::now();
 
         let particles = Self::particles();
@@ -60,8 +59,6 @@ impl SingleChannel {
     }
 
     fn scattering_length() {
-        println!("Calculating scattering length...");
-        
         let particles = Self::particles();
         let potential = Self::potential();
 
@@ -79,8 +76,6 @@ impl SingleChannel {
     }
 
     fn propagation_distance() {
-        println!("Calculating scattering length distance dependence...");
-
         let particles = Self::particles();
         let potential = Self::potential();
 
@@ -104,8 +99,6 @@ impl SingleChannel {
     }
 
     fn mass_scaling() {
-        println!("Calculating scattering length vs mass scaling...");
-
         let mut particles = Self::particles();
         let potential = Self::potential();
 
@@ -138,8 +131,6 @@ impl SingleChannel {
     }
 
     // fn bound_states() {
-    //     println!("Calculating bound states...");
-
     //     let mut collision_params = Self::create_collision_params();
     //     let mut bounds = SingleBounds::new(&mut collision_params, (6.5, 1000.0));
 

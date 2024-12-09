@@ -5,8 +5,6 @@ pub struct HifiDouble;
 
 impl HifiDouble {
     pub fn run() {
-        println!("Solving hyperfine two atoms...");
-
         let first = HifiProblemBuilder::new(1, 1)
             .with_custom_bohr_magneton(1e-2)
             .with_nuclear_magneton(-2.2e-4)

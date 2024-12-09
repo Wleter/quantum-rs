@@ -10,6 +10,36 @@ pub trait PropagatorModifier<D: PropagatorData> {
     fn after_prop(&mut self, _data: &mut D) {}
 }
 
+pub struct MultiPropagatorModifier<'a, D: PropagatorData> {
+    modifiers: Vec<&'a mut dyn PropagatorModifier<D>>
+}
+
+impl<'a, D: PropagatorData> MultiPropagatorModifier<'a, D> {
+    pub fn new(modifiers: Vec<&'a mut dyn PropagatorModifier<D>>) -> Self {
+        Self { modifiers }
+    }
+}
+
+impl<D: PropagatorData> PropagatorModifier<D> for MultiPropagatorModifier<'_, D> {
+    fn before(&mut self, data: &mut D, r_stop: f64) {
+        for modifier in  self.modifiers.iter_mut() {
+            modifier.before(data, r_stop);
+        }
+    }
+
+    fn after_step(&mut self, data: &mut D) {
+        for modifier in  self.modifiers.iter_mut() {
+            modifier.after_step(data);
+        }
+    }
+
+    fn after_prop(&mut self, data: &mut D) {
+        for modifier in  self.modifiers.iter_mut() {
+            modifier.after_prop(data);
+        }
+    }
+}
+
 pub(super) enum SampleConfig {
     Each(usize),
     Step(f64)
