@@ -4,7 +4,7 @@ use faer::Mat;
 use gauss_quad::GaussLegendre;
 use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
-use quantum::{params::{particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::{Angstrom, Distance}, energy_units::{CmInv, Energy, Kelvin}, mass_units::{Dalton, Mass}, Au, Unit}, utility::{legendre_polynomials, linspace}};
+use quantum::{params::{particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::Angstrom, energy_units::{CmInv, Energy, Kelvin}, mass_units::{Dalton, Mass}, Au, Unit}, utility::{legendre_polynomials, linspace}};
 use rusty_fitpack::{splev, splrep};
 use scattering_problems::{rotor_atom::RotorAtomProblemBuilder, utility::{RotorJMax, RotorJTot, RotorLMax}};
 use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::faer_backed::FaerRatioNumerov, propagator::MultiStepRule}, observables::s_matrix::HasSMatrix, potentials::{dispersion_potential::Dispersion, potential::{Potential, SimplePotential, SubPotential}}, utility::save_data};
@@ -17,7 +17,7 @@ pub fn main() {
 
 pub struct Problems;
 
-problems_impl!(Problems, "Spinless SrF + Rb",
+problems_impl!(Problems, "Spinless AlF + Rb",
     "potential values" => |_| Self::potential_values(),
     "elastic cross section" => |_| Self::elastic_cross_section_1chan(),
     "elastic cross section" => |_| Self::elastic_cross_section()
@@ -31,7 +31,7 @@ impl Problems {
             data.push(p.clone());
         }
 
-        save_data("potential_dec_SrF_Rb", "", &data)
+        save_data("potential_dec_AlF_Rb", "", &data)
             .unwrap();
 
         let interp_potentials = interpolate_potentials(&mut pot_array, 0.1);
@@ -45,53 +45,49 @@ impl Problems {
             data.push(values);
         }
 
-        save_data("interpolated_dec_SrF_Rb", "", &data)
+        save_data("interpolated_dec_AlF_Rb", "", &data)
             .unwrap();
     }
 
     fn elastic_cross_section_1chan() {
+        let is_rb_87 = true;
         let energy_relative = Energy(1e-7, Kelvin);
         let channel = 0;
 
         ///////////////////////////////
         
-        for is_rb_87 in [true, false] {
-            let start = Instant::now();
+        let start = Instant::now();
 
-            let mut particles = get_particles(is_rb_87, energy_relative.to(Au));
-            
-            particles.insert(RotorLMax(64));
-            particles.insert(RotorJMax(64));
-    
-            let mut pot_array = read_potential();
-            let potential = get_potentials(&mut pot_array, &particles);
+        let mut particles = get_particles(is_rb_87, energy_relative.to(Au));
+        particles.insert(RotorLMax(80));
+        particles.insert(RotorJMax(80));
 
-            println!("{:?}", potential.size());
-    
-            let id = Mat::<f64>::identity(potential.size(), potential.size());
-            let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
-            let step_rule = MultiStepRule::default();
-            let mut numerov = FaerRatioNumerov::new(&potential, &particles, step_rule, boundary);
-    
-            numerov.propagate_to(200.);
-            let cross_section = numerov.data.calculate_s_matrix(channel).get_elastic_cross_sect();
-            
-            let elapsed = start.elapsed();
-            println!("calculated in {}", elapsed.hhmmssxxx());
-            if is_rb_87 {
-                print!("87Rb + SrF: ")
-            } else {
-                print!("85Rb + SrF: ")
-            }
-            println!("{}", cross_section / Angstrom::TO_AU_MUL.powi(2));
+        let mut pot_array = read_potential();
+        let potential = get_potentials(&mut pot_array, &particles);
+
+        let id = Mat::<f64>::identity(potential.size(), potential.size());
+        let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
+        let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
+        let mut numerov = FaerRatioNumerov::new(&potential, &particles, step_rule, boundary);
+
+        numerov.propagate_to(200.);
+        let cross_section = numerov.data.calculate_s_matrix(channel).get_elastic_cross_sect();
+        
+        let elapsed = start.elapsed();
+        println!("calculated in {}", elapsed.hhmmssxxx());
+        if is_rb_87 {
+            print!("87Rb + AlF: ")
+        } else {
+            print!("85Rb + AlF: ")
         }
+        println!("{}", cross_section / Angstrom::TO_AU_MUL.powi(2));
     }
 
     fn elastic_cross_section() {
         let channel = 0;
 
         let energy_relative = Energy(1e-7, Kelvin);
-        let rot_max = 70;
+        let rot_max = 80;
 
         ///////////////////////////////
 
@@ -112,7 +108,7 @@ impl Problems {
         
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
                     let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                    let step_rule = MultiStepRule::default();
+                    let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
                     let mut numerov = FaerRatioNumerov::new(&potential, &particles, step_rule, boundary);
         
                     numerov.propagate_to(200.);
@@ -129,7 +125,7 @@ impl Problems {
             let header = "mag_field\telastic_cross_section";
             let data = vec![rot_maxes, cross_sections];
     
-            save_data(&format!("srf_rb_elastic_section_{is_rb_87}"), header, &data)
+            save_data(&format!("AlF_Rb_elastic_section_{is_rb_87}"), header, &data)
                 .unwrap()
         }
     }
@@ -137,7 +133,7 @@ impl Problems {
 
 fn get_potentials<'a>(pot_array: &'a mut PotentialArray, particles: &Particles) -> impl Potential<Space = Mat<f64>> + 'a {
     let interp_potentials = interpolate_potentials(pot_array, 0.001);
-
+    
     let mut potentials_far = Vec::new();
     for _ in &interp_potentials {
         potentials_far.push(Dispersion::new(0., 0));
@@ -174,7 +170,7 @@ fn get_potentials<'a>(pot_array: &'a mut PotentialArray, particles: &Particles) 
 
 fn get_particles(is_rb_87: bool , energy: Energy<Au>) -> Particles {
     let rb = if is_rb_87 { create_atom("Rb87").unwrap() } else { create_atom("Rb85").unwrap() };
-    let srf = Particle::new("SrF", Mass(27. + 18.998403, Dalton));
+    let srf = Particle::new("AlF", Mass(27. + 19., Dalton));
 
     let mut particles = Particles::new_pair(rb, srf, energy);
 

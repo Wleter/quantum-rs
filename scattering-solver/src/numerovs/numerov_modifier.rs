@@ -1,6 +1,9 @@
-use crate::{observables::s_matrix::{HasSMatrix, SingleSMatrix}, potentials::potential::SimplePotential};
 
-use super::{propagator::PropagatorData, single_numerov::SingleNumerovData};
+use faer::Mat;
+
+use crate::{observables::s_matrix::{HasSMatrix, SingleSMatrix}, potentials::potential::{Potential, SimplePotential}};
+
+use super::{multi_numerov::faer_backed::MultiNumerovDataFaer, propagator::PropagatorData, single_numerov::SingleNumerovData};
 
 pub trait PropagatorModifier<D: PropagatorData> {
     fn before(&mut self, _data: &mut D, _r_stop: f64) {}
@@ -180,5 +183,57 @@ where
                 self.s_matrices.push(s)
             }
         }
+    }
+}
+
+#[derive(Default)]
+pub struct NumerovLogging<T> {
+    r_min: f64,
+    r_stop: f64,
+    current: f64,
+    steps_no: usize,
+    _psi1: Option<T>,
+}
+
+
+impl<P> PropagatorModifier<SingleNumerovData<'_, P>> for NumerovLogging<f64>
+where 
+    P: SimplePotential
+{
+    fn before(&mut self, data: &mut SingleNumerovData<'_, P>, r_stop: f64) {
+        self.r_min = data.r;
+        self.r_stop = r_stop;
+        self.current = data.r;
+    }
+
+    fn after_step(&mut self, data: &mut SingleNumerovData<'_, P>) {
+        self.current = data.r;
+        self.steps_no += 1;
+        println!("r: {}, step: {}", data.r, data.dr);
+    }
+
+    fn after_prop(&mut self, _data: &mut SingleNumerovData<'_, P>) {
+        println!("propagated with after {} steps", self.steps_no)
+    }
+}
+
+impl<P> PropagatorModifier<MultiNumerovDataFaer<'_, P>> for NumerovLogging<Mat<f64>>
+where 
+    P: Potential<Space = Mat<f64>>
+{
+    fn before(&mut self, data: &mut MultiNumerovDataFaer<'_, P>, r_stop: f64) {
+        self.r_min = data.r;
+        self.r_stop = r_stop;
+        self.current = data.r;
+    }
+
+    fn after_step(&mut self, data: &mut MultiNumerovDataFaer<'_, P>) {
+        self.current = data.r;
+        self.steps_no += 1;
+        println!("r: {}, step: {}", data.r, data.dr);
+    }
+
+    fn after_prop(&mut self, _data: &mut MultiNumerovDataFaer<'_, P>) {
+        println!("propagated with after {} steps", self.steps_no)
     }
 }

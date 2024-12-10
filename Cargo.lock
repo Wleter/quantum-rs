@@ -147,11 +147,12 @@ dependencies = [
 [[package]]
 name = "clebsch-gordan"
 version = "0.3.0"
-source = "git+https://github.com/Wleter/clebsch-gordan#458fc667702dde7da3ef2a88be84bb2ae6ac3493"
+source = "git+https://github.com/Wleter/clebsch-gordan#c0dc8ac6e14bcdc5ff7810dfac1a46c8d6d4fc0a"
 dependencies = [
  "lazy_static",
  "lru",
  "num-bigint",
+ "num-rational",
  "num-traits",
  "parking_lot",
  "smallvec",
