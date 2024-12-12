@@ -3,7 +3,7 @@ use faer::Mat;
 
 use crate::{observables::s_matrix::{HasSMatrix, SingleSMatrix}, potentials::potential::{Potential, SimplePotential}};
 
-use super::{multi_numerov::faer_backed::MultiNumerovDataFaer, propagator::PropagatorData, single_numerov::SingleNumerovData};
+use super::{multi_numerov::MultiNumerovData, propagator::PropagatorData, single_numerov::SingleNumerovData};
 
 pub trait PropagatorModifier<D: PropagatorData> {
     fn before(&mut self, _data: &mut D, _r_stop: f64) {}
@@ -217,23 +217,23 @@ where
     }
 }
 
-impl<P> PropagatorModifier<MultiNumerovDataFaer<'_, P>> for NumerovLogging<Mat<f64>>
+impl<P> PropagatorModifier<MultiNumerovData<'_, P>> for NumerovLogging<Mat<f64>>
 where 
     P: Potential<Space = Mat<f64>>
 {
-    fn before(&mut self, data: &mut MultiNumerovDataFaer<'_, P>, r_stop: f64) {
+    fn before(&mut self, data: &mut MultiNumerovData<'_, P>, r_stop: f64) {
         self.r_min = data.r;
         self.r_stop = r_stop;
         self.current = data.r;
     }
 
-    fn after_step(&mut self, data: &mut MultiNumerovDataFaer<'_, P>) {
+    fn after_step(&mut self, data: &mut MultiNumerovData<'_, P>) {
         self.current = data.r;
         self.steps_no += 1;
         println!("r: {}, step: {}", data.r, data.dr);
     }
 
-    fn after_prop(&mut self, _data: &mut MultiNumerovDataFaer<'_, P>) {
+    fn after_prop(&mut self, _data: &mut MultiNumerovData<'_, P>) {
         println!("propagated with after {} steps", self.steps_no)
     }
 }

@@ -7,7 +7,7 @@ use indicatif::ParallelProgressIterator;
 use quantum::{params::{particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::Angstrom, energy_units::{CmInv, Energy, Kelvin}, mass_units::{Dalton, Mass}, Au, Unit}, utility::{legendre_polynomials, linspace}};
 use rusty_fitpack::{splev, splrep};
 use scattering_problems::{rotor_atom::RotorAtomProblemBuilder, utility::{RotorJMax, RotorJTot, RotorLMax}};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::faer_backed::FaerRatioNumerov, propagator::MultiStepRule}, observables::s_matrix::HasSMatrix, potentials::{dispersion_potential::Dispersion, potential::{Potential, SimplePotential, SubPotential}}, utility::save_data};
+use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, observables::s_matrix::HasSMatrix, potentials::{dispersion_potential::Dispersion, potential::{Potential, SimplePotential, SubPotential}}, utility::save_data};
 
 use rayon::prelude::*;
 
@@ -68,7 +68,7 @@ impl Problems {
         let id = Mat::<f64>::identity(potential.size(), potential.size());
         let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
         let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-        let mut numerov = FaerRatioNumerov::new(&potential, &particles, step_rule, boundary);
+        let mut numerov = MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
 
         numerov.propagate_to(200.);
         let cross_section = numerov.data.calculate_s_matrix(channel).get_elastic_cross_sect();
@@ -109,7 +109,7 @@ impl Problems {
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
                     let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
                     let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                    let mut numerov = FaerRatioNumerov::new(&potential, &particles, step_rule, boundary);
+                    let mut numerov = MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
         
                     numerov.propagate_to(200.);
                     let cross_section = numerov.data.calculate_s_matrix(channel).get_elastic_cross_sect();

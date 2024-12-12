@@ -1317,8 +1317,6 @@ name = "scattering-solver"
 version = "0.1.0"
 dependencies = [
  "faer",
- "nalgebra",
- "ndarray 0.16.1",
  "num",
  "num-traits",
  "quantum",

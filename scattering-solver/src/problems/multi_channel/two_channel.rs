@@ -3,7 +3,7 @@ use std::time::Instant;
 use faer::Mat;
 use num::Complex;
 use quantum::{params::{particle_factory::create_atom, particles::Particles}, problems_impl, units::{distance_units::Distance, energy_units::{Energy, Kelvin}, mass_units::Mass, Au}, utility::linspace};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::faer_backed::FaerRatioNumerov, numerov_modifier::{Sampling, WaveStorage}, propagator::MultiStepRule}, observables::s_matrix::HasSMatrix, potentials::{dispersion_potential::Dispersion, gaussian_coupling::GaussianCoupling, multi_coupling::MultiCoupling, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::Potential, potential_factory::create_lj}, utility::{save_data, AngularSpin}};
+use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, numerov_modifier::{Sampling, WaveStorage}, propagator::MultiStepRule}, observables::s_matrix::HasSMatrix, potentials::{dispersion_potential::Dispersion, gaussian_coupling::GaussianCoupling, multi_coupling::MultiCoupling, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::Potential, potential_factory::create_lj}, utility::{save_data, AngularSpin}};
 
 
 pub struct TwoChannel;
@@ -49,7 +49,7 @@ impl TwoChannel {
         let id: Mat<f64> = Mat::identity(potential.size(), potential.size());
         let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
 
-        let mut numerov = FaerRatioNumerov::new(&potential, &particles, MultiStepRule::default(), boundary);
+        let mut numerov = MultiRatioNumerov::new(&potential, &particles, MultiStepRule::default(), boundary);
         let mut wave_storage = WaveStorage::new(Sampling::default(), 1e-50 * id, 500);
 
         let preparation = start.elapsed();
@@ -74,7 +74,7 @@ impl TwoChannel {
         let id: Mat<f64> = Mat::identity(potential.size(), potential.size());
         let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
 
-        let mut numerov = FaerRatioNumerov::new(&potential, &particles, MultiStepRule::default(), boundary);
+        let mut numerov = MultiRatioNumerov::new(&potential, &particles, MultiStepRule::default(), boundary);
         let start = Instant::now();
         numerov.propagate_to(1e3);
         let propagation = start.elapsed();
@@ -103,7 +103,7 @@ impl TwoChannel {
             .map(|scaling| {
                 particles.get_mut::<Mass<Au>>().unwrap().0 = mass * scaling;
     
-                let mut numerov = FaerRatioNumerov::new(&potential, &particles, MultiStepRule::default(), boundary.clone());
+                let mut numerov = MultiRatioNumerov::new(&potential, &particles, MultiStepRule::default(), boundary.clone());
                 numerov.propagate_to(1e3);
         
                 let s_matrix = numerov.data.calculate_s_matrix(entrance);

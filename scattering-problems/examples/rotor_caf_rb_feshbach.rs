@@ -8,7 +8,7 @@ use indicatif::ParallelProgressIterator;
 use num::complex::Complex64;
 use quantum::{params::{particle::Particle, particle_factory::{self, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{energy_units::{Energy, GHz, Kelvin, MHz}, mass_units::{Dalton, Mass}, Au, Unit}, utility::linspace};
 use scattering_problems::{alkali_atoms::{AlkaliAtomsProblem, AlkaliAtomsProblemBuilder}, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder}, utility::{RotorJMax, RotorJTot, RotorLMax}};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::faer_backed::FaerRatioNumerov, propagator::MultiStepRule, single_numerov::SingleRatioNumerov}, observables::s_matrix::HasSMatrix, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::save_data};
+use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule, single_numerov::SingleRatioNumerov}, observables::s_matrix::HasSMatrix, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::save_data};
 
 use rayon::prelude::*;
 
@@ -47,9 +47,7 @@ impl Problems {
     }
 
     fn potential_aniso() -> Composite<Dispersion> {
-        let mut singlet = Composite::new(Dispersion::new(-100., -6));
-        singlet.add_potential(Dispersion::new(1e7, -12));
-
+        let singlet = Composite::new(Dispersion::new(-100., -6));
         singlet
     }
 
@@ -74,8 +72,8 @@ impl Problems {
         let rb = particle_factory::create_atom("Rb87").unwrap();
 
         let mut particles = Particles::new_pair(caf, rb, energy);
-        particles.insert(RotorLMax(2));
-        particles.insert(RotorJMax(2));
+        particles.insert(RotorLMax(20));
+        particles.insert(RotorJMax(20));
         particles.insert(RotorJTot(0));
         particles.insert(RotConst(Energy(10.3, GHz).to_au()));
         
@@ -179,7 +177,7 @@ impl Problems {
             let id = Mat::<f64>::identity(potential.size(), potential.size());
             let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
             let step_rule = MultiStepRule::default();
-            let mut numerov = FaerRatioNumerov::new(potential, &caf_rb, step_rule, boundary);
+            let mut numerov = MultiRatioNumerov::new(potential, &caf_rb, step_rule, boundary);
 
             numerov.propagate_to(1.5e3);
             numerov.data.calculate_s_matrix(channel).get_scattering_length()
@@ -225,8 +223,8 @@ impl Problems {
         let projection = 2;
         let channel = 0;
 
-        let config_triplet = 0;
-        let config_singlet = 2;
+        let config_triplet = 1;
+        let config_singlet = 1;
 
         let energy_relative = Energy(1e-7, Kelvin);
         let mag_fields = linspace(0., 1000., 4000);
@@ -246,7 +244,7 @@ impl Problems {
             let id = Mat::<f64>::identity(potential.size(), potential.size());
             let boundary = Boundary::new(8.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
             let step_rule = MultiStepRule::new(1e-3, f64::INFINITY, 500.);
-            let mut numerov = FaerRatioNumerov::new(potential, &caf_rb, step_rule, boundary);
+            let mut numerov = MultiRatioNumerov::new(potential, &caf_rb, step_rule, boundary);
 
             numerov.propagate_to(1.5e3);
             numerov.data.calculate_s_matrix(channel).get_scattering_length()

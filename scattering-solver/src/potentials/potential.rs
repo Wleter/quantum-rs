@@ -17,37 +17,6 @@ impl<T: Entity> Dimension for Mat<T> {
     }
 }
 
-#[cfg(feature = "nalgebra")]
-use nalgebra::{SMatrix, DMatrix};
-
-#[cfg(feature = "nalgebra")]
-impl<T, const N: usize> Dimension for SMatrix<T, N, N> {
-    fn size(&self) -> usize {
-        self.nrows()
-    }
-}
-
-#[cfg(feature = "nalgebra")]
-impl<T> Dimension for DMatrix<T> {
-    fn size(&self) -> usize {
-        assert!(self.nrows() == self.ncols());
-
-        self.nrows()
-    }
-}
-
-#[cfg(feature = "ndarray")]
-use ndarray::Array2;
-
-#[cfg(feature = "ndarray")]
-impl<T> Dimension for Array2<T> {
-    fn size(&self) -> usize {
-        assert!(self.nrows() == self.ncols());
-
-        self.nrows()
-    }
-}
-
 /// Trait defining potential functionality
 pub trait Potential {
     type Space;

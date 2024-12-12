@@ -7,7 +7,7 @@ use indicatif::{ParallelProgressIterator, ProgressIterator};
 use num::complex::Complex64;
 use quantum::{params::{particle_factory, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{energy_units::{Energy, Kelvin, MHz}, Au, Unit}, utility::linspace};
 use scattering_problems::alkali_atoms::{AlkaliAtomsProblem, AlkaliAtomsProblemBuilder};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::faer_backed::FaerRatioNumerov, propagator::MultiStepRule}, observables::s_matrix::HasSMatrix, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::Potential}, utility::save_data};
+use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, observables::s_matrix::HasSMatrix, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::Potential}, utility::save_data};
 
 use rayon::prelude::*;
 
@@ -101,7 +101,7 @@ impl Problems {
             let id = Mat::<f64>::identity(potential.size(), potential.size());
             let boundary = Boundary::new(4., Direction::Outwards, (1.001 * &id, 1.002 * &id));
             let step_rule = MultiStepRule::default();
-            let mut numerov = FaerRatioNumerov::new(potential, &li2, step_rule, boundary);
+            let mut numerov = MultiRatioNumerov::new(potential, &li2, step_rule, boundary);
 
             numerov.propagate_to(1.5e3);
             numerov.data.calculate_s_matrix(channel).get_scattering_length()
