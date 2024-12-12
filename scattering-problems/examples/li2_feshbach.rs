@@ -5,9 +5,9 @@ use faer::Mat;
 use hhmmss::Hhmmss;
 use indicatif::{ParallelProgressIterator, ProgressIterator};
 use num::complex::Complex64;
-use quantum::{params::{particle_factory, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{energy_units::{Energy, Kelvin, MHz}, Au, Unit}, utility::linspace};
-use scattering_problems::alkali_atoms::{AlkaliAtomsProblem, AlkaliAtomsProblemBuilder};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, observables::s_matrix::HasSMatrix, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::Potential}, utility::save_data};
+use quantum::{params::{particle_factory, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::energy_units::{Energy, Kelvin, MHz}, utility::linspace};
+use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, ScatteringProblem};
+use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::Potential}, utility::save_data};
 
 use rayon::prelude::*;
 
@@ -23,7 +23,7 @@ problems_impl!(Problems, "Li2 Feshbach",
 );
 
 impl Problems {
-    fn get_potential(projection: i32, mag_field: f64) -> AlkaliAtomsProblem<impl Potential<Space = Mat<f64>>> {
+    fn get_potential(projection: i32, mag_field: f64) -> ScatteringProblem<impl Potential<Space = Mat<f64>>> {
         let first = HifiProblemBuilder::new(1, 2)
             .with_hyperfine_coupling(Energy(228.2 / 1.5, MHz).to_au());
 
@@ -37,14 +37,14 @@ impl Problems {
         li2_singlet.add_potential(Dispersion::new(1.112e7, -12));
 
         AlkaliAtomsProblemBuilder::new(hifi_problem, li2_triplet, li2_singlet)
-            .build(mag_field)
+            .build(mag_field, 0)
     }
 
-    fn get_particles(energy: Energy<impl Unit>) -> Particles {
+    fn get_particles() -> Particles {
         let li_first = particle_factory::create_atom("Li6").unwrap();
         let li_second = particle_factory::create_atom("Li6").unwrap();
 
-        Particles::new_pair(li_first, li_second, energy)
+        Particles::new_pair(li_first, li_second, Energy(1e-7, Kelvin))
     }
 
     fn potential_values() {
@@ -79,13 +79,10 @@ impl Problems {
         ///////////////////////////////////
 
         let projection = 0;
-        let channel = 0;
-        let energy_relative = Energy(1e-7, Kelvin);
 
         let mut mag_fields = linspace(0., 620., 620);
         mag_fields.append(&mut linspace(620., 625., 500));
         mag_fields.append(&mut linspace(625., 1200., 575));
-
 
         ///////////////////////////////////
 
@@ -93,10 +90,10 @@ impl Problems {
         
         let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
             let alkali_problem = Self::get_potential(projection, mag_field);
-            let energy = energy_relative.to_au() + alkali_problem.channel_energies[channel].to_au();
 
-            let li2 = Self::get_particles(Energy(energy, Au));
+            let mut li2 = Self::get_particles();
             let potential = &alkali_problem.potential;
+            li2.insert(alkali_problem.asymptotic);
 
             let id = Mat::<f64>::identity(potential.size(), potential.size());
             let boundary = Boundary::new(4., Direction::Outwards, (1.001 * &id, 1.002 * &id));
@@ -104,7 +101,7 @@ impl Problems {
             let mut numerov = MultiRatioNumerov::new(potential, &li2, step_rule, boundary);
 
             numerov.propagate_to(1.5e3);
-            numerov.data.calculate_s_matrix(channel).get_scattering_length()
+            numerov.data.calculate_s_matrix().get_scattering_length()
         })
         .collect::<Vec<Complex64>>();
 

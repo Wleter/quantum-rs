@@ -3,7 +3,7 @@ use std::time::Instant;
 use faer::Mat;
 use num::Complex;
 use quantum::{params::{particle_factory::create_atom, particles::Particles}, problems_impl, units::{distance_units::Distance, energy_units::{Energy, Kelvin}, mass_units::Mass, Au}, utility::linspace};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, numerov_modifier::{Sampling, WaveStorage}, propagator::MultiStepRule}, observables::s_matrix::HasSMatrix, potentials::{dispersion_potential::Dispersion, gaussian_coupling::GaussianCoupling, multi_coupling::MultiCoupling, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::Potential, potential_factory::create_lj}, utility::{save_data, AngularSpin}};
+use scattering_solver::{boundary::{Asymptotic, Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, numerov_modifier::{Sampling, WaveStorage}, propagator::MultiStepRule}, potentials::{dispersion_potential::Dispersion, gaussian_coupling::GaussianCoupling, multi_coupling::MultiCoupling, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::Potential, potential_factory::create_lj}, utility::{save_data, AngMomentum}};
 
 
 pub struct TwoChannel;
@@ -22,7 +22,12 @@ impl TwoChannel {
         let energy = Energy(1e-7, Kelvin);
 
         let mut particles = Particles::new_pair(particle1, particle2, energy);
-        particles.insert(AngularSpin(0));
+        particles.insert(Asymptotic {
+            centrifugal: vec![AngMomentum(0); 2],
+            entrance: 0,
+            channel_energies: vec![0., Energy(0.0021, Kelvin).to_au()],
+            channel_states: Mat::identity(2, 2),
+        });
 
         particles
     }
@@ -79,7 +84,7 @@ impl TwoChannel {
         numerov.propagate_to(1e3);
         let propagation = start.elapsed();
 
-        let s_matrix = numerov.data.calculate_s_matrix(0);
+        let s_matrix = numerov.data.calculate_s_matrix();
         let scattering_length = s_matrix.get_scattering_length();
 
         let extraction = start.elapsed() - propagation;
@@ -93,7 +98,6 @@ impl TwoChannel {
         let mut particles = Self::particles();
         let potential = Self::potential();
         let scalings = linspace(0.8, 1.2, 200);
-        let entrance = 0;
 
         let id: Mat<f64> = Mat::identity(potential.size(), potential.size());
         let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
@@ -106,7 +110,7 @@ impl TwoChannel {
                 let mut numerov = MultiRatioNumerov::new(&potential, &particles, MultiStepRule::default(), boundary.clone());
                 numerov.propagate_to(1e3);
         
-                let s_matrix = numerov.data.calculate_s_matrix(entrance);
+                let s_matrix = numerov.data.calculate_s_matrix();
                 s_matrix.get_scattering_length()
             })
             .collect();

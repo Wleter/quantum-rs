@@ -7,8 +7,8 @@ use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
 use num::complex::Complex64;
 use quantum::{params::{particle::Particle, particle_factory::{self, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{energy_units::{Energy, GHz, Kelvin, MHz}, mass_units::{Dalton, Mass}, Au, Unit}, utility::linspace};
-use scattering_problems::{alkali_atoms::{AlkaliAtomsProblem, AlkaliAtomsProblemBuilder}, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder}, utility::{RotorJMax, RotorJTot, RotorLMax}};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule, single_numerov::SingleRatioNumerov}, observables::s_matrix::HasSMatrix, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::save_data};
+use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder}, utility::{RotorJMax, RotorJTot, RotorLMax}, ScatteringProblem};
+use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule, single_numerov::SingleRatioNumerov}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::save_data};
 
 use rayon::prelude::*;
 
@@ -24,7 +24,6 @@ problems_impl!(Problems, "CaF + Rb Feshbach",
     "isotropic feshbach" => |_| Self::feshbach_iso(),
     "rotor feshbach" => |_| Self::feshbach_rotor(),
     "rotor potentials" => |_| Self::rotor_potentials()
-
 );
 
 impl Problems {
@@ -51,7 +50,7 @@ impl Problems {
         singlet
     }
 
-    fn get_potential_iso(config_triplet: usize, config_singlet: usize, projection: i32, mag_field: f64) -> AlkaliAtomsProblem<impl Potential<Space = Mat<f64>>> {
+    fn get_potential_iso(config_triplet: usize, config_singlet: usize, projection: i32, mag_field: f64, entrance: usize) -> ScatteringProblem<impl Potential<Space = Mat<f64>>> {
         let hifi_caf = HifiProblemBuilder::new(1, 1)
             .with_hyperfine_coupling(Energy(120., MHz).to_au());
 
@@ -64,7 +63,7 @@ impl Problems {
         let singlet = Self::singlet_iso(config_singlet);
 
         AlkaliAtomsProblemBuilder::new(hifi_problem, triplet, singlet)
-            .build(mag_field)
+            .build(mag_field, entrance)
     }
 
     fn get_particles(energy: Energy<impl Unit>) -> Particles {
@@ -153,12 +152,12 @@ impl Problems {
         ///////////////////////////////////
 
         let projection = 2;
-        let channel = 0;
+        let entrance = 0;
+        let energy = Energy(1e-7, Kelvin);
 
         let config_triplet = 0;
         let config_singlet = 0;
-
-        let energy_relative = Energy(1e-7, Kelvin);
+        
         let mag_fields = linspace(0., 1000., 4000);
         
         linspace(0., 1000., 1000);
@@ -168,10 +167,9 @@ impl Problems {
         let start = Instant::now();
         
         let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
-            let alkali_problem = Self::get_potential_iso(config_triplet, config_singlet, projection, mag_field);
-            let energy = energy_relative.to_au() + alkali_problem.channel_energies[channel].to_au();
+            let alkali_problem = Self::get_potential_iso(config_triplet, config_singlet, projection, mag_field, entrance);
 
-            let caf_rb = Self::get_particles(Energy(energy, Au));
+            let caf_rb = Self::get_particles(energy);
             let potential = &alkali_problem.potential;
 
             let id = Mat::<f64>::identity(potential.size(), potential.size());
@@ -180,7 +178,7 @@ impl Problems {
             let mut numerov = MultiRatioNumerov::new(potential, &caf_rb, step_rule, boundary);
 
             numerov.propagate_to(1.5e3);
-            numerov.data.calculate_s_matrix(channel).get_scattering_length()
+            numerov.data.calculate_s_matrix().get_scattering_length()
         })
         .collect::<Vec<Complex64>>();
 
@@ -247,7 +245,7 @@ impl Problems {
             let mut numerov = MultiRatioNumerov::new(potential, &caf_rb, step_rule, boundary);
 
             numerov.propagate_to(1.5e3);
-            numerov.data.calculate_s_matrix(channel).get_scattering_length()
+            numerov.data.calculate_s_matrix().get_scattering_length()
         })
         .collect::<Vec<Complex64>>();
 

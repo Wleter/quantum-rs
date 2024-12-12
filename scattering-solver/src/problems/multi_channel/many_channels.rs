@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use faer::Mat;
 use quantum::{params::{particle_factory::create_atom, particles::Particles}, problems_impl, units::{distance_units::Distance, energy_units::{Energy, Kelvin}, Au}, utility::linspace};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, observables::s_matrix::HasSMatrix, potentials::{dispersion_potential::Dispersion, gaussian_coupling::GaussianCoupling, multi_coupling::MultiCoupling, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::Potential, potential_factory::create_lj}, utility::AngularSpin};
+use scattering_solver::{boundary::{Asymptotic, Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, potentials::{dispersion_potential::Dispersion, gaussian_coupling::GaussianCoupling, multi_coupling::MultiCoupling, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::Potential, potential_factory::create_lj}, utility::AngMomentum};
 
 
 pub struct ManyChannels;
@@ -11,21 +11,28 @@ problems_impl!(ManyChannels, "large number of channels",
     "scattering length static size" => |_| Self::scattering_length()
 );
 
+const N: usize = 50;
+
 impl ManyChannels {
     fn particles() -> Particles {
         let particle1 = create_atom("Li6").unwrap();
         let particle2 = create_atom("Li7").unwrap();
         let energy = Energy(1e-7, Kelvin);
+        
+        let wells = linspace(0.0019, 0.0022, N);
 
         let mut particles = Particles::new_pair(particle1, particle2, energy);
-        particles.insert(AngularSpin(0));
+        particles.insert(Asymptotic {
+            centrifugal: vec![AngMomentum(0); N],
+            entrance: 0,
+            channel_energies: wells.iter().map(|well| Energy(well / 0.0019 - 1.0, Kelvin).to_au()).collect(),
+            channel_states: Mat::identity(N, N),
+        });
         
         particles
     }
 
     fn potential() -> impl Potential<Space = Mat<f64>> {
-        const N: usize = 50;
-
         let wells = linspace(0.0019, 0.0022, N);
         let potentials = wells.iter()
             .map(|well| {
@@ -61,7 +68,7 @@ impl ManyChannels {
         numerov.propagate_to(1e3);
         let propagation = start.elapsed() - preparation;
 
-        let s_matrix = numerov.data.calculate_s_matrix(0);
+        let s_matrix = numerov.data.calculate_s_matrix();
         let scattering_length = s_matrix.get_scattering_length();
 
         let extraction = start.elapsed() - propagation - preparation;

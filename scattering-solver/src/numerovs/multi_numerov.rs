@@ -1,6 +1,6 @@
 use faer::{linalg::matmul::matmul, prelude::c64, solvers::SolverCore, unzipped, zipped, Mat, MatMut};
 use quantum::{params::particles::Particles, units::{energy_units::Energy, mass_units::Mass, Au}, utility::{asymptotic_bessel_j, asymptotic_bessel_n, bessel_j_ratio, bessel_n_ratio}};
-use crate::{boundary::Boundary, numerovs::{numerov_modifier::{PropagatorModifier, SampleConfig, WaveStorage}, propagator::{MultiStep, MultiStepRule, Numerov, NumerovResult, PropagatorData, StepAction, StepRule}}, observables::s_matrix::FaerSMatrix, potentials::{dispersion_potential::Dispersion, potential::{Potential, SimplePotential}, potential_factory::create_centrifugal}, utility::{inverse_inplace, AngularSpin}};
+use crate::{boundary::{Asymptotic, Boundary}, numerovs::{numerov_modifier::{PropagatorModifier, SampleConfig, WaveStorage}, propagator::{MultiStep, MultiStepRule, Numerov, NumerovResult, PropagatorData, StepAction, StepRule}}, observables::s_matrix::SMatrix, potentials::{dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::inverse_inplace};
 
 use core::f64;
 use std::{f64::consts::PI, mem::swap};
@@ -30,10 +30,11 @@ where
     pub dr: f64,
 
     pub potential: &'a P,
-    pub(super) centrifugal: Option<Dispersion>,
     pub(super) mass: f64,
     pub(super) energy: f64,
-    pub(super) l: AngularSpin,
+
+    pub(super) asymptotic: &'a Asymptotic,
+    pub(super) centrifugal_prop: Dispersion,
 
     pub(super) potential_buffer: Mat<f64>,
     pub(super) unit: Mat<f64>,
@@ -42,8 +43,8 @@ where
     pub psi1: Mat<f64>,
     pub(super) psi2: Mat<f64>,
 
-    pub(super) perm: Vec<usize>,
-    pub(super) perm_inv: Vec<usize>,
+    pub(super) perm_buffer: Vec<usize>,
+    pub(super) perm_inv_buffer: Vec<usize>,
 }
 
 impl<P> MultiNumerovData<'_, P> 
@@ -53,21 +54,19 @@ where
     pub fn get_g_func(&mut self, r: f64, out: MatMut<f64>) {
         self.potential.value_inplace(r, &mut self.potential_buffer);
 
-
-        if let Some(centr) = &self.centrifugal {
-            let centr = centr.value(r);
-
-            self.potential_buffer.diagonal_mut()
-                .column_vector_mut()
-                .iter_mut()
-                .for_each(|x| *x += centr)
-        }
+        let centr_prop = self.centrifugal_prop.value(r);
+        self.potential_buffer.diagonal_mut()
+            .column_vector_mut()
+            .iter_mut()
+            .zip(self.asymptotic.centrifugal.iter())
+            .for_each(|(x, l)| *x += (l.0 * (l.0 + 1)) as f64 * centr_prop);
+        
 
         zipped!(out, self.unit.as_ref(), self.potential_buffer.as_ref())
             .for_each(|unzipped!(mut o, u, p)| o.write(2.0 * self.mass * (self.energy * u.read() - p.read())));
     }
 
-    pub fn calculate_s_matrix(&self, entrance: usize) -> FaerSMatrix {
+    pub fn calculate_s_matrix(&self) -> SMatrix {
         let size = self.potential.size();
         let r_last = self.r;
         let r_prev_last = self.r - self.dr;
@@ -99,10 +98,10 @@ where
         for i in 0..size {
             let momentum = momenta[i];
             if is_open_channel[i] {
-                j_last[(i, i)] = asymptotic_bessel_j(momentum * r_last, self.l.0);
-                j_prev_last[(i, i)] = asymptotic_bessel_j(momentum * r_prev_last, self.l.0);
-                n_last[(i, i)] = asymptotic_bessel_n(momentum * r_last, self.l.0);
-                n_prev_last[(i, i)] = asymptotic_bessel_n(momentum * r_prev_last, self.l.0);
+                j_last[(i, i)] = asymptotic_bessel_j(momentum * r_last, self.asymptotic.centrifugal[i].0);
+                j_prev_last[(i, i)] = asymptotic_bessel_j(momentum * r_prev_last, self.asymptotic.centrifugal[i].0);
+                n_last[(i, i)] = asymptotic_bessel_n(momentum * r_last, self.asymptotic.centrifugal[i].0);
+                n_prev_last[(i, i)] = asymptotic_bessel_n(momentum * r_prev_last, self.asymptotic.centrifugal[i].0);
             } else {
                 j_last[(i, i)] = bessel_j_ratio(momentum * r_last, momentum * r_prev_last);
                 j_prev_last[(i, i)] = 1.0;
@@ -144,11 +143,11 @@ where
         let entrance = is_open_channel.iter()
             .enumerate()
             .filter(|(_, x)| **x)
-            .find(|(i, _)| *i == entrance)
+            .find(|(i, _)| *i == self.asymptotic.entrance)
             .expect("Closed entrance channel")
             .0;
 
-        FaerSMatrix::new(s_matrix, momenta, entrance)
+        SMatrix::new(s_matrix, momenta, entrance)
     }
 }
 
@@ -172,16 +171,19 @@ where
     P: Potential<Space = Mat<f64>>,
     S: StepRule<MultiNumerovData<'a, P>>,
 {
-    pub fn new(potential: &'a P, particles: &Particles, step_rules: S, boundary: Boundary<Mat<f64>>) -> Self {
+    pub fn new(potential: &'a P, particles: &'a Particles, step_rules: S, boundary: Boundary<Mat<f64>>) -> Self {
         let mass = particles.get::<Mass<Au>>()
             .expect("no reduced mass parameter Mass<Au> found in particles")
             .to_au();
-        let energy = particles.get::<Energy<Au>>()
+        let mut energy = particles.get::<Energy<Au>>()
             .expect("no collision energy Energy<Au> found in particles")
             .to_au();
 
-        let l = *particles.get::<AngularSpin>().unwrap_or(&AngularSpin(0));
-        let centrifugal = create_centrifugal(mass, l);
+        let asymptotic = particles.get::<Asymptotic>()
+            .expect("no Asymptotic found in particles for multi channel numerov problem");
+        let centrifugal_prop = Dispersion::new(1. / (2. * mass), -2);
+
+        energy += asymptotic.channel_energies[asymptotic.entrance];
 
         let size = potential.size();
 
@@ -190,8 +192,8 @@ where
             r,
             dr: 0.,
             potential,
-            centrifugal,
-            l,
+            centrifugal_prop,
+            asymptotic,
             mass,
             energy,
             potential_buffer: Mat::zeros(size, size),
@@ -199,8 +201,8 @@ where
             current_g_func: Mat::zeros(size, size),
             psi1: Mat::zeros(size, size),
             psi2: Mat::zeros(size, size),
-            perm: vec![0; size],
-            perm_inv: vec![0; size]
+            perm_buffer: vec![0; size],
+            perm_inv_buffer: vec![0; size]
         };
 
         data.current_g_func();
@@ -252,14 +254,12 @@ where
     fn current_g_func(&mut self) {
         self.potential.value_inplace(self.r + self.dr, &mut self.potential_buffer);
 
-        if let Some(centr) = &self.centrifugal {
-            let centr = centr.value(self.r + self.dr);
-
-            self.potential_buffer.diagonal_mut()
-                .column_vector_mut()
-                .iter_mut()
-                .for_each(|x| *x += centr)
-        }
+        let centr_prop = self.centrifugal_prop.value(self.r + self.dr);
+        self.potential_buffer.diagonal_mut()
+            .column_vector_mut()
+            .iter_mut()
+            .zip(self.asymptotic.centrifugal.iter())
+            .for_each(|(x, l)| *x += (l.0 * (l.0 + 1)) as f64 * centr_prop);
 
         zipped!(self.current_g_func.as_mut(), self.unit.as_ref(), self.potential_buffer.as_ref())
             .for_each(|unzipped!(mut c, u, p)| 
@@ -321,9 +321,9 @@ where
                 b1.write(u.read() + data.dr * data.dr / 12. * c.read())
             );
 
-        inverse_inplace(self.buffer1.as_ref(), self.f3.as_mut(), &mut data.perm, &mut data.perm_inv);
+        inverse_inplace(self.buffer1.as_ref(), self.f3.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
 
-        inverse_inplace(data.psi1.as_ref(), data.psi2.as_mut(), &mut data.perm, &mut data.perm_inv);
+        inverse_inplace(data.psi1.as_ref(), data.psi2.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
         matmul(self.buffer2.as_mut(), self.f2.as_ref(), data.psi2.as_ref(), None, 1., faer::Parallelism::None);
         zipped!(self.buffer2.as_mut(), data.unit.as_ref(), self.f1.as_ref())
             .for_each(|unzipped!(mut b2, u, f1)| 
@@ -357,7 +357,7 @@ where
                 b1.write(2. * u.read() - data.dr * data.dr * 10. / 12. * b1.read())
             );
 
-        inverse_inplace(self.buffer1.as_ref(), self.buffer2.as_mut(), &mut data.perm, &mut data.perm_inv);
+        inverse_inplace(self.buffer1.as_ref(), self.buffer2.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
 
         zipped!(self.f2.as_mut(), data.unit.as_ref(), self.buffer1.as_ref())
             .for_each(|unzipped!(mut f2, u, b1)| 
@@ -368,7 +368,7 @@ where
         self.buffer1 += self.f2.as_ref();
         matmul(data.psi2.as_mut(), self.buffer2.as_ref(), self.buffer1.as_ref(), None, 1., faer::Parallelism::None);
 
-        inverse_inplace(data.psi2.as_ref(), self.buffer1.as_mut(), &mut data.perm, &mut data.perm_inv);
+        inverse_inplace(data.psi2.as_ref(), self.buffer1.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
 
         matmul(self.buffer2.as_mut(), data.psi1.as_ref(), self.buffer1.as_ref(), None, 1., faer::Parallelism::None);
         swap(&mut data.psi1, &mut self.buffer2);

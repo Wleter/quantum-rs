@@ -2,7 +2,7 @@ use std::{fs::{create_dir_all, File}, io::Write, path::Path};
 use faer::{dyn_stack::{GlobalPodBuffer, PodStack}, linalg::{cholesky::bunch_kaufman::compute::{cholesky_in_place, cholesky_in_place_req}, lu::{self, partial_pivoting::{compute::lu_in_place_req, inverse::invert_req}}, temp_mat_req, temp_mat_uninit}, perm::PermRef, unzipped, zipped, Conj, MatMut, MatRef, Parallelism};
 
 #[derive(Clone, Copy, Debug)]
-pub struct AngularSpin(pub usize);
+pub struct AngMomentum(pub u32);
 
 pub fn save_data(
     filename: &str,

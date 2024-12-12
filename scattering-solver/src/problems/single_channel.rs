@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use num::Complex;
 use quantum::{params::{particle_factory::create_atom, particles::Particles}, problems_impl, units::{distance_units::Distance, energy_units::{Energy, Kelvin}, mass_units::Mass, Au}, utility::linspace};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{numerov_modifier::{Sampling, ScatteringVsDistance, WaveStorage}, propagator::MultiStepRule, single_numerov::SingleRatioNumerov}, observables::s_matrix::HasSMatrix, potentials::{potential::Potential, potential_factory::create_lj}, utility::{save_data, AngularSpin}};
+use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{numerov_modifier::{Sampling, ScatteringVsDistance, WaveStorage}, propagator::MultiStepRule, single_numerov::SingleRatioNumerov}, potentials::{potential::Potential, potential_factory::create_lj}, utility::{save_data, AngMomentum}};
 
 pub struct SingleChannel {}
 
@@ -20,7 +20,7 @@ impl SingleChannel {
         let particle1 = create_atom("Li6").unwrap();
         let particle2 = create_atom("Li7").unwrap();
         let energy = Energy(1e-7, Kelvin);
-        let spin = AngularSpin(0);
+        let spin = AngMomentum(0);
 
         let mut particles = Particles::new_pair(particle1, particle2, energy);
         particles.insert(spin);

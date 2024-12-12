@@ -1,3 +1,7 @@
 /target
 __pycache__/
 /data
+
+report/*
+!report/report.tex
+!report/report.pdf

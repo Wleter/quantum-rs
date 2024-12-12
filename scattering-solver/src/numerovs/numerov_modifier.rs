@@ -1,7 +1,7 @@
 
 use faer::Mat;
 
-use crate::{observables::s_matrix::{HasSMatrix, SingleSMatrix}, potentials::potential::{Potential, SimplePotential}};
+use crate::{observables::s_matrix::SingleSMatrix, potentials::potential::{Potential, SimplePotential}};
 
 use super::{multi_numerov::MultiNumerovData, propagator::PropagatorData, single_numerov::SingleNumerovData};
 
@@ -138,7 +138,7 @@ pub enum Sampling {
     Variable,
 }
 
-pub struct ScatteringVsDistance<S: HasSMatrix> {
+pub struct ScatteringVsDistance<S> {
     r_min: f64,
     capacity: usize,
     take_per: f64,
@@ -147,7 +147,7 @@ pub struct ScatteringVsDistance<S: HasSMatrix> {
     pub s_matrices: Vec<S>
 }
 
-impl<S: HasSMatrix> ScatteringVsDistance<S> {
+impl<S> ScatteringVsDistance<S> {
     pub fn new(r_min: f64, capacity: usize) -> Self {
         Self {
             r_min,

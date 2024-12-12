@@ -2,11 +2,11 @@ use std::{cmp::Ordering, f64::consts::FRAC_PI_2};
 
 use crate::units::{energy_units::Energy, Au, Unit};
 
-pub fn asymptotic_bessel_j(x: f64, l: usize) -> f64 {
+pub fn asymptotic_bessel_j(x: f64, l: u32) -> f64 {
     (x - FRAC_PI_2 * (l as f64)).sin()
 }
 
-pub fn asymptotic_bessel_n(x: f64, l: usize) -> f64 {
+pub fn asymptotic_bessel_n(x: f64, l: u32) -> f64 {
     (x - FRAC_PI_2 * (l as f64)).cos()
 }
 
@@ -32,6 +32,23 @@ pub fn linspace(start: f64, end: f64, n: usize) -> Vec<f64> {
 
     result
 }
+
+pub fn logspace(start: f64, end: f64, n: usize) -> Vec<f64> {
+    if n == 1 {
+        return vec![start];
+    }
+
+    let mut result = Vec::with_capacity(n);
+    let step = (end - start) / (n as f64 - 1.0);
+
+    for i in 0..n {
+        result.push((10.0f64).powf(start + (i as f64) * step));
+    }
+
+    result
+}
+
+
 
 pub fn unit_linspace<U: Unit>(start: Energy<U>, end: Energy<U>, n: usize) -> Vec<Energy<U>> {
     let start_au = start.to_au();

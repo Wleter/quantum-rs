@@ -3,7 +3,7 @@ use faer::Mat;
 use quantum::{cast_variant, params::{particle_factory::RotConst, particles::Particles}, states::{operator::Operator, state::State, state_type::StateType, States, StatesBasis}, units::{energy_units::Energy, Au}};
 use scattering_solver::potentials::{composite_potential::Composite, dispersion_potential::Dispersion, masked_potential::MaskedPotential, pair_potential::PairPotential, potential::{Potential, SimplePotential}};
 
-use crate::{rotor_atom::RotorAtomSFStates, utility::{percival_coef, RotorJMax, RotorJTot, RotorLMax}};
+use crate::{rotor_atom::RotorAtomStates, utility::{percival_coef, RotorJMax, RotorJTot, RotorLMax}};
 
 #[derive(Clone)]
 pub struct AlkaliRotorAtomProblemBuilder<P, V>
@@ -43,15 +43,15 @@ where
             && self.singlet_potential.iter().all(|(lambda, _)| lambda & 1 == 0);
 
         let ls = if all_even { (0..=l_max).step_by(2).collect() } else { (0..=l_max).collect() };
-        let system_l = State::new(RotorAtomSFStates::SystemL, ls);
+        let system_l = State::new(RotorAtomStates::SystemL, ls);
         let js = if all_even { (0..=j_max).step_by(2).collect() } else { (0..=j_max).collect() };
-        let rotor_j = State::new(RotorAtomSFStates::RotorJ, js);
+        let rotor_j = State::new(RotorAtomStates::RotorJ, js);
         
         let mut rotor_states = States::default();
         rotor_states.push_state(StateType::Irreducible(system_l))
             .push_state(StateType::Irreducible(rotor_j));
 
-        let rotor_basis: StatesBasis<RotorAtomSFStates, u32> = rotor_states.iter_elements()
+        let rotor_basis: StatesBasis<RotorAtomStates, u32> = rotor_states.iter_elements()
             .filter(|a| {
                 let j = a.values[0];
                 let l = a.values[1];
@@ -68,13 +68,13 @@ where
         
         let hifi_states = hifi_problem.states_at(mag_field);
 
-        let l_centrifugal = Operator::from_diagonal_mel(&rotor_basis, [RotorAtomSFStates::SystemL], |[l]| {
+        let l_centrifugal = Operator::from_diagonal_mel(&rotor_basis, [RotorAtomStates::SystemL], |[l]| {
             (l.1 * (l.1 + 1)) as f64
         });
         let l_centrifugal_mask = l_centrifugal.kron(&id_hifi);
         let l_potential = Dispersion::new(0.5 / particles.red_mass(), -2);
 
-        let j_centrifugal = Operator::from_diagonal_mel(&rotor_basis, [RotorAtomSFStates::RotorJ], |[j]| {
+        let j_centrifugal = Operator::from_diagonal_mel(&rotor_basis, [RotorAtomStates::RotorJ], |[j]| {
             (j.1 * (j.1 + 1)) as f64
         });
         let j_centrifugal_mask = j_centrifugal.kron(&id_hifi);
@@ -105,7 +105,7 @@ where
 
         let mut triplet_potentials = self.triplet_potential.into_iter()
             .map(|(lambda, potential)| {
-                let rotor_masking = Operator::from_mel(&rotor_basis, [RotorAtomSFStates::SystemL, RotorAtomSFStates::RotorJ], |[l, j]| {
+                let rotor_masking = Operator::from_mel(&rotor_basis, [RotorAtomStates::SystemL, RotorAtomStates::RotorJ], |[l, j]| {
                     let lj_left = (l.bra.1, j.bra.1);
                     let lj_right = (l.ket.1, j.ket.1);
 
@@ -122,7 +122,7 @@ where
 
         let mut singlet_potentials = self.singlet_potential.into_iter()
             .map(|(lambda, potential)| {
-                let rotor_masking = Operator::from_mel(&rotor_basis, [RotorAtomSFStates::SystemL, RotorAtomSFStates::RotorJ], |[l, j]| {
+                let rotor_masking = Operator::from_mel(&rotor_basis, [RotorAtomStates::SystemL, RotorAtomStates::RotorJ], |[l, j]| {
                     let lj_left = (l.bra.1, j.bra.1);
                     let lj_right = (l.ket.1, j.ket.1);
 

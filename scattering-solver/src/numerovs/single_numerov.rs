@@ -3,7 +3,7 @@ use std::f64::consts::PI;
 use num::complex::Complex64;
 use quantum::{params::particles::Particles, units::{energy_units::Energy, mass_units::Mass, Au}, utility::{asymptotic_bessel_j, asymptotic_bessel_n}};
 
-use crate::{boundary::Boundary, observables::s_matrix::SingleSMatrix, potentials::{dispersion_potential::Dispersion, potential::SimplePotential, potential_factory::create_centrifugal}, utility::AngularSpin};
+use crate::{boundary::Boundary, observables::s_matrix::SingleSMatrix, potentials::{dispersion_potential::Dispersion, potential::SimplePotential, potential_factory::create_centrifugal}, utility::AngMomentum};
 
 use super::propagator::{MultiStep, MultiStepRule, Numerov, NumerovResult, PropagatorData, StepAction, StepRule};
 
@@ -79,7 +79,7 @@ where
     potential: &'a P,
     mass: f64,
     energy: f64,
-    pub l: AngularSpin,
+    pub l: AngMomentum,
     centrifugal: Option<Dispersion>,
 
     current_g_func: f64,
@@ -100,7 +100,7 @@ where
             .expect("no collision energy Energy<Au> found in particles")
             .to_au();
 
-        let l = particles.get::<AngularSpin>().unwrap_or(&AngularSpin(0));
+        let l = particles.get::<AngMomentum>().unwrap_or(&AngMomentum(0));
         let centrifugal = create_centrifugal(mass, *l);
 
         Self {

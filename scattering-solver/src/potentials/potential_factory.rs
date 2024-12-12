@@ -1,6 +1,6 @@
 use quantum::units::{distance_units::Distance, energy_units::Energy, Au};
 
-use crate::utility::AngularSpin;
+use crate::utility::AngMomentum;
 
 use super::{composite_potential::Composite, dispersion_potential::Dispersion};
 
@@ -18,7 +18,7 @@ pub fn create_lj(d6: Energy<Au>, r6: Distance<Au>) -> Composite<Dispersion> {
 }
 
 /// Creates a Lennard-Jones potential with given parameters
-pub fn create_centrifugal(red_mass: f64, l: AngularSpin) -> Option<Dispersion> {
+pub fn create_centrifugal(red_mass: f64, l: AngMomentum) -> Option<Dispersion> {
     if l.0 == 0 {
         return None
     }
