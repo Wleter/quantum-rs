@@ -1,4 +1,4 @@
-use std::f64::consts::FRAC_PI_2;
+use std::{cmp::Ordering, f64::consts::FRAC_PI_2};
 
 use crate::units::{energy_units::Energy, Au, Unit};
 
@@ -105,59 +105,63 @@ pub fn double_factorial(n: u32) -> f64 {
 fn negate_m(l: u32, m: i32) -> f64 {
     assert!(m < 50);
 
-    if m > 0 {
-        let mut value = (-1.0f64).powi(m);
-        let min = l as i32 - m;
-        let max = l as i32 + m;
-
-        for k in min..max {
-            value /= k as f64 + 1.
-        }
-
-        value
-    } else if m < 0 {
-        let mut value = (-1.0f64).powi(m);
-        let min = l as i32 + m;
-        let max = l as i32 - m;
-
-        for k in min..max {
-            value *= k as f64 + 1.
-        }
-
-        value
-    } else {
-        1.0
+    match m.cmp(&0) {
+        Ordering::Greater => {
+            let mut value = (-1.0f64).powi(m);
+            let min = l as i32 - m;
+            let max = l as i32 + m;
+    
+            for k in min..max {
+                value /= k as f64 + 1.
+            }
+    
+            value
+        },
+        Ordering::Less => {
+            let mut value = (-1.0f64).powi(m);
+            let min = l as i32 + m;
+            let max = l as i32 - m;
+    
+            for k in min..max {
+                value *= k as f64 + 1.
+            }
+    
+            value
+        },
+        Ordering::Equal => 1.0
     }
 }
 
 pub fn normalization(l: u32, m: i32) -> f64 {
     assert!(m < 50);
 
-    let norm2 = if m > 0 {
-        let mut value = 1.0;
-        let min = l as i32 - m;
-        let max = l as i32 + m;
-
-        for k in min..max {
-            value /= k as f64 + 1.;
-            if value.is_nan() || value < 0.{
-                println!("{} {} {}", l, m, k)
+    let norm2 = match m.cmp(&0) {
+        Ordering::Greater => {
+            let mut value = 1.0;
+            let min = l as i32 - m;
+            let max = l as i32 + m;
+    
+            for k in min..max {
+                value /= k as f64 + 1.;
+                if value.is_nan() || value < 0.{
+                    println!("{} {} {}", l, m, k)
+                }
             }
-        }
-
-        value
-    } else if m < 0 {
-        let mut value = 1.0;
-        let min = l as i32 + m;
-        let max = l as i32 - m;
-
-        for k in min..max {
-            value *= k as f64 + 1.
-        }
-
-        value
-    } else {
-        1.0
+    
+            value
+        },
+        Ordering::Less => {
+            let mut value = 1.0;
+            let min = l as i32 + m;
+            let max = l as i32 - m;
+    
+            for k in min..max {
+                value *= k as f64 + 1.
+            }
+    
+            value
+        },
+        Ordering::Equal => 1.0
     };
 
     (norm2 * (l as f64 + 0.5)).sqrt()

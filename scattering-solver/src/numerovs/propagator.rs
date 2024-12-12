@@ -162,7 +162,7 @@ where
     pub fn change_step_rule<S2: StepRule<D>>(self, step_rules: S2) -> Numerov<D, S2, M> {
         Numerov {
             data: self.data,
-            step_rules: step_rules,
+            step_rules,
             multi_step: self.multi_step
         }
     }

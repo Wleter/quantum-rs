@@ -111,7 +111,7 @@ where
             }
         }
 
-        let denominator = (&wave_ratio * n_prev_last - n_last).partial_piv_lu();
+        let denominator = (wave_ratio * n_prev_last - n_last).partial_piv_lu();
         let denominator = denominator.inverse();
 
         let k_matrix = -denominator * (wave_ratio * j_prev_last - j_last);
@@ -398,11 +398,8 @@ where
     P: Potential<Space = Mat<f64>>
 {
     fn before(&mut self, data: &mut MultiNumerovData<'_, P>, r_stop: f64) {
-        match &mut self.sampling {
-            SampleConfig::Step(value) => {
-                *value = (data.r - r_stop).abs() / self.capacity as f64
-            },
-            _ => {},
+        if let SampleConfig::Step(value) = &mut self.sampling {
+            *value = (data.r - r_stop).abs() / self.capacity as f64
         }
 
         self.rs.push(data.r);

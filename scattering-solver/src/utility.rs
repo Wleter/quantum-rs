@@ -128,7 +128,7 @@ pub fn inverse_symmetric_inplace(mat: MatRef<f64>, mut out: MatMut<f64>, perm: &
         mat_temp.as_ref(),
         sub_diag.col(0),
         Conj::No,
-        unsafe { PermRef::new_unchecked(&perm, &perm_inv) },
+        unsafe { PermRef::new_unchecked(perm, perm_inv) },
         out,
         Parallelism::None,
         PodStack::new(&mut GlobalPodBuffer::new(

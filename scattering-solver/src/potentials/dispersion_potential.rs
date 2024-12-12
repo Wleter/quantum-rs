@@ -9,7 +9,7 @@ pub struct Dispersion {
 
 impl Dispersion {
     pub fn new(d0: f64, n: i32) -> Self {
-        Self { d0: d0, n, }
+        Self { d0, n, }
     }
 }
 

@@ -85,18 +85,15 @@ where
     P: SimplePotential
 {
     fn before(&mut self, data: &mut SingleNumerovData<'_, P>, r_stop: f64) {
-        match &mut self.sampling {
-            SampleConfig::Step(value) => {
-                *value = (data.r - r_stop).abs() / self.capacity as f64
-            },
-            _ => {},
+        if let SampleConfig::Step(value) = &mut self.sampling {
+            *value = (data.r - r_stop).abs() / self.capacity as f64
         }
 
         self.rs.push(data.r);
     }
 
     fn after_step(&mut self, data: &mut SingleNumerovData<'_, P>) {
-        self.last_value = data.psi1 * self.last_value;
+        self.last_value *= data.psi1;
 
         match &mut self.sampling {
             SampleConfig::Each(sample_each) => {
