@@ -1263,15 +1263,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rusty-fitpack"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4b249fb561e6c95e9af03c77fba372ba210f2250c032e60effcb25a589ee5b7"
-dependencies = [
- "ndarray 0.12.1",
-]
-
-[[package]]
 name = "ryu"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1308,8 +1299,8 @@ dependencies = [
  "num",
  "quantum",
  "rayon",
- "rusty-fitpack",
  "scattering-solver",
+ "spline-interpolation",
 ]
 
 [[package]]
@@ -1432,6 +1423,14 @@ name = "smallvec"
 version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
+
+[[package]]
+name = "spline-interpolation"
+version = "0.2.0"
+source = "git+https://github.com/Wleter/spline-interpolation.git#7d50ff9fcfc097c4b39a5da3fab5c91139370dbb"
+dependencies = [
+ "ndarray 0.12.1",
+]
 
 [[package]]
 name = "standback"

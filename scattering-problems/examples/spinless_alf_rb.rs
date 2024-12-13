@@ -1,15 +1,15 @@
-use std::{f64::consts::PI, fs::File, io::{BufRead, BufReader}, mem::swap, time::Instant};
+use std::{f64::consts::PI, fs::File, io::{BufRead, BufReader}, time::Instant};
 
 use faer::Mat;
 use gauss_quad::GaussLegendre;
 use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
 use quantum::{params::{particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::Angstrom, energy_units::{CmInv, Energy, Kelvin}, mass_units::{Dalton, Mass}, Au, Unit}, utility::{legendre_polynomials, linspace, logspace}};
-use rusty_fitpack::{splev, splrep};
 use scattering_problems::{rotor_atom::RotorAtomProblemBuilder, utility::{RotorJMax, RotorJTot, RotorLMax}, ScatteringProblem};
 use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, potentials::{dispersion_potential::Dispersion, potential::{Potential, SimplePotential, SubPotential}}, utility::save_data};
 
 use rayon::prelude::*;
+use spline_interpolation::{SplineBuilder, UniformSpline};
 
 pub fn main() {
     Problems::select(&mut get_args());
@@ -19,7 +19,7 @@ pub struct Problems;
 
 problems_impl!(Problems, "Spinless AlF + Rb",
     "potential values" => |_| Self::potential_values(),
-    "elastic cross section" => |_| Self::elastic_cross_section_1chan(),
+    "elastic cross section 1 channel" => |_| Self::elastic_cross_section_1chan(),
     "elastic cross section" => |_| Self::elastic_cross_section(),
     "inelastic cross section" => |_| Self::inelastic_cross_section()
 );
@@ -35,7 +35,7 @@ impl Problems {
         save_data("potential_dec_AlF_Rb", "", &data)
             .unwrap();
 
-        let interp_potentials = interpolate_potentials(&mut pot_array, 0.1);
+        let interp_potentials = interpolate_potentials(&mut pot_array);
         let distances = linspace(4., 50., 1000);
 
         let mut data = vec![distances.clone()];
@@ -53,6 +53,7 @@ impl Problems {
     fn elastic_cross_section_1chan() {
         let is_rb_87 = true;
         let energy_relative = Energy(1e-7, Kelvin);
+        let pot_array = read_potential();
 
         ///////////////////////////////
         
@@ -62,8 +63,7 @@ impl Problems {
         particles.insert(RotorLMax(80));
         particles.insert(RotorJMax(80));
 
-        let mut pot_array = read_potential();
-        let scattering_problem = get_potentials(&mut pot_array, &particles, 0);
+        let scattering_problem = get_potentials(&pot_array, &particles, 0);
         let potential = &scattering_problem.potential;
         particles.insert(scattering_problem.asymptotic);
 
@@ -88,6 +88,7 @@ impl Problems {
     fn elastic_cross_section() {
         let energy = Energy(1e-7, Kelvin);
         let rot_max = 80;
+        let pot_array = read_potential();
 
         ///////////////////////////////
 
@@ -103,8 +104,7 @@ impl Problems {
                     particles.insert(RotorLMax(*x));
                     particles.insert(RotorJMax(*x));
     
-                    let mut pot_array = read_potential();
-                    let scattering_problem = get_potentials(&mut pot_array, &particles, 0);
+                    let scattering_problem = get_potentials(&pot_array, &particles, 0);
                     let potential = &scattering_problem.potential;
                     particles.insert(scattering_problem.asymptotic);
         
@@ -137,6 +137,8 @@ impl Problems {
 
         ///////////////////////////////
 
+        let pot_array = read_potential();
+
         for is_rb_87 in [true, false] {
             let start = Instant::now();
     
@@ -150,8 +152,7 @@ impl Problems {
                     particles.insert(RotorLMax(80));
                     particles.insert(RotorJMax(80));
     
-                    let mut pot_array = read_potential();
-                    let scattering_problem = get_potentials(&mut pot_array, &particles, 1);
+                    let scattering_problem = get_potentials(&pot_array, &particles, 1);
                     let potential = &scattering_problem.potential;
                     particles.insert(scattering_problem.asymptotic);
         
@@ -187,8 +188,8 @@ impl Problems {
     }
 }
 
-fn get_potentials<'a>(pot_array: &'a mut PotentialArray, particles: &Particles, entrance: usize) -> ScatteringProblem<impl Potential<Space = Mat<f64>> + 'a> {
-    let interp_potentials = interpolate_potentials(pot_array, 0.001);
+fn get_potentials(pot_array: &PotentialArray, particles: &Particles, entrance: usize) -> ScatteringProblem<impl Potential<Space = Mat<f64>>> {
+    let interp_potentials = interpolate_potentials(pot_array);
     
     let mut potentials_far = Vec::new();
     for _ in &interp_potentials {
@@ -317,25 +318,14 @@ struct PotentialArray {
     distances: Vec<f64>,
 }
 
-fn interpolate_potentials<'a>(pot_array: &'a mut PotentialArray, res: f64) -> Vec<(u32, InterpolatedPotential<'a>)> {
-    let r_min = 4.;
-    let r_max = 50.;
-    let r_no = (45. / res).ceil() as usize;
-    let r_step = (r_max - r_min) / r_no as f64;
-
-    let x = linspace(4., 50., (45. / res).ceil() as usize);
+fn interpolate_potentials(pot_array: &PotentialArray) -> Vec<(u32, InterpolatedPotential)> {
     let mut interpolated = Vec::new();
 
-    for (lambda, potential) in &mut pot_array.potentials {
-        let (t, c, k) = splrep(pot_array.distances.clone(), potential.clone(), None, None, None, None, None, None, None, None, None, None);
-        swap(potential, &mut splev(t, c, k, x.clone(), 0));
+    for (lambda, potential) in &pot_array.potentials {
+        let spline = SplineBuilder::new(&pot_array.distances, &potential)
+            .build();
 
-        let interp = InterpolatedPotential {
-            values: potential,
-            r_min,
-            r_max,
-            r_step,
-        };
+        let interp = InterpolatedPotential(spline);
 
         interpolated.push((*lambda, interp))
     }
@@ -344,40 +334,13 @@ fn interpolate_potentials<'a>(pot_array: &'a mut PotentialArray, res: f64) -> Ve
 }
 
 #[derive(Clone)]
-pub struct InterpolatedPotential<'a> {
-    values: &'a [f64],
-    r_min: f64,
-    r_max: f64,
-    r_step: f64,
-}
+pub struct InterpolatedPotential(UniformSpline);
 
-impl<'a> InterpolatedPotential<'a> {
-    fn value_internal(&self, r: f64) -> f64 {
-        if self.r_min >= r {
-            return self.values[0]
-        }
-        if self.r_max <= r {
-            return *self.values.last().unwrap()
-        }
-
-        let mut progress = (r - self.r_min).max(0.) / self.r_step;
-
-        let index = progress.floor();
-        progress -= index;
-        let index = index as usize;
-        if index == self.values.len() - 1 {
-            return self.values[index]
-        }
-
-        self.values[index] + progress * (self.values[index + 1] - self.values[index])
-    }
-}
-
-impl Potential for InterpolatedPotential<'_> {
+impl Potential for InterpolatedPotential {
     type Space = f64;
 
     fn value_inplace(&self, r: f64, value: &mut Self::Space) {
-        *value = self.value_internal(r);
+        *value = self.0.eval(r);
     }
 
     fn size(&self) -> usize {
@@ -385,9 +348,9 @@ impl Potential for InterpolatedPotential<'_> {
     }
 }
 
-impl SubPotential for InterpolatedPotential<'_> {
+impl SubPotential for InterpolatedPotential {
     fn value_add(&self, r: f64, value: &mut Self::Space) {
-        *value += self.value_internal(r)
+        *value += self.0.eval(r)
     }
 }
 

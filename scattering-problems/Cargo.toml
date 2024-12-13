@@ -14,4 +14,4 @@ indicatif = { workspace = true }
 num = { workspace = true }
 rayon = {workspace = true }
 gauss-quad = "0.2.1"
-rusty-fitpack = "0.1.2"
+spline-interpolation = { git = "https://github.com/Wleter/spline-interpolation.git" }
