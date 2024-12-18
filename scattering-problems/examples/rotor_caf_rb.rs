@@ -1,13 +1,13 @@
 use core::f64;
 use std::time::Instant;
 
-use abm::{DoubleHifiProblemBuilder, HifiProblemBuilder};
+use abm::{utility::save_spectrum, DoubleHifiProblemBuilder, HifiProblemBuilder};
 use faer::Mat;
 use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
 use num::complex::Complex64;
 use quantum::{params::{particle::Particle, particle_factory::{self, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{energy_units::{Energy, GHz, Kelvin, MHz}, mass_units::{Dalton, Mass}, Au, Unit}, utility::linspace};
-use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder}, utility::{RotorJMax, RotorJTot, RotorLMax}, ScatteringProblem};
+use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder}, utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorJTotMax, RotorLMax}, ScatteringProblem};
 use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule, single_numerov::SingleRatioNumerov}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::save_data};
 
 use rayon::prelude::*;
@@ -22,68 +22,17 @@ problems_impl!(Problems, "CaF + Rb Feshbach",
     "isotropic potential" => |_| Self::potentials(),
     "single channel isotropic scatterings" => |_| Self::single_chan_scatterings(),
     "isotropic feshbach" => |_| Self::feshbach_iso(),
+    "rotor levels" => |_| Self::rotor_levels(),
+    "rotor potentials" => |_| Self::rotor_potentials(),
     "rotor feshbach" => |_| Self::feshbach_rotor(),
-    "rotor potentials" => |_| Self::rotor_potentials()
 );
 
 impl Problems {
-    fn triplet_iso(config: usize) -> Composite<Dispersion> {
-        let factors = [1.0286, 0.9717, 1.00268];
-
-        let mut triplet = Composite::new(Dispersion::new(-3084., -6));
-        triplet.add_potential(Dispersion::new(factors[config] * 2e9, -12));
-
-        triplet
-    }
-
-    fn singlet_iso(config: usize) -> Composite<Dispersion> {
-        let factors = [1.0196, 0.9815, 1.0037];
-
-        let mut singlet = Composite::new(Dispersion::new(-3084., -6));
-        singlet.add_potential(Dispersion::new(factors[config] * 5e8, -12));
-
-        singlet
-    }
-
-    fn potential_aniso() -> Composite<Dispersion> {
-        let singlet = Composite::new(Dispersion::new(-100., -6));
-        singlet
-    }
-
-    fn get_potential_iso(config_triplet: usize, config_singlet: usize, projection: i32, mag_field: f64, entrance: usize) -> ScatteringProblem<impl Potential<Space = Mat<f64>>> {
-        let hifi_caf = HifiProblemBuilder::new(1, 1)
-            .with_hyperfine_coupling(Energy(120., MHz).to_au());
-
-        let hifi_rb = HifiProblemBuilder::new(1, 3)
-            .with_hyperfine_coupling(Energy(6.83 / 2., GHz).to_au());
-
-        let hifi_problem = DoubleHifiProblemBuilder::new(hifi_caf, hifi_rb).with_projection(projection);
-
-        let triplet = Self::triplet_iso(config_triplet);
-        let singlet = Self::singlet_iso(config_singlet);
-
-        AlkaliAtomsProblemBuilder::new(hifi_problem, triplet, singlet)
-            .build(mag_field, entrance)
-    }
-
-    fn get_particles(energy: Energy<impl Unit>) -> Particles {
-        let caf = Particle::new("CaF", Mass(39.962590850 + 18.998403162, Dalton));
-        let rb = particle_factory::create_atom("Rb87").unwrap();
-
-        let mut particles = Particles::new_pair(caf, rb, energy);
-        particles.insert(RotorLMax(20));
-        particles.insert(RotorJMax(20));
-        particles.insert(RotorJTot(0));
-        particles.insert(RotConst(Energy(10.3, GHz).to_au()));
-        
-        particles
-    }
-
     fn potentials() {
-        let particles = Self::get_particles(Energy(1e-7, Kelvin));
-        let triplet = Self::triplet_iso(0);
-        let singlet = Self::singlet_iso(0);
-        let aniso = Self::potential_aniso();
+        let particles = get_particles(Energy(1e-7, Kelvin));
+        let triplet = triplet_iso(0);
+        let singlet = singlet_iso(0);
+        let aniso = potential_aniso();
 
         let distances = linspace(4., 20., 200);
         let triplet_values = distances.iter().map(|&x| triplet.value(x)).collect();
@@ -92,8 +41,8 @@ impl Problems {
 
         for config in [0, 1, 2] {
             println!("{config}");
-            let triplet = Self::triplet_iso(config);
-            let singlet = Self::singlet_iso(config);
+            let triplet = triplet_iso(config);
+            let singlet = singlet_iso(config);
 
             let boundary = Boundary::new(8.5, Direction::Outwards, (1.01, 1.02));
             let mut numerov = SingleRatioNumerov::new(&triplet, &particles, MultiStepRule::default(), boundary);
@@ -112,7 +61,7 @@ impl Problems {
     }
 
     fn single_chan_scatterings() {
-        let particles = Self::get_particles(Energy(1e-7, Kelvin));
+        let particles = get_particles(Energy(1e-7, Kelvin));
 
         let factors = linspace(0.95, 1.05, 500);
 
@@ -167,9 +116,10 @@ impl Problems {
         let start = Instant::now();
         
         let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
-            let alkali_problem = Self::get_potential_iso(config_triplet, config_singlet, projection, mag_field, entrance);
+            let alkali_problem = get_potential_iso(config_triplet, config_singlet, projection, mag_field, entrance);
 
-            let caf_rb = Self::get_particles(energy);
+            let mut caf_rb = get_particles(energy);
+            caf_rb.insert(alkali_problem.asymptotic);
             let potential = &alkali_problem.potential;
 
             let id = Mat::<f64>::identity(potential.size(), potential.size());
@@ -195,24 +145,63 @@ impl Problems {
             .unwrap()
     }
 
-    fn get_potential(config_triplet: usize, config_singlet: usize, projection: i32, mag_field: f64, particles: &Particles) -> AlkaliRotorAtomProblem<impl Potential<Space = Mat<f64>>> {
-        let hifi_caf = HifiProblemBuilder::new(1, 1)
-            .with_hyperfine_coupling(Energy(120., MHz).to_au());
+    fn rotor_potentials() {
+        ///////////////////////////////////
 
-        let hifi_rb = HifiProblemBuilder::new(1, 3)
-            .with_hyperfine_coupling(Energy(6.83 / 2., GHz).to_au());
+        let projection = 4;
+        let channel = 0;
 
-        let hifi_problem = DoubleHifiProblemBuilder::new(hifi_caf, hifi_rb).with_projection(projection);
+        let config_triplet = 0;
+        let config_singlet = 0;
 
-        let triplet = Self::triplet_iso(config_triplet);
-        let singlet = Self::singlet_iso(config_singlet);
-        let aniso = Self::potential_aniso();
+        let energy_relative = Energy(1e-7, Kelvin);
+        let distances = linspace(4.2, 30., 200);
 
-        let triplets = vec![(0, triplet), (2, aniso.clone())];
-        let singlets = vec![(0, singlet), (2, aniso)];
+        ///////////////////////////////////
 
-        AlkaliRotorAtomProblemBuilder::new(hifi_problem, triplets, singlets)
-            .build(mag_field, particles)
+        let caf_rb = get_particles(energy_relative);
+        let alkali_problem = get_problem(config_triplet, config_singlet, projection, &caf_rb);
+
+        let alkali_problem = alkali_problem.scattering_at_field(100., channel);
+        let potential = &alkali_problem.potential;
+
+        let mut mat = Mat::zeros(potential.size(), potential.size());
+        let potentials: Vec<Mat<f64>> = distances.iter().map(|&x| {
+                potential.value_inplace(x, &mut mat);
+
+                mat.to_owned()
+            })
+            .collect();
+
+        let header = "distances\tpotentials";
+        let mut data = vec![distances];
+        for i in 0..potential.size() {
+            for j in 0..potential.size() {
+                data.push(potentials.iter().map(|p| p[(i, j)]).collect());
+            }
+        }
+
+        save_data(&format!("CaF_Rb_potentials_{config_triplet}_{config_singlet}"), header, &data)
+            .unwrap()
+    }
+
+    fn rotor_levels() {
+        let projection = 2;
+        let atoms = get_particles(Energy(1e-7, Kelvin));
+        let alkali_problem = get_problem(0, 0, projection, &atoms);
+
+        let mag_fields = linspace(0., 2000., 2000);
+
+        let energies: Vec<Vec<f64>> = mag_fields.par_iter()
+            .map(|mag_field| {
+                let (levels, _) = alkali_problem.levels_at_field(*mag_field);
+
+                levels.iter().map(|x| Energy(*x, Au).to(GHz).value()).collect()
+            })
+            .collect();
+        
+        let header = "magnetic field [G]\tEnergies [GHz]";
+        save_spectrum(header, "caf_rb_levels", &mag_fields, &energies).expect("error while saving abm");
     }
 
     fn feshbach_rotor() {
@@ -221,28 +210,28 @@ impl Problems {
         let projection = 2;
         let channel = 0;
 
-        let config_triplet = 1;
-        let config_singlet = 1;
+        let config_triplet = 0;
+        let config_singlet = 2;
 
         let energy_relative = Energy(1e-7, Kelvin);
         let mag_fields = linspace(0., 1000., 4000);
+        let atoms = get_particles(energy_relative);
+        let alkali_problem = get_problem(config_triplet, config_singlet, projection, &atoms);
 
         ///////////////////////////////////
 
         let start = Instant::now();
         let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
-            let mut caf_rb = Self::get_particles(energy_relative);
-            let alkali_problem = Self::get_potential(config_triplet, config_singlet, projection, mag_field, &caf_rb);
-
-            let energy = energy_relative.to_au() + alkali_problem.channel_energies[channel].to_au();
-
-            caf_rb.insert(Energy(energy, Au));
+            let mut atoms = get_particles(energy_relative);
+            let alkali_problem = alkali_problem.scattering_at_field(mag_field, channel);
+            
+            atoms.insert(alkali_problem.asymptotic);
             let potential = &alkali_problem.potential;
 
             let id = Mat::<f64>::identity(potential.size(), potential.size());
             let boundary = Boundary::new(8.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
             let step_rule = MultiStepRule::new(1e-3, f64::INFINITY, 500.);
-            let mut numerov = MultiRatioNumerov::new(potential, &caf_rb, step_rule, boundary);
+            let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
 
             numerov.propagate_to(1.5e3);
             numerov.data.calculate_s_matrix().get_scattering_length()
@@ -261,45 +250,78 @@ impl Problems {
         save_data(&format!("CaF_Rb_scatterings_{config_triplet}_{config_singlet}"), header, &data)
             .unwrap()
     }
+}
 
-    fn rotor_potentials() {
-        ///////////////////////////////////
+fn triplet_iso(config: usize) -> Composite<Dispersion> {
+    let factors = [1.0286, 0.9717, 1.00268];
 
-        let projection = 4;
-        let channel = 0;
+    let mut triplet = Composite::new(Dispersion::new(-3084., -6));
+    triplet.add_potential(Dispersion::new(factors[config] * 2e9, -12));
 
-        let config_triplet = 0;
-        let config_singlet = 0;
+    triplet
+}
 
-        let energy_relative = Energy(1e-7, Kelvin);
-        let distances = linspace(4.2, 30., 200);
+fn singlet_iso(config: usize) -> Composite<Dispersion> {
+    let factors = [1.0196, 0.9815, 1.0037];
 
-        ///////////////////////////////////
+    let mut singlet = Composite::new(Dispersion::new(-3084., -6));
+    singlet.add_potential(Dispersion::new(factors[config] * 5e8, -12));
 
-        let mut caf_rb = Self::get_particles(energy_relative);
-        let alkali_problem = Self::get_potential(config_triplet, config_singlet, projection, 100., &caf_rb);
+    singlet
+}
 
-        let energy = energy_relative.to_au() + alkali_problem.channel_energies[channel].to_au();
+fn potential_aniso() -> Composite<Dispersion> {
+    let singlet = Composite::new(Dispersion::new(-100., -6));
+    singlet
+}
 
-        caf_rb.insert(Energy(energy, Au));
-        let potential = &alkali_problem.potential;
-        
-        let mut mat = Mat::zeros(potential.size(), potential.size());
-        let potentials: Vec<Mat<f64>> = distances.iter().map(|&x| {
-                potential.value_inplace(x, &mut mat);
+fn get_potential_iso(config_triplet: usize, config_singlet: usize, projection: i32, mag_field: f64, entrance: usize) -> ScatteringProblem<impl Potential<Space = Mat<f64>>> {
+    let hifi_caf = HifiProblemBuilder::new(1, 1)
+        .with_hyperfine_coupling(Energy(120., MHz).to_au());
 
-                mat.to_owned()
-            })
-            .collect();
-        let header = "distances\tpotentials";
-        let mut data = vec![distances];
-        for i in 0..potential.size() {
-            for j in 0..potential.size() {
-                data.push(potentials.iter().map(|p| p[(i, j)]).collect());
-            }
-        }
+    let hifi_rb = HifiProblemBuilder::new(1, 3)
+        .with_hyperfine_coupling(Energy(6.83 / 2., GHz).to_au());
 
-        save_data(&format!("CaF_Rb_potentials_{config_triplet}_{config_singlet}"), header, &data)
-            .unwrap()
-    }
+    let hifi_problem = DoubleHifiProblemBuilder::new(hifi_caf, hifi_rb).with_projection(projection);
+
+    let triplet = triplet_iso(config_triplet);
+    let singlet = singlet_iso(config_singlet);
+
+    AlkaliAtomsProblemBuilder::new(hifi_problem, triplet, singlet)
+        .build(mag_field, entrance)
+}
+
+fn get_particles(energy: Energy<impl Unit>) -> Particles {
+    let caf = Particle::new("CaF", Mass(39.962590850 + 18.998403162, Dalton));
+    let rb = particle_factory::create_atom("Rb87").unwrap();
+
+    let mut particles = Particles::new_pair(caf, rb, energy);
+    particles.insert(RotorLMax(20));
+    particles.insert(RotorJMax(20));
+    particles.insert(RotorJTotMax(0));
+    particles.insert(RotConst(Energy(10.3, GHz).to_au()));
+    particles.insert(GammaSpinRot(Energy(40., MHz).to_au()));
+    particles.insert(AnisoHifi(Energy(14., MHz).to_au()));
+    
+    particles
+}
+
+fn get_problem(config_triplet: usize, config_singlet: usize, projection: i32, particles: &Particles) -> AlkaliRotorAtomProblem<impl SimplePotential + Clone, impl SimplePotential + Clone> {
+    let hifi_caf = HifiProblemBuilder::new(1, 1)
+        .with_hyperfine_coupling(Energy(120., MHz).to_au());
+
+    let hifi_rb = HifiProblemBuilder::new(1, 3)
+        .with_hyperfine_coupling(Energy(6.83 / 2., GHz).to_au());
+
+    let hifi_problem = DoubleHifiProblemBuilder::new(hifi_caf, hifi_rb).with_projection(projection);
+
+    let triplet = triplet_iso(config_triplet);
+    let singlet = singlet_iso(config_singlet);
+    let aniso = potential_aniso();
+
+    let triplets = vec![(0, triplet), (2, aniso.clone())];
+    let singlets = vec![(0, singlet), (2, aniso)];
+
+    AlkaliRotorAtomProblemBuilder::new(hifi_problem, triplets, singlets)
+        .build(particles)
 }

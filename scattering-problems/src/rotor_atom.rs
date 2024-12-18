@@ -16,17 +16,17 @@ where
     P: SimplePotential,
 {
     potential: Vec<(u32, P)>,
-    entrance: usize
+    entrance_lj: (u32, u32)
 }
 
 impl<P> RotorAtomProblemBuilder<P> 
 where 
     P: SimplePotential,
 {
-    pub fn new(potential: Vec<(u32, P)>, entrance: usize) -> Self {
+    pub fn new(potential: Vec<(u32, P)>, entrance_lj: (u32, u32)) -> Self {
         Self {
             potential,
-            entrance
+            entrance_lj
         }
     }
 
@@ -82,7 +82,7 @@ where
 
         let full_potential = PairPotential::new(rotor_centrifugal, potential);
 
-        let centrifugal = rotor_basis.iter()
+        let angular_momenta = rotor_basis.iter()
             .map(|x| AngMomentum(x.values[0]))
             .collect();
         
@@ -90,9 +90,15 @@ where
             .map(|x| (x.values[1] * (x.values[1] + 1)) as f64 * rot_const)
             .collect();
 
+        let entrance = rotor_basis.iter()
+            .enumerate()
+            .find(|(_, s)| s.values[0] == self.entrance_lj.0 && s.values[1] == self.entrance_lj.1)
+            .expect("Did not found entrance channel")
+            .0;
+
         let asymptotic = Asymptotic {
-            centrifugal,
-            entrance: self.entrance,
+            centrifugal: angular_momenta,
+            entrance,
             channel_energies,
             channel_states: Mat::identity(rotor_basis.len(), rotor_basis.len()),
         };

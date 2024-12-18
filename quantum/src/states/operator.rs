@@ -27,11 +27,7 @@ macro_rules! cast_variant {
         if let $pat(a) = $value {
             a
         } else {
-            panic!(
-                "mismatch variant when casting to {} for value {}",
-                stringify!($pat),
-                stringify!($val)
-            )
+            unreachable!()
         }
     }};
 }

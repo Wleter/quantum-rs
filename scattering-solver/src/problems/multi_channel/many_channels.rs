@@ -60,8 +60,7 @@ impl ManyChannels {
         let particles = Self::particles();
         let potential = Self::potential();
         
-        let id: Mat<f64> = Mat::identity(potential.size(), potential.size());
-        let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+        let id: Mat<f64> = Mat::identity(potential.size(), potential.size()); let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
 
         let mut numerov = MultiRatioNumerov::new(&potential, &particles, MultiStepRule::default(), boundary);
         let preparation = start.elapsed();

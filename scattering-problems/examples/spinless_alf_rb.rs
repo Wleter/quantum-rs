@@ -5,11 +5,10 @@ use gauss_quad::GaussLegendre;
 use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
 use quantum::{params::{particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::Angstrom, energy_units::{CmInv, Energy, Kelvin}, mass_units::{Dalton, Mass}, Au, Unit}, utility::{legendre_polynomials, linspace, logspace}};
-use scattering_problems::{rotor_atom::RotorAtomProblemBuilder, utility::{RotorJMax, RotorJTot, RotorLMax}, ScatteringProblem};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, potentials::{dispersion_potential::Dispersion, potential::{Potential, SimplePotential, SubPotential}}, utility::save_data};
+use scattering_problems::{potential_interpolation::{interpolate_potentials, PotentialArray, TransitionedPotential}, rotor_atom::RotorAtomProblemBuilder, utility::{RotorJMax, RotorJTot, RotorLMax}, ScatteringProblem};
+use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, potentials::{dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::save_data};
 
 use rayon::prelude::*;
-use spline_interpolation::{SplineBuilder, UniformSpline};
 
 pub fn main() {
     Problems::select(&mut get_args());
@@ -21,7 +20,8 @@ problems_impl!(Problems, "Spinless AlF + Rb",
     "potential values" => |_| Self::potential_values(),
     "elastic cross section 1 channel" => |_| Self::elastic_cross_section_1chan(),
     "elastic cross section" => |_| Self::elastic_cross_section(),
-    "inelastic cross section" => |_| Self::inelastic_cross_section()
+    "inelastic cross section" => |_| Self::inelastic_cross_section(),
+    "inelastic cross section j_tot" => |_| Self::inelastic_cross_section_j_tot()
 );
 
 impl Problems {
@@ -35,7 +35,7 @@ impl Problems {
         save_data("potential_dec_AlF_Rb", "", &data)
             .unwrap();
 
-        let interp_potentials = interpolate_potentials(&mut pot_array);
+        let interp_potentials = interpolate_potentials(&mut pot_array, 3);
         let distances = linspace(4., 50., 1000);
 
         let mut data = vec![distances.clone()];
@@ -63,7 +63,7 @@ impl Problems {
         particles.insert(RotorLMax(80));
         particles.insert(RotorJMax(80));
 
-        let scattering_problem = get_potentials(&pot_array, &particles, 0);
+        let scattering_problem = get_potentials(&pot_array, &particles, (0, 0));
         let potential = &scattering_problem.potential;
         particles.insert(scattering_problem.asymptotic);
 
@@ -104,7 +104,7 @@ impl Problems {
                     particles.insert(RotorLMax(*x));
                     particles.insert(RotorJMax(*x));
     
-                    let scattering_problem = get_potentials(&pot_array, &particles, 0);
+                    let scattering_problem = get_potentials(&pot_array, &particles, (0, 0));
                     let potential = &scattering_problem.potential;
                     particles.insert(scattering_problem.asymptotic);
         
@@ -142,17 +142,17 @@ impl Problems {
         for is_rb_87 in [true, false] {
             let start = Instant::now();
     
-            let cross_sections: Vec<[f64; 3]> = energies.par_iter()
+            let cross_sections: Vec<[f64; 5]> = energies.par_iter()
                 .progress()
                 .map(|x| {
                     let energy = Energy(*x, Kelvin);
 
                     let mut particles = get_particles(is_rb_87, energy.to(Au));
             
-                    particles.insert(RotorLMax(80));
-                    particles.insert(RotorJMax(80));
+                    particles.insert(RotorLMax(64));
+                    particles.insert(RotorJMax(64));
     
-                    let scattering_problem = get_potentials(&pot_array, &particles, 1);
+                    let scattering_problem = get_potentials(&pot_array, &particles, (1, 1));
                     let potential = &scattering_problem.potential;
                     particles.insert(scattering_problem.asymptotic);
         
@@ -161,14 +161,16 @@ impl Problems {
                     let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
                     let mut numerov = MultiRatioNumerov::new(potential, &particles, step_rule, boundary);
         
-                    numerov.propagate_to(500.);
+                    numerov.propagate_to(200.);
                     let s_matrix = numerov.data.calculate_s_matrix();
 
                     let inel_cross_section = s_matrix.get_inelastic_cross_sect_to(0) / Angstrom::TO_AU_MUL.powi(2);
                     let inel_tot_cross_section = s_matrix.get_inelastic_cross_sect() / Angstrom::TO_AU_MUL.powi(2);
                     let el_cross_section = s_matrix.get_elastic_cross_sect() / Angstrom::TO_AU_MUL.powi(2);
+                    let el_s_length_re = s_matrix.get_scattering_length().re;
+                    let el_s_length_im = s_matrix.get_scattering_length().im;
     
-                    [inel_cross_section, inel_tot_cross_section, el_cross_section]
+                    [inel_cross_section, inel_tot_cross_section, el_cross_section, el_s_length_re, el_s_length_im]
                 })
                 .collect();
     
@@ -176,20 +178,78 @@ impl Problems {
             println!("calculated in {}", elapsed.hhmmssxxx());
     
             let inelastic = cross_sections.iter().map(|x| x[0]).collect();
-            let inelastic_tot = cross_sections.iter().map(|x| x[2]).collect();
-            let elastic = cross_sections.iter().map(|x| x[3]).collect();
+            let inelastic_tot = cross_sections.iter().map(|x| x[1]).collect();
+            let elastic = cross_sections.iter().map(|x| x[2]).collect();
+            let s_re = cross_sections.iter().map(|x| x[3]).collect();
+            let s_im = cross_sections.iter().map(|x| x[4]).collect();
 
             let header = "energies\tcross_sections";
-            let data = vec![energies.clone(), inelastic, inelastic_tot, elastic];
+            let data = vec![energies.clone(), inelastic, inelastic_tot, elastic, s_re, s_im];
     
             save_data(&format!("AlF_Rb_inelastic_section_{is_rb_87}"), header, &data)
                 .unwrap()
         }
     }
+
+    fn inelastic_cross_section_j_tot() {
+        let energies = logspace(-7., 0., 500);
+        let j_tot_max = 5;
+
+        ///////////////////////////////
+
+        let pot_array = read_potential();
+        
+        for is_rb_87 in [true, false] {
+            let mut data = vec![energies.clone()];
+
+            for j_tot in 0..=j_tot_max {
+                let start = Instant::now();
+        
+                let cross_sections: Vec<f64> = energies.par_iter()
+                    .progress()
+                    .map(|x| {
+                        let energy = Energy(*x, Kelvin);
+
+                        let mut particles = get_particles(is_rb_87, energy.to(Au));
+                
+                        particles.insert(RotorLMax(64));
+                        particles.insert(RotorJMax(64));
+                        particles.insert(RotorJTot(j_tot));
+        
+                        let scattering_problem = get_potentials(&pot_array, &particles, (1, 1));
+                        let potential = &scattering_problem.potential;
+                        particles.insert(scattering_problem.asymptotic);
+            
+                        let id = Mat::<f64>::identity(potential.size(), potential.size());
+                        let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                        let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
+                        let mut numerov = MultiRatioNumerov::new(potential, &particles, step_rule, boundary);
+            
+                        numerov.propagate_to(200.);
+                        let s_matrix = numerov.data.calculate_s_matrix();
+
+                        let inel_cross_section = s_matrix.get_inelastic_cross_sect() / Angstrom::TO_AU_MUL.powi(2);
+        
+                        inel_cross_section
+                    })
+                    .collect();
+
+                let elapsed = start.elapsed();
+                println!("calculated in {}", elapsed.hhmmssxxx());
+                
+                data.push(cross_sections);
+            }
+
+            let header = "energies\tcross_sections";
+    
+            save_data(&format!("AlF_Rb_inelastic_section_{is_rb_87}_j_tots"), header, &data)
+                .unwrap()
+        }
+    }
 }
 
-fn get_potentials(pot_array: &PotentialArray, particles: &Particles, entrance: usize) -> ScatteringProblem<impl Potential<Space = Mat<f64>>> {
-    let interp_potentials = interpolate_potentials(pot_array);
+fn get_potentials(pot_array: &PotentialArray, particles: &Particles, lj_entrance: (u32, u32)) -> ScatteringProblem<impl Potential<Space = Mat<f64>>> {
+    let interp_potentials = interpolate_potentials(pot_array, 3);
     
     let mut potentials_far = Vec::new();
     for _ in &interp_potentials {
@@ -211,17 +271,13 @@ fn get_potentials(pot_array: &PotentialArray, particles: &Particles, entrance: u
     let potentials = interp_potentials.into_iter()
         .zip(potentials_far.into_iter())
         .map(|((lambda, near), far)| {
-            let combined = TransitionedPotential {
-                near,
-                far,
-                transition,
-            };
+            let combined = TransitionedPotential::new(near, far, transition);
 
             (lambda, combined)
         })
         .collect();
 
-    RotorAtomProblemBuilder::new(potentials, entrance)
+    RotorAtomProblemBuilder::new(potentials, lj_entrance)
         .build(particles)
 }
 
@@ -306,107 +362,5 @@ fn read_potential() -> PotentialArray {
         potentials.push((lambda as u32, lambda_values));
     }
 
-    PotentialArray {
-        potentials,
-        distances
-    }
-}
-
-#[derive(Debug)]
-struct PotentialArray {
-    potentials: Vec<(u32, Vec<f64>)>,
-    distances: Vec<f64>,
-}
-
-fn interpolate_potentials(pot_array: &PotentialArray) -> Vec<(u32, InterpolatedPotential)> {
-    let mut interpolated = Vec::new();
-
-    for (lambda, potential) in &pot_array.potentials {
-        let spline = SplineBuilder::new(&pot_array.distances, &potential)
-            .build();
-
-        let interp = InterpolatedPotential(spline);
-
-        interpolated.push((*lambda, interp))
-    }
-
-    interpolated
-}
-
-#[derive(Clone)]
-pub struct InterpolatedPotential(UniformSpline);
-
-impl Potential for InterpolatedPotential {
-    type Space = f64;
-
-    fn value_inplace(&self, r: f64, value: &mut Self::Space) {
-        *value = self.0.eval(r);
-    }
-
-    fn size(&self) -> usize {
-        1
-    }
-}
-
-impl SubPotential for InterpolatedPotential {
-    fn value_add(&self, r: f64, value: &mut Self::Space) {
-        *value += self.0.eval(r)
-    }
-}
-
-pub struct TransitionedPotential<P, V, F>
-where
-    P: SimplePotential,
-    V: SimplePotential,
-    F: Fn(f64) -> f64
-{
-    near: P,
-    far: V,
-    transition: F
-}
-
-impl<P, V, F> Potential for TransitionedPotential<P, V, F> 
-where
-    P: SimplePotential,
-    V: SimplePotential,
-    F: Fn(f64) -> f64
-{
-    type Space = f64;
-
-    fn value_inplace(&self, r: f64, value: &mut Self::Space) {
-        let a = (self.transition)(r);
-        assert!(a >= 0. && a <= 1.);
-
-        if a == 0. {
-            self.far.value_inplace(r, value);
-        } else if a == 1. {
-            self.near.value_inplace(r, value);
-        } else {
-            *value = a * self.near.value(r) + (1. - a) * self.far.value(r)
-        }
-    }
-
-    fn size(&self) -> usize {
-        1
-    }
-}
-
-impl<P, V, F> SubPotential for TransitionedPotential<P, V, F> 
-where
-    P: SimplePotential,
-    V: SimplePotential,
-    F: Fn(f64) -> f64
-{
-    fn value_add(&self, r: f64, value: &mut Self::Space) {
-        let a = (self.transition)(r);
-        assert!(a >= 0. && a <= 1.);
-
-        if a == 0. {
-            *value += self.far.value(r);
-        } else if a == 1. {
-            *value += self.near.value(r);
-        } else {
-            *value += a * self.near.value(r) + (1. - a) * self.far.value(r)
-        }
-    }
+    PotentialArray::new(distances, potentials)
 }

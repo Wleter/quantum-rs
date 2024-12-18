@@ -78,7 +78,7 @@ pub trait ProblemSelector {
 
 #[macro_export]
 macro_rules! problems_impl {
-    ($selector:ty, $name:expr, $($problem_type:expr => $method:expr),*) => {
+    ($selector:ty, $name:expr, $($problem_type:expr => $method:expr),* $(,)?) => {
         impl $crate::problem_selector::ProblemSelector for $selector {
             const NAME: &'static str = $name;
 
