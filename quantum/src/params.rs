@@ -11,12 +11,12 @@ use std::{
 /// Used to store information about a particle and composition of particles.
 #[derive(Default)]
 pub struct Params {
-    params: HashMap<TypeId, Box<dyn Any>>,
+    params: HashMap<TypeId, Box<dyn Any + Send + Sync>>,
 }
 
 impl Params {
     /// Insert or replace unique parameter of type `T`.
-    pub fn insert<T: 'static>(&mut self, value: T) -> &mut Self {
+    pub fn insert<T: Send + Sync + 'static>(&mut self, value: T) -> &mut Self {
         self.params.insert(TypeId::of::<T>(), Box::new(value));
 
         self

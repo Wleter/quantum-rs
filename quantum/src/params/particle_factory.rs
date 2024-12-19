@@ -2,6 +2,7 @@ use crate::units::mass_units::{Dalton, Mass};
 
 use super::particle::Particle;
 
+#[derive(Clone, Copy, Debug)]
 pub struct RotConst(pub f64);
 
 pub fn create_atom(name: &str) -> Option<Particle> {

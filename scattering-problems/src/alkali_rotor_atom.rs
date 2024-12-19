@@ -1,10 +1,10 @@
-use abm::{get_hifi, get_zeeman_prop, utility::{diagonalize, spin_proj}, DoubleHifiProblemBuilder, Symmetry};
-use clebsch_gordan::{wigner_3j, wigner_6j};
+use abm::{get_hifi, get_zeeman_prop, utility::diagonalize, DoubleHifiProblemBuilder, Symmetry};
+use clebsch_gordan::{half_i32, half_integer::{HalfI32, HalfU32}, half_u32, wigner_3j, wigner_6j};
 use faer::Mat;
-use quantum::{cast_variant, params::{particle_factory::RotConst, particles::Particles}, states::{operator::Operator, state::State, state_type::StateType, States, StatesBasis}};
+use quantum::{cast_variant, params::{particle_factory::RotConst, particles::Particles}, states::{operator::Operator, spins::spin_projections, state::State, state_type::StateType, States, StatesBasis}};
 use scattering_solver::{boundary::Asymptotic, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, masked_potential::MaskedPotential, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{Potential, SimplePotential}}, utility::AngMomentum};
 
-use crate::{utility::{AnisoHifi, GammaSpinRot, RotorDoubleJMax, RotorDoubleJTotMax, RotorDoubleLMax}, ScatteringProblem};
+use crate::{utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorDoubleJTotMax, RotorLMax}, ScatteringProblem};
 
 #[derive(Clone)]
 pub struct AlkaliRotorAtomProblemBuilder<P, V>
@@ -21,10 +21,10 @@ where
 pub enum SpinRotorAtom {
     /// (l, j, j_tot)
     Angular((u32, u32, u32)),
-    RotorS(u32),
-    RotorI(u32),
-    AtomS(u32),
-    AtomI(u32)
+    RotorS(HalfU32),
+    RotorI(HalfU32),
+    AtomS(HalfU32),
+    AtomI(HalfU32)
 }
 
 impl<P, V> AlkaliRotorAtomProblemBuilder<P, V> 
@@ -33,8 +33,8 @@ where
     V: SimplePotential
 {
     pub fn new(hifi_problem: DoubleHifiProblemBuilder, triplet: Vec<(u32, P)>, singlet: Vec<(u32, V)>) -> Self {
-        assert!(hifi_problem.first.s == 1);
-        assert!(hifi_problem.second.s == 1);
+        assert!(hifi_problem.first.s == half_u32!(1/2));
+        assert!(hifi_problem.second.s == half_u32!(1/2));
         assert!(matches!(hifi_problem.symmetry, Symmetry::None));
 
         Self {
@@ -45,8 +45,8 @@ where
     }
 
     pub fn build(self, particles: &Particles) -> AlkaliRotorAtomProblem<P, V> {
-        let l_max = particles.get::<RotorDoubleLMax>().expect("Did not find SystemLMax parameter in particles").0;
-        let j_max = particles.get::<RotorDoubleJMax>().expect("Did not find RotorJMax parameter in particles").0;
+        let l_max = particles.get::<RotorLMax>().expect("Did not find SystemLMax parameter in particles").0;
+        let j_max = particles.get::<RotorJMax>().expect("Did not find RotorJMax parameter in particles").0;
         let j_tot_max = particles.get::<RotorDoubleJTotMax>().map_or(0, |x| x.0);
         // todo! change to rotor particle having RotConst
         let rot_const = particles.get::<RotConst>().expect("Did not find RotConst parameter in the particles").0;
@@ -62,30 +62,28 @@ where
                 let j_upper = (l + j_tot).min(j_max);
                 
                 for j in j_lower..=j_upper {
-                    let projections = (-(j_tot as i32)..=(j_tot as i32)).collect();
+                    let projections = spin_projections(HalfU32::from_doubled(2 * j_tot));
                     let state = State::new(SpinRotorAtom::Angular((l, j, j_tot)), projections);
                     angular_states.push(state);
                 }
             }
         }
-        println!("{:?}", angular_states);
-        panic!();
 
         let s_rotor = State::new(
             SpinRotorAtom::RotorS(self.hifi_problem.first.s),
-            spin_proj(self.hifi_problem.first.s),
+            spin_projections(self.hifi_problem.first.s),
         );
         let s_atom = State::new(
             SpinRotorAtom::AtomS(self.hifi_problem.second.s),
-            spin_proj(self.hifi_problem.second.s),
+            spin_projections(self.hifi_problem.second.s),
         );
         let i_rotor = State::new(
             SpinRotorAtom::RotorI(self.hifi_problem.first.i),
-            spin_proj(self.hifi_problem.first.i),
+            spin_projections(self.hifi_problem.first.i),
         );
         let i_atom = State::new(
             SpinRotorAtom::AtomI(self.hifi_problem.second.i),
-            spin_proj(self.hifi_problem.second.i),
+            spin_projections(self.hifi_problem.second.i),
         );
 
         let mut states = States::default();
@@ -100,7 +98,7 @@ where
             Some(m_tot) => {
                 states.iter_elements()
                     .filter(|els| {
-                        els.values.iter().copied().sum::<i32>() == m_tot
+                        els.values.iter().copied().sum::<HalfI32>() == m_tot
                     })
                     .collect()
             },
@@ -132,7 +130,7 @@ where
 
         let spin_rot = Operator::from_mel(
             &basis, 
-            [SpinRotorAtom::Angular((0, 0, 0)), SpinRotorAtom::RotorS(0)],
+            [SpinRotorAtom::Angular((0, 0, 0)), SpinRotorAtom::RotorS(half_u32!(0))],
             |[ang_braket, s_braket]| {
                 let (l_ket, j_ket, j_tot_ket) = cast_variant!(ang_braket.ket.0, SpinRotorAtom::Angular);
                 let m_r_ket = ang_braket.ket.1;
@@ -140,26 +138,30 @@ where
                 let (l_bra, j_bra, j_tot_bra) = cast_variant!(ang_braket.bra.0, SpinRotorAtom::Angular);
                 let m_r_bra = ang_braket.bra.1;
 
-                let ds_ket = cast_variant!(s_braket.ket.0, SpinRotorAtom::RotorS);
-                let dms_ket = s_braket.ket.1;
-                let ds_bra = cast_variant!(s_braket.bra.0, SpinRotorAtom::RotorS);
-                let dms_bra = s_braket.bra.1;
+                let s_ket = cast_variant!(s_braket.ket.0, SpinRotorAtom::RotorS);
+                let ms_ket = s_braket.ket.1;
+                let s_bra = cast_variant!(s_braket.bra.0, SpinRotorAtom::RotorS);
+                let ms_bra = s_braket.bra.1;
 
-                let s_ket = ds_ket as f64 / 2.;
-
-                if l_bra == l_ket && j_bra == j_ket && ds_ket == ds_bra {
+                if l_bra == l_ket && j_bra == j_ket && s_ket == s_bra {
                     let factor = (((2 * j_tot_ket + 1) * (2 * j_tot_bra + 1) 
                                 * (2 * j_ket + 1) * j_ket * (j_ket + 1)) as f64).sqrt()
-                                * ((2. * s_ket + 1.) * s_ket * (s_ket + 1.)).sqrt();
+                                * ((2. * s_ket.value() + 1.) * s_ket.value() * (s_ket.value() + 1.)).sqrt();
 
-                    let sign = (-1.0f64).powi(1 + (j_tot_bra + j_tot_ket + l_bra + j_bra) as i32 - m_r_bra
-                                        + (ds_bra as i32 - dms_bra) / 2);
+                    let sign = (-1.0f64).powi(1 + (j_tot_bra + j_tot_ket + l_bra + j_bra) as i32 - m_r_bra.double_value() / 2
+                                                + (s_bra.double_value() as i32 - ms_bra.double_value()) / 2);
 
+                    let j_bra = HalfU32::from_doubled(2 * j_bra);
+                    let l_bra = HalfU32::from_doubled(2 * l_bra);
+                    let j_tot_bra = HalfU32::from_doubled(2 * j_tot_bra);
+                    let j_tot_ket = HalfU32::from_doubled(2 * j_tot_ket);
+                    
                     let mut wigner_sum = 0.;
-                    for p in [-2, 0, 2] { 
-                        wigner_sum += (-1.0f64).powi(p / 2) * wigner_6j(j_bra, j_tot_bra, l_bra, j_tot_ket, j_bra, 1)
-                            * wigner_3j(2 * j_tot_bra, 2, 2 * j_tot_ket, -m_r_bra, p, m_r_ket)
-                            * wigner_3j(ds_bra, 2, ds_bra, -dms_bra, p, dms_ket)
+                    for p in [half_i32!(-1), half_i32!(0), half_i32!(1)] { 
+                        wigner_sum += (-1.0f64).powi(p.double_value() / 2) 
+                            * wigner_6j(j_bra, j_tot_bra, l_bra, j_tot_ket, j_bra, half_u32!(1/2))
+                            * wigner_3j(j_tot_bra, half_u32!(1), j_tot_ket, -m_r_bra, p, m_r_ket)
+                            * wigner_3j(s_bra, half_u32!(1), s_bra, -ms_bra, p, ms_ket)
                     }
 
                     gamma_spin_rot * factor * sign * wigner_sum
@@ -171,7 +173,7 @@ where
 
         let aniso_hifi = Operator::from_mel(
             &basis, 
-            [SpinRotorAtom::Angular((0, 0, 0)), SpinRotorAtom::RotorS(0), SpinRotorAtom::RotorI(0)],
+            [SpinRotorAtom::Angular((0, 0, 0)), SpinRotorAtom::RotorS(half_u32!(0)), SpinRotorAtom::RotorI(half_u32!(0))],
             |[ang_braket, s_braket, i_braket]| {
                 let (l_ket, j_ket, j_tot_ket) = cast_variant!(ang_braket.ket.0, SpinRotorAtom::Angular);
                 let mr_ket = ang_braket.ket.1;
@@ -179,33 +181,36 @@ where
                 let (l_bra, j_bra, j_tot_bra) = cast_variant!(ang_braket.bra.0, SpinRotorAtom::Angular);
                 let mr_bra = ang_braket.bra.1;
 
-                let ds_ket = cast_variant!(s_braket.ket.0, SpinRotorAtom::RotorS);
-                let dms_ket = s_braket.ket.1;
-                let ds_bra = cast_variant!(s_braket.bra.0, SpinRotorAtom::RotorS);
-                let dms_bra = s_braket.bra.1;
+                let s_ket = cast_variant!(s_braket.ket.0, SpinRotorAtom::RotorS);
+                let ms_ket = s_braket.ket.1;
+                let s_bra = cast_variant!(s_braket.bra.0, SpinRotorAtom::RotorS);
+                let ms_bra = s_braket.bra.1;
 
-                let di_ket = cast_variant!(i_braket.ket.0, SpinRotorAtom::RotorI);
-                let dmi_ket = i_braket.ket.1;
-                let di_bra = cast_variant!(i_braket.bra.0, SpinRotorAtom::RotorI);
-                let dmi_bra = i_braket.bra.1;
+                let i_ket = cast_variant!(i_braket.ket.0, SpinRotorAtom::RotorI);
+                let mi_ket = i_braket.ket.1;
+                let i_bra = cast_variant!(i_braket.bra.0, SpinRotorAtom::RotorI);
+                let mi_bra = i_braket.bra.1;
 
-                let s_bra = ds_ket as f64 / 2.;
-                let i_bra = di_bra as f64 / 2.;
-
-                if l_bra == l_ket && ds_ket == ds_bra && di_ket == di_bra {
+                if l_bra == l_ket && s_ket == s_bra && i_ket == i_bra {
                     let factor = (((2 * j_tot_ket + 1) * (2 * j_tot_bra + 1)
                                     * (2 * j_ket + 1) * (2 * j_bra + 1)) as f64).sqrt()
-                                * ((2. * s_bra + 1.) * s_bra * (s_bra + 1.)
-                                    * (2. * i_bra + 1.) * i_bra * (i_bra + 1.)).sqrt();
+                                * ((2. * s_bra.value() + 1.) * s_bra.value() * (s_bra.value() + 1.)
+                                    * (2. * i_bra.value() + 1.) * i_bra.value() * (i_bra.value() + 1.)).sqrt();
 
-                    let sign = (-1.0f64).powi((j_tot_bra + j_tot_ket + l_bra) as i32 - mr_bra);
+                    let sign = (-1.0f64).powi((j_tot_bra + j_tot_ket + l_bra) as i32 - mr_bra.double_value() / 2);
 
-                    let wigner = wigner_6j(j_bra, j_tot_bra, l_bra, j_tot_ket, j_ket, 2)
-                        * wigner_3j(2, 2, 4, dmi_bra - dmi_ket, dms_bra - dms_ket, mr_bra - mr_ket)
-                        * wigner_3j(2 * j_tot_bra, 4, 2 * j_tot_ket, -mr_bra, mr_bra - mr_ket, mr_ket)
-                        * wigner_3j(2 * j_bra, 4, 2 * j_ket, 0, 0, 0)
-                        * wigner_3j(di_bra, 2, di_ket, -dmi_bra, dmi_bra - dmi_ket, dmi_ket)
-                        * wigner_3j(ds_bra, 2, ds_ket, -dms_bra, dms_bra - dms_ket, dms_ket);
+                    let j_bra = HalfU32::from_doubled(2 * j_bra);
+                    let j_ket = HalfU32::from_doubled(2 * j_ket);
+                    let l_bra = HalfU32::from_doubled(2 * l_bra);
+                    let j_tot_bra = HalfU32::from_doubled(2 * j_tot_bra);
+                    let j_tot_ket = HalfU32::from_doubled(2 * j_tot_ket);
+
+                    let wigner = wigner_6j(j_bra, j_tot_bra, l_bra, j_tot_ket, j_ket, half_u32!(1))
+                        * wigner_3j(half_u32!(1), half_u32!(1), half_u32!(2), mi_bra - mi_ket, ms_bra - ms_ket, mr_bra - mr_ket)
+                        * wigner_3j(j_tot_bra, half_u32!(2), j_tot_ket, -mr_bra, mr_bra - mr_ket, mr_ket)
+                        * wigner_3j(j_bra, half_u32!(2), j_ket, half_i32!(0), half_i32!(0), half_i32!(0))
+                        * wigner_3j(i_bra, half_u32!(1), i_ket, -mi_bra, mi_bra - mi_ket, mi_ket)
+                        * wigner_3j(s_bra, half_u32!(1), s_ket, -ms_bra, ms_bra - ms_ket, ms_ket);
 
                     aniso_hifi * f64::sqrt(30.) / 3. * sign * factor * wigner
                 } else {
@@ -218,7 +223,7 @@ where
             .map(|(lambda, pot)| {
                 let masking_singlet = Operator::from_mel(
                     &basis, 
-                    [SpinRotorAtom::Angular((0, 0, 0)), SpinRotorAtom::RotorS(0), SpinRotorAtom::AtomS(0)],
+                    [SpinRotorAtom::Angular((0, 0, 0)), SpinRotorAtom::RotorS(half_u32!(0)), SpinRotorAtom::AtomS(half_u32!(0))],
                     |[ang_braket, s_braket, sa_braket]| {
                         let (l_ket, j_ket, j_tot_ket) = cast_variant!(ang_braket.ket.0, SpinRotorAtom::Angular);
                         let mr_ket = ang_braket.ket.1;
@@ -226,27 +231,34 @@ where
                         let (l_bra, j_bra, j_tot_bra) = cast_variant!(ang_braket.bra.0, SpinRotorAtom::Angular);
                         let mr_bra = ang_braket.bra.1;
         
-                        let ds_ket = cast_variant!(s_braket.ket.0, SpinRotorAtom::RotorS);
-                        let dms_ket = s_braket.ket.1;
-                        let ds_bra = cast_variant!(s_braket.bra.0, SpinRotorAtom::RotorS);
-                        let dms_bra = s_braket.bra.1;
+                        let s_ket = cast_variant!(s_braket.ket.0, SpinRotorAtom::RotorS);
+                        let ms_ket = s_braket.ket.1;
+                        let s_bra = cast_variant!(s_braket.bra.0, SpinRotorAtom::RotorS);
+                        let ms_bra = s_braket.bra.1;
         
-                        let dsa_ket = cast_variant!(sa_braket.ket.0, SpinRotorAtom::AtomS);
-                        let dmsa_ket = sa_braket.ket.1;
-                        let dsa_bra = cast_variant!(sa_braket.bra.0, SpinRotorAtom::AtomS);
-                        let dmsa_bra = sa_braket.bra.1;
+                        let sa_ket = cast_variant!(sa_braket.ket.0, SpinRotorAtom::AtomS);
+                        let msa_ket = sa_braket.ket.1;
+                        let sa_bra = cast_variant!(sa_braket.bra.0, SpinRotorAtom::AtomS);
+                        let msa_bra = sa_braket.bra.1;
         
-                        if j_tot_bra == j_tot_ket && mr_bra == mr_ket && ds_ket == ds_bra && dsa_ket == dsa_bra {
+                        if j_tot_bra == j_tot_ket && mr_bra == mr_ket && s_ket == s_bra && sa_ket == sa_bra {
                             let factor = (((2 * j_bra + 1) * (2 * j_ket + 1)
                                         * (2 * l_bra + 1) * (2 * l_ket + 1)) as f64).sqrt();
         
-                            let sign = (-1.0f64).powi((j_tot_bra + j_bra + j_ket + ds_bra) as i32 - dsa_bra as i32);
+                            let sign = (-1.0f64).powi((j_tot_bra + j_bra + j_ket + s_bra.double_value()) as i32 - sa_bra.double_value() as i32);
         
+                            let j_bra = HalfU32::from_doubled(2 * j_bra);
+                            let j_ket = HalfU32::from_doubled(2 * j_ket);
+                            let l_bra = HalfU32::from_doubled(2 * l_bra);
+                            let l_ket = HalfU32::from_doubled(2 * l_ket);
+                            let j_tot_bra = HalfU32::from_doubled(2 * j_tot_bra);
+                            let lambda = HalfU32::from_doubled(lambda);
+
                             let wigner = wigner_6j(j_bra, l_bra, j_tot_bra, l_ket, j_ket, lambda)
-                                * wigner_3j(2 * j_bra, 2 * lambda, 2 * j_ket, 0, 0, 0)
-                                * wigner_3j(2 * l_bra, 2 * lambda, 2 * l_ket, 0, 0, 0)
-                                * wigner_3j(ds_bra, dsa_bra, 0, dms_bra, dmsa_bra, 0)
-                                * wigner_3j(ds_bra, dsa_bra, 0, dms_ket, dmsa_ket, 0);
+                                * wigner_3j(j_bra, lambda, j_ket, half_i32!(0), half_i32!(0), half_i32!(0))
+                                * wigner_3j(l_bra, lambda, l_ket, half_i32!(0), half_i32!(0), half_i32!(0))
+                                * wigner_3j(s_bra, sa_bra, half_u32!(0), ms_bra, msa_bra, half_i32!(0))
+                                * wigner_3j(s_bra, sa_bra, half_u32!(0), ms_ket, msa_ket, half_i32!(0));
         
                             sign * factor * wigner
                         } else {
@@ -263,7 +275,7 @@ where
             .map(|(lambda, pot)| {
                 let masking_triplet = Operator::from_mel(
                     &basis, 
-                    [SpinRotorAtom::Angular((0, 0, 0)), SpinRotorAtom::RotorS(0), SpinRotorAtom::AtomS(0)],
+                    [SpinRotorAtom::Angular((0, 0, 0)), SpinRotorAtom::RotorS(half_u32!(0)), SpinRotorAtom::AtomS(half_u32!(0))],
                     |[ang_braket, s_braket, sa_braket]| {
                         let (l_ket, j_ket, j_tot_ket) = cast_variant!(ang_braket.ket.0, SpinRotorAtom::Angular);
                         let mr_ket = ang_braket.ket.1;
@@ -271,31 +283,39 @@ where
                         let (l_bra, j_bra, j_tot_bra) = cast_variant!(ang_braket.bra.0, SpinRotorAtom::Angular);
                         let mr_bra = ang_braket.bra.1;
         
-                        let ds_ket = cast_variant!(s_braket.ket.0, SpinRotorAtom::RotorS);
-                        let dms_ket = s_braket.ket.1;
-                        let ds_bra = cast_variant!(s_braket.bra.0, SpinRotorAtom::RotorS);
-                        let dms_bra = s_braket.bra.1;
+                        let s_ket = cast_variant!(s_braket.ket.0, SpinRotorAtom::RotorS);
+                        let ms_ket = s_braket.ket.1;
+                        let s_bra = cast_variant!(s_braket.bra.0, SpinRotorAtom::RotorS);
+                        let ms_bra = s_braket.bra.1;
         
-                        let dsa_ket = cast_variant!(sa_braket.ket.0, SpinRotorAtom::AtomS);
-                        let dmsa_ket = sa_braket.ket.1;
-                        let dsa_bra = cast_variant!(sa_braket.bra.0, SpinRotorAtom::AtomS);
-                        let dmsa_bra = sa_braket.bra.1;
+                        let sa_ket = cast_variant!(sa_braket.ket.0, SpinRotorAtom::AtomS);
+                        let msa_ket = sa_braket.ket.1;
+                        let sa_bra = cast_variant!(sa_braket.bra.0, SpinRotorAtom::AtomS);
+                        let msa_bra = sa_braket.bra.1;
         
-                        if j_tot_bra == j_tot_ket && mr_bra == mr_ket && ds_ket == ds_bra && dsa_ket == dsa_bra {
+                        if j_tot_bra == j_tot_ket && mr_bra == mr_ket && s_ket == s_bra && sa_ket == sa_bra {
                             let factor = (((2 * j_bra + 1) * (2 * j_ket + 1)
                                         * (2 * l_bra + 1) * (2 * l_ket + 1)) as f64).sqrt();
         
-                            let sign = (-1.0f64).powi((j_tot_bra + j_bra + j_ket + ds_bra) as i32 - dsa_bra as i32);
+                            let sign = (-1.0f64).powi((j_tot_bra + j_bra + j_ket + s_bra.double_value()) as i32 - sa_bra.double_value() as i32);
         
+                            let j_bra = HalfU32::from_doubled(2 * j_bra);
+                            let j_ket = HalfU32::from_doubled(2 * j_ket);
+                            let l_bra = HalfU32::from_doubled(2 * l_bra);
+                            let l_ket = HalfU32::from_doubled(2 * l_ket);
+                            let j_tot_bra = HalfU32::from_doubled(2 * j_tot_bra);
+                            let lambda = HalfU32::from_doubled(lambda);
+
                             let mut triplet_wigner = 0.;
-                            for ms_tot in [-2, 0, 2] {
-                               triplet_wigner += 3. * wigner_3j(ds_bra, dsa_bra, 2, dms_bra, dmsa_bra, -ms_tot)
-                                * wigner_3j(ds_bra, dsa_bra, 2, dms_ket, dmsa_ket, -ms_tot)
+                            for ms_tot in [half_i32!(-1), half_i32!(0), half_i32!(1)] {
+                               triplet_wigner += 3. * (-1.0f64).powi(ms_tot.double_value() / 2) 
+                                * wigner_3j(s_bra, sa_bra, half_u32!(1), ms_bra, msa_bra, -ms_tot)
+                                * wigner_3j(s_bra, sa_bra, half_u32!(1), ms_ket, msa_ket, -ms_tot)
                             }
     
                             let wigner = wigner_6j(j_bra, l_bra, j_tot_bra, l_ket, j_ket, lambda)
-                                * wigner_3j(2 * j_bra, 2 * lambda, 2 * j_ket, 0, 0, 0)
-                                * wigner_3j(2 * l_bra, 2 * lambda, 2 * l_ket, 0, 0, 0);
+                                * wigner_3j(j_bra, lambda, j_ket, half_i32!(0), half_i32!(0), half_i32!(0))
+                                * wigner_3j(l_bra, lambda, l_ket, half_i32!(0), half_i32!(0), half_i32!(0));
         
                             sign * factor * wigner * triplet_wigner
                         } else {
@@ -319,7 +339,7 @@ where
 }
 
 pub struct AlkaliRotorAtomProblem<P: SimplePotential, V: SimplePotential> {
-    basis: StatesBasis<SpinRotorAtom, i32>,
+    basis: StatesBasis<SpinRotorAtom, HalfI32>,
     triplets: Vec<(P, Mat<f64>)>,
     singlets: Vec<(V, Mat<f64>)>,
     mag_inv: Mat<f64>,

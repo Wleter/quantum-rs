@@ -54,6 +54,7 @@ mod tests {
         },
     };
 
+    #[derive(Clone,Copy)]
     struct Parameter(u32);
 
     #[test]

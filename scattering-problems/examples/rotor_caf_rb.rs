@@ -2,12 +2,13 @@ use core::f64;
 use std::time::Instant;
 
 use abm::{utility::save_spectrum, DoubleHifiProblemBuilder, HifiProblemBuilder};
+use clebsch_gordan::{half_i32, half_integer::HalfI32, half_u32};
 use faer::Mat;
 use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
 use num::complex::Complex64;
 use quantum::{params::{particle::Particle, particle_factory::{self, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{energy_units::{Energy, GHz, Kelvin, MHz}, mass_units::{Dalton, Mass}, Au, Unit}, utility::linspace};
-use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder}, utility::{AnisoHifi, GammaSpinRot, RotorDoubleJMax, RotorDoubleJTotMax, RotorDoubleLMax}, ScatteringProblem};
+use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder}, utility::{AnisoHifi, GammaSpinRot, RotorDoubleJTotMax, RotorJMax, RotorLMax}, ScatteringProblem};
 use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule, single_numerov::SingleRatioNumerov}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::save_data};
 
 use rayon::prelude::*;
@@ -100,7 +101,7 @@ impl Problems {
     fn feshbach_iso() {
         ///////////////////////////////////
 
-        let projection = 2;
+        let projection = half_i32!(1);
         let entrance = 0;
         let energy = Energy(1e-7, Kelvin);
 
@@ -148,7 +149,7 @@ impl Problems {
     fn rotor_potentials() {
         ///////////////////////////////////
 
-        let projection = 4;
+        let projection = half_i32!(2);
         let channel = 0;
 
         let config_triplet = 0;
@@ -186,7 +187,7 @@ impl Problems {
     }
 
     fn rotor_levels() {
-        let projection = 2;
+        let projection = half_i32!(1);
         let atoms = get_particles(Energy(1e-7, Kelvin));
         let alkali_problem = get_problem(0, 0, projection, &atoms);
 
@@ -207,7 +208,7 @@ impl Problems {
     fn feshbach_rotor() {
         ///////////////////////////////////
 
-        let projection = 2;
+        let projection = half_i32!(1);
         let channel = 0;
 
         let config_triplet = 0;
@@ -275,11 +276,11 @@ fn potential_aniso() -> Composite<Dispersion> {
     singlet
 }
 
-fn get_potential_iso(config_triplet: usize, config_singlet: usize, projection: i32, mag_field: f64, entrance: usize) -> ScatteringProblem<impl Potential<Space = Mat<f64>>> {
-    let hifi_caf = HifiProblemBuilder::new(1, 1)
+fn get_potential_iso(config_triplet: usize, config_singlet: usize, projection: HalfI32, mag_field: f64, entrance: usize) -> ScatteringProblem<impl Potential<Space = Mat<f64>>> {
+    let hifi_caf = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(1/2))
         .with_hyperfine_coupling(Energy(120., MHz).to_au());
 
-    let hifi_rb = HifiProblemBuilder::new(1, 3)
+    let hifi_rb = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(3/2))
         .with_hyperfine_coupling(Energy(6.83 / 2., GHz).to_au());
 
     let hifi_problem = DoubleHifiProblemBuilder::new(hifi_caf, hifi_rb).with_projection(projection);
@@ -296,21 +297,21 @@ fn get_particles(energy: Energy<impl Unit>) -> Particles {
     let rb = particle_factory::create_atom("Rb87").unwrap();
 
     let mut particles = Particles::new_pair(caf, rb, energy);
-    particles.insert(RotorDoubleLMax(3));
-    particles.insert(RotorDoubleJMax(3));
+    particles.insert(RotorLMax(3));
+    particles.insert(RotorJMax(3));
     particles.insert(RotorDoubleJTotMax(3));
     particles.insert(RotConst(Energy(10.3, GHz).to_au()));
     particles.insert(GammaSpinRot(Energy(40., MHz).to_au()));
-    // particles.insert(AnisoHifi(Energy(14., MHz).to_au()));
+    particles.insert(AnisoHifi(Energy(14., MHz).to_au()));
     
     particles
 }
 
-fn get_problem(config_triplet: usize, config_singlet: usize, projection: i32, particles: &Particles) -> AlkaliRotorAtomProblem<impl SimplePotential + Clone, impl SimplePotential + Clone> {
-    let hifi_caf = HifiProblemBuilder::new(1, 1)
+fn get_problem(config_triplet: usize, config_singlet: usize, projection: HalfI32, particles: &Particles) -> AlkaliRotorAtomProblem<impl SimplePotential + Clone, impl SimplePotential + Clone> {
+    let hifi_caf = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(1/2))
         .with_hyperfine_coupling(Energy(120., MHz).to_au());
 
-    let hifi_rb = HifiProblemBuilder::new(1, 3)
+    let hifi_rb = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(3/2))
         .with_hyperfine_coupling(Energy(6.83 / 2., GHz).to_au());
 
     let hifi_problem = DoubleHifiProblemBuilder::new(hifi_caf, hifi_rb).with_projection(projection);
