@@ -4,7 +4,7 @@ use faer::Mat;
 use quantum::{cast_variant, params::{particle_factory::RotConst, particles::Particles}, states::{operator::Operator, state::State, state_type::StateType, States, StatesBasis}};
 use scattering_solver::{boundary::Asymptotic, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, masked_potential::MaskedPotential, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{Potential, SimplePotential}}, utility::AngMomentum};
 
-use crate::{utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorJTotMax, RotorLMax}, ScatteringProblem};
+use crate::{utility::{AnisoHifi, GammaSpinRot, RotorDoubleJMax, RotorDoubleJTotMax, RotorDoubleLMax}, ScatteringProblem};
 
 #[derive(Clone)]
 pub struct AlkaliRotorAtomProblemBuilder<P, V>
@@ -45,41 +45,31 @@ where
     }
 
     pub fn build(self, particles: &Particles) -> AlkaliRotorAtomProblem<P, V> {
-        let l_max = particles.get::<RotorLMax>().expect("Did not find SystemLMax parameter in particles").0;
-        let j_max = particles.get::<RotorJMax>().expect("Did not find RotorJMax parameter in particles").0;
-        let j_tot_max = particles.get::<RotorJTotMax>().map_or(0, |x| x.0);
+        let l_max = particles.get::<RotorDoubleLMax>().expect("Did not find SystemLMax parameter in particles").0;
+        let j_max = particles.get::<RotorDoubleJMax>().expect("Did not find RotorJMax parameter in particles").0;
+        let j_tot_max = particles.get::<RotorDoubleJTotMax>().map_or(0, |x| x.0);
         // todo! change to rotor particle having RotConst
         let rot_const = particles.get::<RotConst>().expect("Did not find RotConst parameter in the particles").0;
         let gamma_spin_rot = particles.get::<GammaSpinRot>().unwrap_or(&GammaSpinRot(0.)).0;
         let aniso_hifi = particles.get::<AnisoHifi>().unwrap_or(&AnisoHifi(0.)).0;
-        
-        let all_even = self.triplet_potential.iter().all(|(lambda, _)| lambda & 1 == 0)
-            && self.singlet_potential.iter().all(|(lambda, _)| lambda & 1 == 0);
 
-        let ls: Vec<u32> = if all_even { (0..=l_max).step_by(2).collect() } else { (0..=l_max).collect() };
+        let ls: Vec<u32> = (0..=l_max).collect();
         
         let mut angular_states = vec![];
         for j_tot in 0..=j_tot_max {
             for &l in &ls {
-                let j_lower = ((l as i32 - j_tot as i32).max(0) as u32).min(j_max);
+                let j_lower = (l as i32 - j_tot as i32).unsigned_abs().min(j_max);
                 let j_upper = (l + j_tot).min(j_max);
-
-                let js: Vec<u32> = if all_even { 
-                    (j_lower..=j_upper)
-                        .skip_while(|x| x & 1 == 1)
-                        .step_by(2)
-                        .collect() 
-                } else { 
-                    (j_lower..=j_upper).collect() 
-                };
                 
-                for j in js {
+                for j in j_lower..=j_upper {
                     let projections = (-(j_tot as i32)..=(j_tot as i32)).collect();
                     let state = State::new(SpinRotorAtom::Angular((l, j, j_tot)), projections);
                     angular_states.push(state);
                 }
             }
         }
+        println!("{:?}", angular_states);
+        panic!();
 
         let s_rotor = State::new(
             SpinRotorAtom::RotorS(self.hifi_problem.first.s),
@@ -163,13 +153,13 @@ where
                                 * ((2. * s_ket + 1.) * s_ket * (s_ket + 1.)).sqrt();
 
                     let sign = (-1.0f64).powi(1 + (j_tot_bra + j_tot_ket + l_bra + j_bra) as i32 - m_r_bra
-                                        + (ds_bra as i32 - s_braket.bra.1) / 2);
+                                        + (ds_bra as i32 - dms_bra) / 2);
 
                     let mut wigner_sum = 0.;
                     for p in [-2, 0, 2] { 
                         wigner_sum += (-1.0f64).powi(p / 2) * wigner_6j(j_bra, j_tot_bra, l_bra, j_tot_ket, j_bra, 1)
-                            * wigner_3j(2 * j_tot_bra, 2, 2 * j_tot_ket, - m_r_bra, p, m_r_ket)
-                            * wigner_3j(ds_bra, 2, ds_bra, - dms_bra, p, dms_ket)
+                            * wigner_3j(2 * j_tot_bra, 2, 2 * j_tot_ket, -m_r_bra, p, m_r_ket)
+                            * wigner_3j(ds_bra, 2, ds_bra, -dms_bra, p, dms_ket)
                     }
 
                     gamma_spin_rot * factor * sign * wigner_sum

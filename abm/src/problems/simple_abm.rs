@@ -1,6 +1,7 @@
 use abm::{
     utility::save_spectrum, ABMProblemBuilder, ABMVibrational, HifiProblemBuilder, Symmetry,
 };
+use clebsch_gordan::{half_i32, half_u32};
 use faer::mat;
 use quantum::{
     units::{energy_units::Energy, Au},
@@ -15,7 +16,7 @@ impl SimpleABM {
         let gamma_e = 2e-2;
         let gamma_i = -1.2e-5;
 
-        let single = HifiProblemBuilder::new(1, 2)
+        let single = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(1))
             .with_custom_bohr_magneton(gamma_e)
             .with_nuclear_magneton(gamma_i)
             .with_hyperfine_coupling(a_hifi);
@@ -27,7 +28,7 @@ impl SimpleABM {
 
         let abm_problem = ABMProblemBuilder::new_homo(single, Symmetry::Fermionic)
             .with_vibrational(bounds)
-            .with_projection(0)
+            .with_projection(half_i32!(0))
             .build();
 
         let mag_fields = linspace(0., 500., 1000);

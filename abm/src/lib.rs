@@ -1,12 +1,13 @@
-use abm_states::{ABMStates, ABMStatesSep, HifiStates, HifiStatesSep};
+use abm_states::{ABMStates, ABMStatesSep, ABMStatesValues, HifiStates, HifiStatesSep};
 use consts::Consts;
 use faer::{unzipped, zipped, Mat, MatRef};
 use quantum::{
     cast_variant,
-    states::{operator::Operator, state::State, state_type::StateType, States, StatesBasis},
+    states::{operator::Operator, spins::{spin_projections, sum_spin_projections}, state::State, state_type::StateType, States, StatesBasis},
     units::{energy_units::Energy, Au, Unit},
 };
-use utility::{diagonalize, spin_proj, sum_spin_proj};
+use utility::diagonalize;
+use clebsch_gordan::{half_integer::{HalfI32, HalfU32}, half_u32};
 
 pub mod abm_states;
 pub mod consts;
@@ -14,17 +15,17 @@ pub mod utility;
 
 #[derive(Clone, PartialEq)]
 pub struct HifiProblemBuilder {
-    pub s: u32,
-    pub i: u32,
+    pub s: HalfU32,
+    pub i: HalfU32,
     pub gamma_e: f64,
     pub gamma_i: Option<f64>,
     pub a_hifi: Option<f64>,
 
-    pub total_projection: Option<i32>,
+    pub total_projection: Option<HalfI32>,
 }
 
 impl HifiProblemBuilder {
-    pub fn new(double_s: u32, double_i: u32) -> Self {
+    pub fn new(double_s: HalfU32, double_i: HalfU32) -> Self {
         Self {
             s: double_s,
             i: double_i,
@@ -53,16 +54,16 @@ impl HifiProblemBuilder {
         self
     }
 
-    pub fn with_total_projection(mut self, double_projection: i32) -> Self {
-        self.total_projection = Some(double_projection);
+    pub fn with_total_projection(mut self, projection: HalfI32) -> Self {
+        self.total_projection = Some(projection);
 
         self
     }
 
-    pub fn build(self) -> ABMHifiProblem<HifiStates, i32> {
+    pub fn build(self) -> ABMHifiProblem<HifiStates, HalfI32> {
         let mut states = States::default();
-        let s = State::new(HifiStates::ElectronDSpin(self.s), spin_proj(self.s));
-        let i = State::new(HifiStates::NuclearDSpin(self.i), spin_proj(self.i));
+        let s = State::new(HifiStates::ElectronSpin(self.s), spin_projections(self.s));
+        let i = State::new(HifiStates::NuclearSpin(self.i), spin_projections(self.i));
 
         states
             .push_state(StateType::Irreducible(s))
@@ -70,23 +71,23 @@ impl HifiProblemBuilder {
         let basis = match self.total_projection {
             Some(projection) => states
                 .iter_elements()
-                .filter(|s| s.values.iter().sum::<i32>() == projection)
+                .filter(|s| s.values.iter().copied().sum::<HalfI32>() == projection)
                 .collect(),
             None => states.get_basis(),
         };
 
         let mut zeeman_prop =
-            get_zeeman_prop!(basis, HifiStates::ElectronDSpin, self.gamma_e).into_backed();
+            get_zeeman_prop!(basis, HifiStates::ElectronSpin, self.gamma_e).into_backed();
         if let Some(gamma_i) = self.gamma_i {
-            zeeman_prop += get_zeeman_prop!(basis, HifiStates::NuclearDSpin, gamma_i).as_ref();
+            zeeman_prop += get_zeeman_prop!(basis, HifiStates::NuclearSpin, gamma_i).as_ref();
         }
 
         let mut hifi = Mat::zeros(basis.len(), basis.len());
         if let Some(a_hifi) = self.a_hifi {
             hifi += get_hifi!(
                 basis,
-                HifiStates::ElectronDSpin,
-                HifiStates::NuclearDSpin,
+                HifiStates::ElectronSpin,
+                HifiStates::NuclearSpin,
                 a_hifi
             )
             .as_ref()
@@ -105,7 +106,7 @@ pub struct DoubleHifiProblemBuilder {
     pub first: HifiProblemBuilder,
     pub second: HifiProblemBuilder,
 
-    pub total_projection: Option<i32>,
+    pub total_projection: Option<HalfI32>,
     pub symmetry: Symmetry,
 }
 
@@ -128,28 +129,28 @@ impl DoubleHifiProblemBuilder {
         }
     }
 
-    pub fn with_projection(mut self, double_projection: i32) -> Self {
-        self.total_projection = Some(double_projection);
+    pub fn with_projection(mut self, projection: HalfI32) -> Self {
+        self.total_projection = Some(projection);
 
         self
     }
 
-    pub fn build(self) -> ABMHifiProblem<HifiStates, i32> {
+    pub fn build(self) -> ABMHifiProblem<HifiStates, HalfI32> {
         let s1 = State::new(
-            HifiStatesSep::ElDSpin1(self.first.s),
-            spin_proj(self.first.s),
+            HifiStatesSep::ElSpin1(self.first.s),
+            spin_projections(self.first.s),
         );
         let s2 = State::new(
-            HifiStatesSep::ElDSpin2(self.second.s),
-            spin_proj(self.second.s),
+            HifiStatesSep::ElSpin2(self.second.s),
+            spin_projections(self.second.s),
         );
         let i1 = State::new(
-            HifiStatesSep::NuclearDSpin1(self.first.i),
-            spin_proj(self.first.i),
+            HifiStatesSep::NuclearSpin1(self.first.i),
+            spin_projections(self.first.i),
         );
         let i2 = State::new(
-            HifiStatesSep::NuclearDSpin2(self.second.i),
-            spin_proj(self.second.i),
+            HifiStatesSep::NuclearSpin2(self.second.i),
+            spin_projections(self.second.i),
         );
 
         let mut states = States::default();
@@ -162,18 +163,18 @@ impl DoubleHifiProblemBuilder {
         let basis_sep = match self.total_projection {
             Some(projection) => states
                 .iter_elements()
-                .filter(|s| s.values.iter().sum::<i32>() == projection)
+                .filter(|s| s.values.iter().copied().sum::<HalfI32>() == projection)
                 .collect(),
             None => states.get_basis(),
         };
 
-        let s_tot = sum_spin_proj(self.first.s, self.second.s)
+        let s_tot = sum_spin_projections(self.first.s, self.second.s)
             .into_iter()
-            .map(|x| State::new(HifiStates::ElectronDSpin(x.0), x.1))
+            .map(|x| State::new(HifiStates::ElectronSpin(x.0), x.1))
             .collect();
-        let i_tot = sum_spin_proj(self.first.i, self.second.i)
+        let i_tot = sum_spin_projections(self.first.i, self.second.i)
             .into_iter()
-            .map(|x| State::new(HifiStates::NuclearDSpin(x.0), x.1))
+            .map(|x| State::new(HifiStates::NuclearSpin(x.0), x.1))
             .collect();
 
         let mut states = States::default();
@@ -184,31 +185,31 @@ impl DoubleHifiProblemBuilder {
         let basis = match self.total_projection {
             Some(projection) => states
                 .iter_elements()
-                .filter(|s| s.values.iter().sum::<i32>() == projection)
+                .filter(|s| s.values.iter().copied().sum::<HalfI32>() == projection)
                 .collect(),
             None => states.get_basis(),
         };
 
         let mut zeeman_prop =
-            get_zeeman_prop!(basis_sep, HifiStatesSep::ElDSpin1, self.first.gamma_e).as_ref()
-                + get_zeeman_prop!(basis_sep, HifiStatesSep::ElDSpin2, self.second.gamma_e)
+            get_zeeman_prop!(basis_sep, HifiStatesSep::ElSpin1, self.first.gamma_e).as_ref()
+                + get_zeeman_prop!(basis_sep, HifiStatesSep::ElSpin2, self.second.gamma_e)
                     .as_ref();
 
         if let Some(gamma_i) = self.first.gamma_i {
             zeeman_prop +=
-                get_zeeman_prop!(basis_sep, HifiStatesSep::NuclearDSpin1, gamma_i).as_ref();
+                get_zeeman_prop!(basis_sep, HifiStatesSep::NuclearSpin1, gamma_i).as_ref();
         }
         if let Some(gamma_i) = self.second.gamma_i {
             zeeman_prop +=
-                get_zeeman_prop!(basis_sep, HifiStatesSep::NuclearDSpin2, gamma_i).as_ref();
+                get_zeeman_prop!(basis_sep, HifiStatesSep::NuclearSpin2, gamma_i).as_ref();
         }
 
         let mut hifi = Mat::zeros(basis_sep.len(), basis_sep.len());
         if let Some(a_hifi_1) = self.first.a_hifi {
             hifi += get_hifi!(
                 basis_sep,
-                HifiStatesSep::ElDSpin1,
-                HifiStatesSep::NuclearDSpin1,
+                HifiStatesSep::ElSpin1,
+                HifiStatesSep::NuclearSpin1,
                 a_hifi_1
             )
             .as_ref()
@@ -216,8 +217,8 @@ impl DoubleHifiProblemBuilder {
         if let Some(a_hifi_2) = self.second.a_hifi {
             hifi += get_hifi!(
                 basis_sep,
-                HifiStatesSep::ElDSpin2,
-                HifiStatesSep::NuclearDSpin2,
+                HifiStatesSep::ElSpin2,
+                HifiStatesSep::NuclearSpin2,
                 a_hifi_2
             )
             .as_ref()
@@ -230,19 +231,19 @@ impl DoubleHifiProblemBuilder {
             Symmetry::Fermionic => basis
                 .into_iter()
                 .filter(|s| {
-                    let s_tot = cast_variant!(s.variants[0], HifiStates::ElectronDSpin);
-                    let i_tot = cast_variant!(s.variants[1], HifiStates::NuclearDSpin);
+                    let s_tot = cast_variant!(s.variants[0], HifiStates::ElectronSpin);
+                    let i_tot = cast_variant!(s.variants[1], HifiStates::NuclearSpin);
 
-                    (s_max + i_max) % 4 != (s_tot + i_tot) % 4
+                    (s_max + i_max).double_value() % 4 != (s_tot + i_tot).double_value() % 4
                 })
                 .collect(),
             Symmetry::Bosonic => basis
                 .into_iter()
                 .filter(|s| {
-                    let s_tot = cast_variant!(s.variants[0], HifiStates::ElectronDSpin);
-                    let i_tot = cast_variant!(s.variants[1], HifiStates::NuclearDSpin);
+                    let s_tot = cast_variant!(s.variants[0], HifiStates::ElectronSpin);
+                    let i_tot = cast_variant!(s.variants[1], HifiStates::NuclearSpin);
 
-                    (s_max + i_max) % 4 == (s_tot + i_tot) % 4
+                    (s_max + i_max).double_value() % 4 == (s_tot + i_tot).double_value() % 4
                 })
                 .collect(),
         };
@@ -265,7 +266,7 @@ pub struct ABMProblemBuilder {
     pub first: HifiProblemBuilder,
     pub second: HifiProblemBuilder,
 
-    pub total_projection: Option<i32>,
+    pub total_projection: Option<HalfI32>,
     pub symmetry: Symmetry,
 
     pub abm_vibrational: Option<ABMVibrational>,
@@ -298,34 +299,46 @@ impl ABMProblemBuilder {
         self
     }
 
-    pub fn with_projection(mut self, projection: i32) -> Self {
+    pub fn with_projection(mut self, projection: HalfI32) -> Self {
         self.total_projection = Some(projection);
 
         self
     }
 
-    pub fn build(self) -> ABMHifiProblem<ABMStates, i32> {
+    pub fn build(self) -> ABMHifiProblem<ABMStates, ABMStatesValues> {
         assert!(
-            self.first.s == 1 && self.second.s == 1,
+            self.first.s == half_u32!(1/2) && self.second.s == half_u32!(1/2),
             "ABM problem is done under the assumption of s = 1/2"
         );
 
         let mut states = States::default();
         let s1 = State::new(
-            ABMStatesSep::ElDSpin1(self.first.s),
-            spin_proj(self.first.s),
+            ABMStatesSep::ElSpin1(self.first.s),
+            spin_projections(self.first.s)
+                .into_iter()
+                .map(|x| ABMStatesValues::Proj(x))
+                .collect(),
         );
         let s2 = State::new(
-            ABMStatesSep::ElDSpin2(self.second.s),
-            spin_proj(self.second.s),
+            ABMStatesSep::ElSpin2(self.second.s),
+            spin_projections(self.second.s)
+                .into_iter()
+                .map(|x| ABMStatesValues::Proj(x))
+                .collect(),
         );
         let i1 = State::new(
-            ABMStatesSep::NuclearDSpin1(self.first.i),
-            spin_proj(self.first.i),
+            ABMStatesSep::NuclearSpin1(self.first.i),
+            spin_projections(self.first.i)
+                .into_iter()
+                .map(|x| ABMStatesValues::Proj(x))
+                .collect(),
         );
         let i2 = State::new(
-            ABMStatesSep::NuclearDSpin2(self.second.i),
-            spin_proj(self.second.i),
+            ABMStatesSep::NuclearSpin2(self.second.i),
+            spin_projections(self.second.i)
+                .into_iter()
+                .map(|x| ABMStatesValues::Proj(x))
+                .collect(),
         );
 
         assert!(
@@ -333,7 +346,12 @@ impl ABMProblemBuilder {
             "vibrational states not provided by function with_vibrational"
         );
         let abm_vibrational = self.abm_vibrational.unwrap();
-        let bounds_sep = State::new(ABMStatesSep::Vibrational, abm_vibrational.states());
+        let vib_values: Vec<ABMStatesValues> = abm_vibrational.states()
+            .into_iter()
+            .map(|x| ABMStatesValues::Vib(x))
+            .collect();
+
+        let bounds_sep = State::new(ABMStatesSep::Vibrational, vib_values.clone());
 
         states
             .push_state(StateType::Irreducible(s1))
@@ -346,25 +364,30 @@ impl ABMProblemBuilder {
             Some(projection) => states
                 .iter_elements()
                 .filter(|s| {
-                    s.pairwise_iter()
-                        .filter(|(&s, _)| s != ABMStatesSep::Vibrational)
-                        .map(|(_, v)| v)
-                        .sum::<i32>()
-                        == projection
+                    s.values.iter()
+                        .filter(|e| matches!(e, ABMStatesValues::Proj(_)))
+                        .map(|e| *cast_variant!(e, ABMStatesValues::Proj))
+                        .sum::<HalfI32>() == projection
                 })
                 .collect(),
             None => states.get_basis(),
         };
 
-        let s_tot = sum_spin_proj(self.first.s, self.second.s)
+        let s_tot = sum_spin_projections(self.first.s, self.second.s)
             .into_iter()
-            .map(|x| State::new(ABMStates::ElectronDSpin(x.0), x.1))
+            .map(|x| {
+                let projections = x.1.into_iter().map(|p| ABMStatesValues::Proj(p)).collect();
+                State::new(ABMStates::ElectronSpin(x.0), projections)
+            })
             .collect();
-        let i_tot = sum_spin_proj(self.first.i, self.second.i)
+        let i_tot = sum_spin_projections(self.first.i, self.second.i)
             .into_iter()
-            .map(|x| State::new(ABMStates::NuclearDSpin(x.0), x.1))
+            .map(|x| {
+                let projections = x.1.into_iter().map(|p| ABMStatesValues::Proj(p)).collect();
+                State::new(ABMStates::NuclearSpin(x.0), projections)
+            })
             .collect();
-        let bounds = State::new(ABMStates::Vibrational, abm_vibrational.states());
+        let bounds = State::new(ABMStates::Vibrational, vib_values);
 
         let mut states = States::default();
         states
@@ -376,11 +399,10 @@ impl ABMProblemBuilder {
             Some(projection) => states
                 .iter_elements()
                 .filter(|s| {
-                    s.pairwise_iter()
-                        .filter(|(&s, _)| s != ABMStates::Vibrational)
-                        .map(|(_, v)| v)
-                        .sum::<i32>()
-                        == projection
+                    s.values.iter()
+                        .filter(|e| matches!(e, ABMStatesValues::Proj(_)))
+                        .map(|e| *cast_variant!(e, ABMStatesValues::Proj))
+                        .sum::<HalfI32>() == projection
                 })
                 .collect(),
             None => states.get_basis(),
@@ -393,45 +415,45 @@ impl ABMProblemBuilder {
             Symmetry::Fermionic => basis
                 .into_iter()
                 .filter(|s| {
-                    let s_tot = cast_variant!(s.variants[0], ABMStates::ElectronDSpin);
-                    let i_tot = cast_variant!(s.variants[1], ABMStates::NuclearDSpin);
+                    let s_tot = cast_variant!(s.variants[0], ABMStates::ElectronSpin);
+                    let i_tot = cast_variant!(s.variants[1], ABMStates::NuclearSpin);
 
-                    (s_max + i_max) % 4 != (s_tot + i_tot) % 4
+                    (s_max + i_max).double_value() % 4 != (s_tot + i_tot).double_value() % 4
                 })
                 .collect(),
             Symmetry::Bosonic => basis
                 .into_iter()
                 .filter(|s| {
-                    let s_tot = cast_variant!(s.variants[0], ABMStates::ElectronDSpin);
-                    let i_tot = cast_variant!(s.variants[1], ABMStates::NuclearDSpin);
+                    let s_tot = cast_variant!(s.variants[0], ABMStates::ElectronSpin);
+                    let i_tot = cast_variant!(s.variants[1], ABMStates::NuclearSpin);
 
-                    (s_max + i_max) % 4 == (s_tot + i_tot) % 4
+                    (s_max + i_max).double_value() % 4 == (s_tot + i_tot).double_value() % 4
                 })
                 .collect(),
         };
 
         let mut zeeman_prop =
-            get_zeeman_prop!(basis_sep, ABMStatesSep::ElDSpin1, self.first.gamma_e).as_ref()
-                + get_zeeman_prop!(basis_sep, ABMStatesSep::ElDSpin2, self.second.gamma_e).as_ref();
+            get_zeeman_prop!(basis_sep, ABMStatesSep::ElSpin1, self.first.gamma_e; ABMStatesValues::Proj).as_ref()
+                + get_zeeman_prop!(basis_sep, ABMStatesSep::ElSpin2, self.second.gamma_e; ABMStatesValues::Proj).as_ref();
 
         if let Some(gamma_i) = self.first.gamma_i {
             zeeman_prop +=
-                get_zeeman_prop!(basis_sep, ABMStatesSep::NuclearDSpin1, gamma_i).as_ref();
+                get_zeeman_prop!(basis_sep, ABMStatesSep::NuclearSpin1, gamma_i; ABMStatesValues::Proj).as_ref();
         }
         if let Some(gamma_i) = self.second.gamma_i {
             zeeman_prop +=
-                get_zeeman_prop!(basis_sep, ABMStatesSep::NuclearDSpin2, gamma_i).as_ref();
+                get_zeeman_prop!(basis_sep, ABMStatesSep::NuclearSpin2, gamma_i; ABMStatesValues::Proj).as_ref();
         }
 
         let mut hifi = Mat::zeros(basis_sep.len(), basis_sep.len());
         if let Some(a_hifi_1) = self.first.a_hifi {
-            hifi += get_hifi!(basis_sep, ABMStatesSep::ElDSpin1, ABMStatesSep::NuclearDSpin1,
-                            a_hifi_1, with ABMStatesSep::Vibrational)
+            hifi += get_hifi!(basis_sep, ABMStatesSep::ElSpin1, ABMStatesSep::NuclearSpin1,
+                            a_hifi_1, with ABMStatesSep::Vibrational; ABMStatesValues::Proj)
             .as_ref()
         }
         if let Some(a_hifi_2) = self.second.a_hifi {
-            hifi += get_hifi!(basis_sep, ABMStatesSep::ElDSpin2, ABMStatesSep::NuclearDSpin2,
-                            a_hifi_2, with ABMStatesSep::Vibrational)
+            hifi += get_hifi!(basis_sep, ABMStatesSep::ElSpin2, ABMStatesSep::NuclearSpin2,
+                            a_hifi_2, with ABMStatesSep::Vibrational; ABMStatesValues::Proj)
             .as_ref()
         }
 
@@ -439,12 +461,12 @@ impl ABMProblemBuilder {
 
         let bound_states = Operator::from_diagonal_mel(
             &basis,
-            [ABMStates::ElectronDSpin(0), ABMStates::Vibrational],
+            [ABMStates::ElectronSpin(half_u32!(0)), ABMStates::Vibrational],
             |[s_ket, vib_ket]| {
-                let s = cast_variant!(s_ket.0, ABMStates::ElectronDSpin);
-                let vib = vib_ket.1;
+                let s = cast_variant!(s_ket.0, ABMStates::ElectronSpin);
+                let vib = cast_variant!(vib_ket.1, ABMStatesValues::Vib);
 
-                if s == 2 {
+                if s == half_u32!(1) {
                     abm_vibrational.triplet_state(vib)
                 } else {
                     abm_vibrational.singlet_state(vib)
@@ -455,27 +477,29 @@ impl ABMProblemBuilder {
         let fc_factors = Operator::from_mel(
             &basis,
             [
-                ABMStates::ElectronDSpin(0),
-                ABMStates::NuclearDSpin(0),
+                ABMStates::ElectronSpin(half_u32!(0)),
+                ABMStates::NuclearSpin(half_u32!(0)),
                 ABMStates::Vibrational,
             ],
             |[s_braket, _, vib_braket]| {
-                let s_ket = cast_variant!(s_braket.ket.0, ABMStates::ElectronDSpin);
-                let s_bra = cast_variant!(s_braket.bra.0, ABMStates::ElectronDSpin);
+                let s_ket = cast_variant!(s_braket.ket.0, ABMStates::ElectronSpin);
+                let s_bra = cast_variant!(s_braket.bra.0, ABMStates::ElectronSpin);
+                let vib_bra = cast_variant!(vib_braket.bra.1, ABMStatesValues::Vib);
+                let vib_ket = cast_variant!(vib_braket.ket.1, ABMStatesValues::Vib);
 
                 if s_bra == s_ket {
-                    if vib_braket.bra.1 == vib_braket.ket.1 {
+                    if vib_bra == vib_ket {
                         1.
                     } else {
                         0.
                     }
-                } else if s_bra == 2 {
-                    assert!(s_ket == 0);
-                    abm_vibrational.fc_factor(vib_braket.ket.1, vib_braket.bra.1)
+                } else if s_bra == half_u32!(1) {
+                    assert!(s_ket == half_u32!(0));
+                    abm_vibrational.fc_factor(vib_ket, vib_bra)
                 } else {
-                    assert!(s_bra == 0);
-                    assert!(s_ket == 2);
-                    abm_vibrational.fc_factor(vib_braket.bra.1, vib_braket.ket.1)
+                    assert!(s_bra == half_u32!(0));
+                    assert!(s_ket == half_u32!(1));
+                    abm_vibrational.fc_factor(vib_bra, vib_ket)
                 }
             },
         );

@@ -2,7 +2,7 @@ use faer::Mat;
 use quantum::{params::{particle_factory::RotConst, particles::Particles}, states::{operator::Operator, state::State, state_type::StateType, States, StatesBasis}};
 use scattering_solver::{boundary::Asymptotic, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, masked_potential::MaskedPotential, pair_potential::PairPotential, potential::{Potential, SimplePotential}}, utility::AngMomentum};
 
-use crate::{utility::{percival_coef, RotorJMax, RotorJTot, RotorLMax}, ScatteringProblem};
+use crate::{utility::{percival_coef, RotorDoubleJMax, RotorDoubleJTot, RotorDoubleLMax}, ScatteringProblem};
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum RotorAtomStates {
@@ -31,17 +31,17 @@ where
     }
 
     pub fn build(self, particles: &Particles) -> ScatteringProblem<impl Potential<Space = Mat<f64>>> {
-        let l_max = particles.get::<RotorLMax>().expect("Did not find SystemLMax parameter in particles").0;
-        let j_max = particles.get::<RotorJMax>().expect("Did not find RotorJMax parameter in particles").0;
-        let j_tot = particles.get::<RotorJTot>().map_or(0, |x| x.0);
+        let dl_max = particles.get::<RotorDoubleLMax>().expect("Did not find SystemLMax parameter in particles").0;
+        let dj_max = particles.get::<RotorDoubleJMax>().expect("Did not find RotorJMax parameter in particles").0;
+        let dj_tot = particles.get::<RotorDoubleJTot>().map_or(0, |x| x.0);
         // todo! possibly change to rotor particle having RotConst
         let rot_const = particles.get::<RotConst>().expect("Did not find RotConst parameter in the particles").0;
 
         let all_even = self.potential.iter().all(|(lambda, _)| lambda & 1 == 0);
 
-        let ls = if all_even { (0..=l_max).step_by(2).collect() } else { (0..=l_max).collect() };
+        let ls = (0..=dl_max).step_by(if all_even { 4 } else { 2 } ).collect();
         let system_l = State::new(RotorAtomStates::SystemL, ls);
-        let js = if all_even { (0..=j_max).step_by(2).collect() } else { (0..=j_max).collect() };
+        let js = (0..=dj_max).step_by(if all_even { 4 } else { 2 } ).collect();
         let rotor_j = State::new(RotorAtomStates::RotorJ, js);
 
         let mut rotor_states = States::default();
@@ -49,15 +49,15 @@ where
             .push_state(StateType::Irreducible(rotor_j));
         let rotor_basis: StatesBasis<RotorAtomStates, u32> = rotor_states.iter_elements()
             .filter(|a| {
-                let j = a.values[0];
-                let l = a.values[1];
+                let dj = a.values[0];
+                let dl = a.values[1];
 
-                l + j >= j_tot && (l as i32 - j as i32).unsigned_abs() <= j_tot
+                dl + dj >= dj_tot && (dl as i32 - dj as i32).unsigned_abs() <= dj_tot
             })
             .collect();
 
-        let j_centrifugal_mask = Operator::from_diagonal_mel(&rotor_basis, [RotorAtomStates::RotorJ], |[j]| {
-            (j.1 * (j.1 + 1)) as f64
+        let j_centrifugal_mask = Operator::from_diagonal_mel(&rotor_basis, [RotorAtomStates::RotorJ], |[dj]| {
+            (dj.1 * (dj.1 + 2)) as f64 / 4.
         }).into_backed();
         let j_potential = Dispersion::new(rot_const, 0);
 
@@ -65,11 +65,11 @@ where
 
         let mut potentials = self.potential.into_iter()
             .map(|(lambda, potential)| {
-                let rotor_masking = Operator::from_mel(&rotor_basis, [RotorAtomStates::SystemL, RotorAtomStates::RotorJ], |[l, j]| {
-                    let lj_left = (l.bra.1, j.bra.1);
-                    let lj_right = (l.ket.1, j.ket.1);
+                let rotor_masking = Operator::from_mel(&rotor_basis, [RotorAtomStates::SystemL, RotorAtomStates::RotorJ], |[dl, dj]| {
+                    let dlj_left = (dl.bra.1, dj.bra.1);
+                    let dlj_right = (dl.ket.1, dj.ket.1);
 
-                    percival_coef(lambda, lj_left, lj_right, j_tot)
+                    percival_coef(lambda, dlj_left, dlj_right, dj_tot)
                 }).into_backed();
 
                 MaskedPotential::new(potential, rotor_masking)
@@ -87,7 +87,7 @@ where
             .collect();
         
         let channel_energies = rotor_basis.iter()
-            .map(|x| (x.values[1] * (x.values[1] + 1)) as f64 * rot_const)
+            .map(|x| rot_const * (x.values[1] * (x.values[1] + 2)) as f64 / 4.)
             .collect();
 
         let entrance = rotor_basis.iter()

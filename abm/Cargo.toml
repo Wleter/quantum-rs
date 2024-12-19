@@ -5,4 +5,5 @@ edition.workspace = true
 
 [dependencies]
 faer = { workspace = true }
+clebsch-gordan = { workspace = true }
 quantum = { path = "../quantum", features = ["spins", "faer"] }

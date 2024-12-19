@@ -21,6 +21,8 @@ impl<M> Operator<M> {
 }
 
 /// Cast the expression `value` to the variant `pat` or panic if it is mismatched.
+/// # Syntax
+/// - `cast_variant!($value, $pat)`
 #[macro_export]
 macro_rules! cast_variant {
     ($value:expr, $pat:path) => {{

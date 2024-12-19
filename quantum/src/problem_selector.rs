@@ -64,8 +64,7 @@ pub trait ProblemSelector {
         ) {
             let args = VecDeque::from(vec!["-1".to_string()]);
 
-            for (i, problem_name) in list.iter().enumerate() {
-                println!("Chose problem: {problem_name}");
+            for i in 0..list.len() {
                 let result = panic::catch_unwind(|| (methods)(&i.to_string(), &mut args.clone()));
 
                 if result.is_err() {

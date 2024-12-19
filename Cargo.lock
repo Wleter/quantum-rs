@@ -6,6 +6,7 @@ version = 3
 name = "abm"
 version = "0.1.0"
 dependencies = [
+ "clebsch-gordan",
  "faer",
  "quantum",
 ]
@@ -15,6 +16,7 @@ name = "abm-py"
 version = "0.1.0"
 dependencies = [
  "abm",
+ "clebsch-gordan",
  "faer",
  "pyo3",
  "quantum",
@@ -147,7 +149,7 @@ dependencies = [
 [[package]]
 name = "clebsch-gordan"
 version = "0.3.0"
-source = "git+https://github.com/Wleter/clebsch-gordan#c0dc8ac6e14bcdc5ff7810dfac1a46c8d6d4fc0a"
+source = "git+https://github.com/Wleter/clebsch-gordan#3bc5709537e8871541a04435750b549f351677fd"
 dependencies = [
  "lazy_static",
  "lru",

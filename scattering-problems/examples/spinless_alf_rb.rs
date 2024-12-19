@@ -5,7 +5,7 @@ use gauss_quad::GaussLegendre;
 use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
 use quantum::{params::{particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::Angstrom, energy_units::{CmInv, Energy, Kelvin}, mass_units::{Dalton, Mass}, Au, Unit}, utility::{legendre_polynomials, linspace, logspace}};
-use scattering_problems::{potential_interpolation::{interpolate_potentials, PotentialArray, TransitionedPotential}, rotor_atom::RotorAtomProblemBuilder, utility::{RotorJMax, RotorJTot, RotorLMax}, ScatteringProblem};
+use scattering_problems::{potential_interpolation::{interpolate_potentials, PotentialArray, TransitionedPotential}, rotor_atom::RotorAtomProblemBuilder, utility::{RotorDoubleJMax, RotorDoubleJTot, RotorDoubleLMax}, ScatteringProblem};
 use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, potentials::{dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::save_data};
 
 use rayon::prelude::*;
@@ -60,8 +60,8 @@ impl Problems {
         let start = Instant::now();
 
         let mut particles = get_particles(is_rb_87, energy_relative.to(Au));
-        particles.insert(RotorLMax(80));
-        particles.insert(RotorJMax(80));
+        particles.insert(RotorDoubleLMax(80));
+        particles.insert(RotorDoubleJMax(80));
 
         let scattering_problem = get_potentials(&pot_array, &particles, (0, 0));
         let potential = &scattering_problem.potential;
@@ -101,8 +101,8 @@ impl Problems {
                 .map(|x| {
                     let mut particles = get_particles(is_rb_87, energy.to(Au));
             
-                    particles.insert(RotorLMax(*x));
-                    particles.insert(RotorJMax(*x));
+                    particles.insert(RotorDoubleLMax(*x));
+                    particles.insert(RotorDoubleJMax(*x));
     
                     let scattering_problem = get_potentials(&pot_array, &particles, (0, 0));
                     let potential = &scattering_problem.potential;
@@ -149,8 +149,8 @@ impl Problems {
 
                     let mut particles = get_particles(is_rb_87, energy.to(Au));
             
-                    particles.insert(RotorLMax(64));
-                    particles.insert(RotorJMax(64));
+                    particles.insert(RotorDoubleLMax(64));
+                    particles.insert(RotorDoubleJMax(64));
     
                     let scattering_problem = get_potentials(&pot_array, &particles, (1, 1));
                     let potential = &scattering_problem.potential;
@@ -212,9 +212,9 @@ impl Problems {
 
                         let mut particles = get_particles(is_rb_87, energy.to(Au));
                 
-                        particles.insert(RotorLMax(64));
-                        particles.insert(RotorJMax(64));
-                        particles.insert(RotorJTot(j_tot));
+                        particles.insert(RotorDoubleLMax(64));
+                        particles.insert(RotorDoubleJMax(64));
+                        particles.insert(RotorDoubleJTot(j_tot));
         
                         let scattering_problem = get_potentials(&pot_array, &particles, (1, 1));
                         let potential = &scattering_problem.potential;
@@ -294,7 +294,7 @@ fn get_particles(is_rb_87: bool , energy: Energy<Au>) -> Particles {
     };
     particles.insert(Mass(mass, Dalton).to(Au));
 
-    particles.insert(RotorJTot(0));
+    particles.insert(RotorDoubleJTot(0));
     particles.insert(RotConst(Energy(0.549992, CmInv).to_au()));
 
     particles

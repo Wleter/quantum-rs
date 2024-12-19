@@ -2,6 +2,7 @@ use abm::{
     utility::save_spectrum, ABMProblemBuilder, ABMVibrational, DoubleHifiProblemBuilder,
     HifiProblemBuilder, Symmetry,
 };
+use clebsch_gordan::{half_i32, half_u32};
 use faer::mat;
 use quantum::{
     problems_impl,
@@ -29,16 +30,16 @@ impl PotassiumBound {
         let gamma_i1 = Energy(Self::GAMMA_I_K39, MHz).to_au();
         let gamma_i2 = Energy(Self::GAMMA_I_K41, MHz).to_au();
 
-        let first = HifiProblemBuilder::new(1, 3)
+        let first = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(3/2))
             .with_nuclear_magneton(gamma_i1)
             .with_hyperfine_coupling(a_hifi_1);
 
-        let second = HifiProblemBuilder::new(1, 3)
+        let second = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(3/2))
             .with_nuclear_magneton(gamma_i2)
             .with_hyperfine_coupling(a_hifi_2);
 
         let hifi = DoubleHifiProblemBuilder::new(first, second)
-            .with_projection(4)
+            .with_projection(half_i32!(2))
             .build();
 
         let mag_fields = linspace(0.0, 600.0, 1000);
@@ -66,11 +67,11 @@ impl PotassiumBound {
         let singlet_energies = vec![Energy(-32.1, MHz), Energy(-1698.1, MHz)];
         let fc_factors = mat![[0.9180, 0.0463], [0.0895, 0.9674]];
 
-        let first = HifiProblemBuilder::new(1, 3)
+        let first = HifiProblemBuilder::new(half_u32!(1), half_u32!(3))
             .with_nuclear_magneton(gamma_i1)
             .with_hyperfine_coupling(a_hifi_1);
 
-        let second = HifiProblemBuilder::new(1, 3)
+        let second = HifiProblemBuilder::new(half_u32!(1), half_u32!(3))
             .with_nuclear_magneton(gamma_i2)
             .with_hyperfine_coupling(a_hifi_2);
 
@@ -78,7 +79,7 @@ impl PotassiumBound {
 
         let abm_problem = ABMProblemBuilder::new(first, second)
             .with_vibrational(vibrational)
-            .with_projection(4)
+            .with_projection(half_i32!(4))
             .build();
 
         let mag_fields = linspace(0.0, 600.0, 1000);
@@ -100,12 +101,12 @@ impl PotassiumBound {
         let a_hifi = Energy(Self::HIFI_K39_MHZ, MHz).to_au();
         let gamma_i = Energy(Self::GAMMA_I_K39, MHz).to_au() * 1e-4;
 
-        let single = HifiProblemBuilder::new(1, 3)
+        let single = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(3/2))
             .with_hyperfine_coupling(a_hifi)
             .with_nuclear_magneton(gamma_i);
 
         let hifi = DoubleHifiProblemBuilder::new_homo(single, Symmetry::Bosonic)
-            .with_projection(4)
+            .with_projection(half_i32!(2))
             .build();
 
         let mag_fields = linspace(0.0, 600.0, 1000);
@@ -131,7 +132,7 @@ impl PotassiumBound {
         let singlet_energies = vec![Energy(-32.1, MHz), Energy(-1698.1, MHz)];
         let fc_factors = mat![[0.9180, 0.0463], [0.0895, 0.9674]];
 
-        let single = HifiProblemBuilder::new(1, 3)
+        let single = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(3/2))
             .with_nuclear_magneton(gamma_i)
             .with_hyperfine_coupling(a_hifi);
 
@@ -139,7 +140,7 @@ impl PotassiumBound {
 
         let abm_problem = ABMProblemBuilder::new_homo(single, Symmetry::Bosonic)
             .with_vibrational(vibrational)
-            .with_projection(4)
+            .with_projection(half_i32!(2))
             .build();
 
         let mag_fields = linspace(0.0, 600.0, 1000);

@@ -8,3 +8,4 @@ pyo3 = "0.23.3"
 faer = { workspace = true }
 quantum = { path = "../../quantum" }
 abm = { path = "../../abm" }
+clebsch-gordan = { workspace = true }

@@ -1,4 +1,5 @@
-use abm::{abm_states::{ABMStates, HifiStates}, ABMHifiProblem, ABMProblemBuilder, ABMVibrational, DoubleHifiProblemBuilder, HifiProblemBuilder, Symmetry};
+use abm::{abm_states::{ABMStates, ABMStatesValues, HifiStates}, ABMHifiProblem, ABMProblemBuilder, ABMVibrational, DoubleHifiProblemBuilder, HifiProblemBuilder, Symmetry};
+use clebsch_gordan::half_integer::{HalfI32, HalfU32};
 use faer::Mat;
 use pyo3::prelude::*;
 use quantum::units::{energy_units::Energy, Au};
@@ -13,13 +14,13 @@ struct HifiProblemBuilderPy(HifiProblemBuilder);
 impl HifiProblemBuilderPy {
     #[new]
     pub fn new(s: u32, i: u32) -> Self {
-        Self(HifiProblemBuilder::new(s, i))
+        Self(HifiProblemBuilder::new(HalfU32::from_doubled(s), HalfU32::from_doubled(i)))
     }
 
     pub fn with_projection(&mut self, double_projection: i32) {
         let hifi = self.0.clone();
 
-        self.0 = hifi.with_total_projection(double_projection);
+        self.0 = hifi.with_total_projection(HalfI32::from_doubled(double_projection));
     }
 
     pub fn with_custom_bohr_magneton(&mut self, gamma_e: f64) {
@@ -71,7 +72,7 @@ impl DoubleHifiProblemBuilderPy {
     pub fn with_projection(&mut self, double_projection: i32) {
         let hifi = self.0.clone();
 
-        self.0 = hifi.with_projection(double_projection);
+        self.0 = hifi.with_projection(HalfI32::from_doubled(double_projection));
     }
 
     pub fn build(&mut self) -> HifiProblemPy {
@@ -105,7 +106,7 @@ impl ABMProblemBuilderPy {
     pub fn with_projection(&mut self, double_projection: i32) {
         let abm = self.0.clone();
 
-        self.0 = abm.with_projection(double_projection);
+        self.0 = abm.with_projection(HalfI32::from_doubled(double_projection));
     }
 
     pub fn with_vibrational(&mut self, singlet_states: Vec<f64>, triplet_states: Vec<f64>, fc_factors: Vec<f64>) {
@@ -129,7 +130,8 @@ impl ABMProblemBuilderPy {
 }
 
 #[pyclass(name = "HifiProblem")]
-pub struct HifiProblemPy(ABMHifiProblem<HifiStates, i32>);
+pub struct HifiProblemPy(ABMHifiProblem<HifiStates, HalfI32>);
+
 
 #[pymethods]
 impl HifiProblemPy {
@@ -150,7 +152,7 @@ impl HifiProblemPy {
 }
 
 #[pyclass(name = "ABMProblem")]
-pub struct ABMProblemPy(ABMHifiProblem<ABMStates, i32>);
+pub struct ABMProblemPy(ABMHifiProblem<ABMStates, ABMStatesValues>);
 
 #[pymethods]
 impl ABMProblemPy {
