@@ -50,6 +50,15 @@ mod tests {
     }
 
     #[bench]
+    fn bench_inverse_piv_lu_2000(b: &mut Bencher) {
+        let (mat, mut out, mut perm, mut perm_inv) = setup(2000);
+
+        b.iter(|| {
+            inverse_inplace(mat.as_ref(), out.as_mut(), &mut perm, &mut perm_inv)
+        });
+    }
+
+    #[bench]
     fn bench_inverse_lblt_50(b: &mut Bencher) {
         let (mat, mut out, mut perm, mut perm_inv) = setup(50);
 
@@ -70,6 +79,15 @@ mod tests {
     #[bench]
     fn bench_inverse_lblt_500(b: &mut Bencher) {
         let (mat, mut out, mut perm, mut perm_inv) = setup(500);
+
+        b.iter(|| {
+            inverse_symmetric_inplace(mat.as_ref(), out.as_mut(), &mut perm, &mut perm_inv)
+        });
+    }
+
+    #[bench]
+    fn bench_inverse_lblt_2000(b: &mut Bencher) {
+        let (mat, mut out, mut perm, mut perm_inv) = setup(2000);
 
         b.iter(|| {
             inverse_symmetric_inplace(mat.as_ref(), out.as_mut(), &mut perm, &mut perm_inv)
