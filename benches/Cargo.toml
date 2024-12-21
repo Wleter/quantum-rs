@@ -1,0 +1,11 @@
+[package]
+name = "benches"
+version.workspace = true
+edition.workspace = true
+
+[toolchain]
+channel = "nightly"
+
+[dependencies]
+scattering-solver = {path = "../scattering-solver/"}
+faer = { workspace = true }

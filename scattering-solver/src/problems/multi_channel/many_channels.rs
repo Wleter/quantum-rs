@@ -8,7 +8,7 @@ use scattering_solver::{boundary::{Asymptotic, Boundary, Direction}, numerovs::{
 pub struct ManyChannels;
 
 problems_impl!(ManyChannels, "large number of channels",
-    "scattering length static size" => |_| Self::scattering_length()
+    "scattering length many channels" => |_| Self::scattering_length()
 );
 
 const N: usize = 50;

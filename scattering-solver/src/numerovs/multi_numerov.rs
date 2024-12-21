@@ -1,4 +1,4 @@
-use faer::{linalg::matmul::matmul, prelude::c64, solvers::SolverCore, unzipped, zipped, Mat, MatMut};
+use faer::{linalg::matmul::matmul, prelude::{c64, SolverCore}, unzipped, zipped, Mat, MatMut};
 use quantum::{params::particles::Particles, units::{energy_units::Energy, mass_units::Mass, Au}, utility::{asymptotic_bessel_j, asymptotic_bessel_n, bessel_j_ratio, bessel_n_ratio}};
 use crate::{boundary::{Asymptotic, Boundary}, numerovs::{numerov_modifier::{PropagatorModifier, SampleConfig, WaveStorage}, propagator::{MultiStep, MultiStepRule, Numerov, NumerovResult, PropagatorData, StepAction, StepRule}}, observables::s_matrix::SMatrix, potentials::{dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::inverse_inplace};
 
@@ -63,7 +63,7 @@ where
         
 
         zipped!(out, self.unit.as_ref(), self.potential_buffer.as_ref())
-            .for_each(|unzipped!(mut o, u, p)| o.write(2.0 * self.mass * (self.energy * u.read() - p.read())));
+            .for_each(|unzipped!(o, u, p)| *o = 2.0 * self.mass * (self.energy * u - p));
     }
 
     pub fn calculate_s_matrix(&self) -> SMatrix {
@@ -262,8 +262,8 @@ where
             .for_each(|(x, l)| *x += (l.0 * (l.0 + 1)) as f64 * centr_prop);
 
         zipped!(self.current_g_func.as_mut(), self.unit.as_ref(), self.potential_buffer.as_ref())
-            .for_each(|unzipped!(mut c, u, p)| 
-                c.write(2.0 * self.mass * (self.energy * u.read() - p.read()))
+            .for_each(|unzipped!(c, u, p)| 
+                *c = 2.0 * self.mass * (self.energy * u - p)
             );
     }
 
@@ -317,8 +317,8 @@ where
         data.r += data.dr;
 
         zipped!(self.buffer1.as_mut(), data.unit.as_ref(), data.current_g_func.as_ref())
-            .for_each(|unzipped!(mut b1, u, c)| 
-                b1.write(u.read() + data.dr * data.dr / 12. * c.read())
+            .for_each(|unzipped!(b1, u, c)| 
+                *b1 = u + data.dr * data.dr / 12. * c
             );
 
         inverse_inplace(self.buffer1.as_ref(), self.f3.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
@@ -326,8 +326,8 @@ where
         inverse_inplace(data.psi1.as_ref(), data.psi2.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
         matmul(self.buffer2.as_mut(), self.f2.as_ref(), data.psi2.as_ref(), None, 1., faer::Parallelism::None);
         zipped!(self.buffer2.as_mut(), data.unit.as_ref(), self.f1.as_ref())
-            .for_each(|unzipped!(mut b2, u, f1)| 
-                b2.write(12. * u.read() - 10. * f1.read() - b2.read())
+            .for_each(|unzipped!(b2, u, f1)| 
+                *b2 = 12. * u - 10. * f1 - *b2
             );
         matmul(data.psi2.as_mut(), self.f3.as_ref(), self.buffer2.as_ref(), None, 1., faer::Parallelism::None);
 
@@ -342,26 +342,26 @@ where
         data.dr /= 2.0;
 
         zipped!(self.f2.as_mut(), data.unit.as_ref())
-            .for_each(|unzipped!(mut f2, u)| 
-                f2.write(f2.read() / 4. + 0.75 * u.read())
+            .for_each(|unzipped!(f2, u)| 
+                *f2 = *f2 / 4. + 0.75 * u
             );
 
         zipped!(self.f1.as_mut(), data.unit.as_ref())
-            .for_each(|unzipped!(mut f1, u)| 
-                f1.write(f1.read() / 4. + 0.75 * u.read())
+            .for_each(|unzipped!(f1, u)| 
+                *f1 = *f1 / 4. + 0.75 * u
             );
 
         data.get_g_func(data.r - data.dr, self.buffer1.as_mut());
         zipped!(self.buffer1.as_mut(), data.unit.as_ref())
-            .for_each(|unzipped!(mut b1, u)| 
-                b1.write(2. * u.read() - data.dr * data.dr * 10. / 12. * b1.read())
+            .for_each(|unzipped!(b1, u)| 
+                *b1 = 2. * u - data.dr * data.dr * 10. / 12. * *b1
             );
 
         inverse_inplace(self.buffer1.as_ref(), self.buffer2.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
 
         zipped!(self.f2.as_mut(), data.unit.as_ref(), self.buffer1.as_ref())
-            .for_each(|unzipped!(mut f2, u, b1)| 
-                f2.write(1.2 * u.read() - b1.read() / 10.)
+            .for_each(|unzipped!(f2, u, b1)| 
+                *f2 = 1.2 * u - b1 / 10.
             );
 
         matmul(self.buffer1.as_mut(), self.f1.as_ref(), data.psi1.as_ref(), None, 1., faer::Parallelism::None);
@@ -378,13 +378,13 @@ where
         data.dr *= 2.;
 
         zipped!(self.f2.as_mut(), data.unit.as_ref(), self.f3.as_ref())
-            .for_each(|unzipped!(mut f2, u, f3)| 
-                f2.write(4.0 * f3.read() - 3. * u.read())
+            .for_each(|unzipped!(f2, u, f3)| 
+                *f2 = 4.0 * f3 - 3. * u
             );
 
         zipped!(self.f1.as_mut(), data.unit.as_ref())
-            .for_each(|unzipped!(mut f1, u)| 
-                f1.write(4.0 * f1.read() - 3. * u.read())
+            .for_each(|unzipped!(f1, u)| 
+                *f1 = 4.0 * *f1 - 3. * u
             );
 
         matmul(self.buffer1.as_mut(), data.psi1.as_ref(), data.psi2.as_ref(), None, 1., faer::Parallelism::None);

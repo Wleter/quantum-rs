@@ -29,8 +29,8 @@ impl<P: Potential<Space = f64>> Potential for MaskedPotential<Mat<f64>, P> {
         let potential_value = self.potential.value(r);
 
         zipped!(value.as_mut(), self.masking.as_ref())
-            .for_each(|unzipped!(mut v, m)| {
-                v.write(potential_value * m.read());
+            .for_each(|unzipped!(v, m)| {
+                *v = potential_value * m;
             });
     }
     
@@ -44,8 +44,8 @@ impl<P: Potential<Space = f64>> SubPotential for MaskedPotential<Mat<f64>, P> {
         let potential_value = self.potential.value(r);
 
         zipped!(value.as_mut(), self.masking.as_ref())
-            .for_each(|unzipped!(mut v, m)| {
-                v.write(v.read() + potential_value * m.read());
+            .for_each(|unzipped!(v, m)| {
+                *v += potential_value * m;
             });
     }
 }

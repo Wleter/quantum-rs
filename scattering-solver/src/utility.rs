@@ -43,7 +43,7 @@ pub fn save_data(
 
 pub fn inverse_inplace(mat: MatRef<f64>, mut out: MatMut<f64>, perm: &mut [usize], perm_inv: &mut [usize]) {
     zipped!(out.as_mut(), mat)
-        .for_each(|unzipped!(mut o, m)| o.write(m.read()));
+        .for_each(|unzipped!(o, m)| *o = *m);
 
     let dim: usize = mat.nrows();
 
@@ -64,7 +64,7 @@ pub fn inverse_inplace(mat: MatRef<f64>, mut out: MatMut<f64>, perm: &mut [usize
     );
 
     let perm_ref = unsafe {
-        PermRef::new_unchecked(perm, perm_inv)
+        PermRef::new_unchecked(perm, perm_inv, dim)
     };
 
     lu::partial_pivoting::inverse::invert_in_place(
@@ -98,7 +98,7 @@ pub fn inverse_symmetric_inplace(mat: MatRef<f64>, mut out: MatMut<f64>, perm: &
     let mut mat_temp = temp_mat_uninit::<f64>(dim, dim, mat_stack).0;
 
     zipped!(mat_temp.as_mut(), mat)
-        .for_each(|unzipped!(mut o, m)| o.write(m.read()));
+        .for_each(|unzipped!(o, m)| *o = *m);
 
     cholesky_in_place(
         mat_temp.as_mut(), 
@@ -128,7 +128,7 @@ pub fn inverse_symmetric_inplace(mat: MatRef<f64>, mut out: MatMut<f64>, perm: &
         mat_temp.as_ref(),
         sub_diag.col(0),
         Conj::No,
-        unsafe { PermRef::new_unchecked(perm, perm_inv) },
+        unsafe { PermRef::new_unchecked(perm, perm_inv, dim) },
         out,
         Parallelism::None,
         PodStack::new(&mut GlobalPodBuffer::new(

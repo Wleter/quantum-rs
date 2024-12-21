@@ -506,7 +506,7 @@ impl ABMProblemBuilder {
 
         let mut hifi = &*transf * hifi * transf.transpose();
         zipped!(hifi.as_mut(), fc_factors.as_ref())
-            .for_each(|unzipped!(mut h, fc)| h.write(h.read() * fc.read()));
+            .for_each(|unzipped!(h, fc)| *h *= fc);
 
         let zeeman_prop = &*transf * zeeman_prop * transf.transpose();
 
