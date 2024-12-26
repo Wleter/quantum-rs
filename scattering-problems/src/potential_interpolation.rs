@@ -21,7 +21,7 @@ pub fn interpolate_potentials(pot_array: &PotentialArray, degree: u32) -> Vec<(u
     let mut interpolated = Vec::new();
 
     for (lambda, potential) in &pot_array.potentials {
-        let spline = SplineBuilder::new(&pot_array.distances, &potential)
+        let spline = SplineBuilder::new(&pot_array.distances, potential)
             .with_degree(degree)
             .build();
 
@@ -90,7 +90,7 @@ where
 
     fn value_inplace(&self, r: f64, value: &mut Self::Space) {
         let a = (self.transition)(r);
-        assert!(a >= 0. && a <= 1.);
+        assert!((0. ..= 1.).contains(&a));
 
         if a == 0. {
             self.far.value_inplace(r, value);
@@ -114,7 +114,7 @@ where
 {
     fn value_add(&self, r: f64, value: &mut Self::Space) {
         let a = (self.transition)(r);
-        assert!(a >= 0. && a <= 1.);
+        assert!((0. ..= 1.).contains(&a));
 
         if a == 0. {
             *value += self.far.value(r);

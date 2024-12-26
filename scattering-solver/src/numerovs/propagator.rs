@@ -36,7 +36,7 @@ pub trait StepRule<D: PropagatorData> {
 }
 
 pub struct SingleStepRule {
-    pub(crate) step: f64
+    pub step: f64
 }
 
 impl<D: PropagatorData> StepRule<D> for SingleStepRule {
@@ -49,7 +49,7 @@ impl<D: PropagatorData> StepRule<D> for SingleStepRule {
 
         if prop_step > 1.2 * self.step {
             StepAction::Halve
-        } else if prop_step < 2. * self.step {
+        } else if prop_step < 0.5 * self.step {
             StepAction::Double
         } else {
             StepAction::Keep

@@ -2,9 +2,7 @@ use std::time::Instant;
 
 use faer::Mat;
 use quantum::{params::{particle_factory::create_atom, particles::Particles}, problems_impl, units::{distance_units::Distance, energy_units::{Energy, Kelvin}, Au}, utility::linspace};
-use scattering_solver::{boundary::{Asymptotic, Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, potentials::{dispersion_potential::Dispersion, gaussian_coupling::GaussianCoupling, multi_coupling::MultiCoupling, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::Potential, potential_factory::create_lj}, utility::AngMomentum};
-
-
+use scattering_solver::{boundary::{Asymptotic, Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, numerov_modifier::NumerovLogging, propagator::MultiStepRule}, potentials::{dispersion_potential::Dispersion, multi_coupling::MultiCoupling, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::Potential, potential_factory::create_lj}, utility::AngMomentum};
 pub struct ManyChannels;
 
 problems_impl!(ManyChannels, "large number of channels",
@@ -43,10 +41,10 @@ impl ManyChannels {
             })
             .collect();
         
-        let couplings_strength = linspace(5.0, 15.0, N - 1);
-        let couplings = couplings_strength
+        let couplings = wells
             .iter()
-            .map(|c| GaussianCoupling::new(Energy(*c, Kelvin), 11.0, 2.0))
+            .skip(1)
+            .map(|well| create_lj(Energy(well / 10., Au), Distance(6., Au)))
             .collect();
 
         let potential = Diagonal::<Mat<f64>, _>::from_vec(potentials);
@@ -62,9 +60,10 @@ impl ManyChannels {
         
         let id: Mat<f64> = Mat::identity(potential.size(), potential.size()); let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
 
-        let mut numerov = MultiRatioNumerov::new(&potential, &particles, MultiStepRule::default(), boundary);
+        let step_rule = MultiStepRule::default();
+        let mut numerov = MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
         let preparation = start.elapsed();
-        numerov.propagate_to(1e3);
+        numerov.propagate_to_with(1e3, &mut NumerovLogging::default());
         let propagation = start.elapsed() - preparation;
 
         let s_matrix = numerov.data.calculate_s_matrix();

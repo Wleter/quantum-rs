@@ -4,7 +4,7 @@ pub fn spin_projections(s: HalfU32) -> Vec<HalfI32> {
     let ds = s.double_value() as i32;
 
     (-ds..=ds).step_by(2)
-        .map(|ms| HalfI32::from_doubled(ms))
+        .map(HalfI32::from_doubled)
         .collect()
 }
 

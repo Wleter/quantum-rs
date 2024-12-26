@@ -83,7 +83,7 @@ pub struct StatesIter<'a, T, V> {
     size: usize,
 }
 
-impl<'a, T: Copy, V: Copy> Iterator for StatesIter<'a, T, V> {
+impl<T: Copy, V: Copy> Iterator for StatesIter<'_, T, V> {
     type Item = StatesElement<T, V>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -130,6 +130,7 @@ impl<'a, T: Copy, V: Copy> Iterator for StatesIter<'a, T, V> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct StatesBasis<T, V>(Vec<StatesElement<T, V>>);
 
 impl<T, V> FromIterator<StatesElement<T, V>> for StatesBasis<T, V> {

@@ -9,3 +9,8 @@ channel = "nightly"
 [dependencies]
 scattering-solver = {path = "../scattering-solver/"}
 faer = { workspace = true }
+dhat = {version = "0.3", optional = true}
+
+[features]
+default = []
+allocations = ["dep:dhat"]

@@ -5,7 +5,7 @@ use faer::Mat;
 
 extern crate test;
 
-fn setup(size: usize) -> (Mat<f64>, Mat<f64>, Vec<usize>, Vec<usize>) {
+pub fn setup(size: usize) -> (Mat<f64>, Mat<f64>, Vec<usize>, Vec<usize>) {
     let mat = Mat::from_fn(size, size, |i, j| {
         ((i + j) % (size / 4)) as f64 * 11. / 6.
     });
@@ -19,6 +19,7 @@ fn setup(size: usize) -> (Mat<f64>, Mat<f64>, Vec<usize>, Vec<usize>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use faer::prelude::SolverCore;
     use scattering_solver::utility::{inverse_inplace, inverse_symmetric_inplace};
     use test::Bencher;
 
@@ -43,15 +44,6 @@ mod tests {
     #[bench]
     fn bench_inverse_piv_lu_500(b: &mut Bencher) {
         let (mat, mut out, mut perm, mut perm_inv) = setup(500);
-
-        b.iter(|| {
-            inverse_inplace(mat.as_ref(), out.as_mut(), &mut perm, &mut perm_inv)
-        });
-    }
-
-    #[bench]
-    fn bench_inverse_piv_lu_2000(b: &mut Bencher) {
-        let (mat, mut out, mut perm, mut perm_inv) = setup(2000);
 
         b.iter(|| {
             inverse_inplace(mat.as_ref(), out.as_mut(), &mut perm, &mut perm_inv)
@@ -86,11 +78,22 @@ mod tests {
     }
 
     #[bench]
-    fn bench_inverse_lblt_2000(b: &mut Bencher) {
-        let (mat, mut out, mut perm, mut perm_inv) = setup(2000);
+    fn bench_inverse_lblt_500_alloc(b: &mut Bencher) {
+        let (mat, _, _, _) = setup(2000);
 
         b.iter(|| {
-            inverse_symmetric_inplace(mat.as_ref(), out.as_mut(), &mut perm, &mut perm_inv)
+            let out = mat.lblt(faer::Side::Upper);
+            out.inverse()
+        });
+    }
+
+    #[bench]
+    fn bench_inverse_piv_lu_500_alloc(b: &mut Bencher) {
+        let (mat, _, _, _) = setup(2000);
+
+        b.iter(|| {
+            let out = mat.partial_piv_lu();
+            out.inverse()
         });
     }
 }

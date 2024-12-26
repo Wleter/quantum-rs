@@ -172,7 +172,7 @@ where
             return;
         }
 
-        let append = self.distances.last().map_or(true, |r| (r - data.r).abs() >= self.take_per);
+        let append = self.distances.last().is_none_or(|r| (r - data.r).abs() >= self.take_per);
 
         if append {
             if let Ok(s) = data.calculate_s_matrix() {
@@ -192,7 +192,6 @@ pub struct NumerovLogging<T> {
     _psi1: Option<T>,
 }
 
-
 impl<P> PropagatorModifier<SingleNumerovData<'_, P>> for NumerovLogging<f64>
 where 
     P: SimplePotential
@@ -206,11 +205,10 @@ where
     fn after_step(&mut self, data: &mut SingleNumerovData<'_, P>) {
         self.current = data.r;
         self.steps_no += 1;
-        println!("r: {}, step: {}", data.r, data.dr);
     }
 
     fn after_prop(&mut self, _data: &mut SingleNumerovData<'_, P>) {
-        println!("propagated with after {} steps", self.steps_no)
+        println!("propagated solution after {} steps", self.steps_no)
     }
 }
 
@@ -227,7 +225,6 @@ where
     fn after_step(&mut self, data: &mut MultiNumerovData<'_, P>) {
         self.current = data.r;
         self.steps_no += 1;
-        println!("r: {}, step: {}", data.r, data.dr);
     }
 
     fn after_prop(&mut self, _data: &mut MultiNumerovData<'_, P>) {

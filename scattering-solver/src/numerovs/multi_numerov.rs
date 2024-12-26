@@ -5,9 +5,9 @@ use crate::{boundary::{Asymptotic, Boundary}, numerovs::{numerov_modifier::{Prop
 use core::f64;
 use std::{f64::consts::PI, mem::swap};
 
-pub type MultiRatioNumerov<'a, P> = Numerov<
+pub type MultiRatioNumerov<'a, P, S> = Numerov<
     MultiNumerovData<'a, P>, 
-    MultiStepRule<MultiNumerovData<'a, P>>, 
+    S,
     MultiRatioNumerovStep
 >;
 

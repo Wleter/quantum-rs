@@ -316,28 +316,28 @@ impl ABMProblemBuilder {
             ABMStatesSep::ElSpin1(self.first.s),
             spin_projections(self.first.s)
                 .into_iter()
-                .map(|x| ABMStatesValues::Proj(x))
+                .map(ABMStatesValues::Proj)
                 .collect(),
         );
         let s2 = State::new(
             ABMStatesSep::ElSpin2(self.second.s),
             spin_projections(self.second.s)
                 .into_iter()
-                .map(|x| ABMStatesValues::Proj(x))
+                .map(ABMStatesValues::Proj)
                 .collect(),
         );
         let i1 = State::new(
             ABMStatesSep::NuclearSpin1(self.first.i),
             spin_projections(self.first.i)
                 .into_iter()
-                .map(|x| ABMStatesValues::Proj(x))
+                .map(ABMStatesValues::Proj)
                 .collect(),
         );
         let i2 = State::new(
             ABMStatesSep::NuclearSpin2(self.second.i),
             spin_projections(self.second.i)
                 .into_iter()
-                .map(|x| ABMStatesValues::Proj(x))
+                .map(ABMStatesValues::Proj)
                 .collect(),
         );
 
@@ -348,7 +348,7 @@ impl ABMProblemBuilder {
         let abm_vibrational = self.abm_vibrational.unwrap();
         let vib_values: Vec<ABMStatesValues> = abm_vibrational.states()
             .into_iter()
-            .map(|x| ABMStatesValues::Vib(x))
+            .map(ABMStatesValues::Vib)
             .collect();
 
         let bounds_sep = State::new(ABMStatesSep::Vibrational, vib_values.clone());
@@ -376,14 +376,14 @@ impl ABMProblemBuilder {
         let s_tot = sum_spin_projections(self.first.s, self.second.s)
             .into_iter()
             .map(|x| {
-                let projections = x.1.into_iter().map(|p| ABMStatesValues::Proj(p)).collect();
+                let projections = x.1.into_iter().map(ABMStatesValues::Proj).collect();
                 State::new(ABMStates::ElectronSpin(x.0), projections)
             })
             .collect();
         let i_tot = sum_spin_projections(self.first.i, self.second.i)
             .into_iter()
             .map(|x| {
-                let projections = x.1.into_iter().map(|p| ABMStatesValues::Proj(p)).collect();
+                let projections = x.1.into_iter().map(ABMStatesValues::Proj).collect();
                 State::new(ABMStates::NuclearSpin(x.0), projections)
             })
             .collect();
