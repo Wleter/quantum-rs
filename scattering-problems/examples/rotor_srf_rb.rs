@@ -1,9 +1,11 @@
 use std::{f64::consts::PI, fs::File, io::{BufRead, BufReader}};
 
-use faer::Mat;
-use quantum::{problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::{Angstrom, Distance}, energy_units::{CmInv, Energy}}, utility::{legendre_polynomials, linspace}};
+use faer::{prelude::SpSolver, Col, Mat, Side};
+use quantum::{problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::{Angstrom, Distance}, energy_units::{CmInv, Energy}, Unit}, utility::{legendre_polynomials, linspace}};
 use scattering_problems::potential_interpolation::{interpolate_potentials, PotentialArray, TransitionedPotential};
-use scattering_solver::{potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::SimplePotential}, utility::save_data};
+use scattering_solver::{potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::save_data};
+
+use rayon::prelude::*;
 
 pub fn main() {
     Problems::select(&mut get_args());
@@ -19,7 +21,7 @@ problems_impl!(Problems, "CaF + Rb Feshbach",
 
 impl Problems {
     fn potentials() {
-        let distances = linspace(7., 20., 200);
+        let distances = linspace(7., 80., 800);
 
         let [pot_array_singlet, pot_array_triplet] = read_potentials(25);
         let mut data = vec![pot_array_triplet.distances.clone()];
@@ -30,6 +32,15 @@ impl Problems {
         save_data("SrF_Rb_triplet_dec", "distances\tpotential_decomposition", &data)
             .unwrap();
 
+        let mut data = vec![pot_array_singlet.distances.clone()];
+        for (_, p) in &pot_array_singlet.potentials {
+            data.push(p.clone());
+        }
+
+        save_data("SrF_Rb_singlet_dec", "distances\tpotential_decomposition", &data)
+            .unwrap();
+
+        let [pot_array_singlet, pot_array_triplet] = read_extended(25);
         let interpolated = get_interpolated(&pot_array_triplet);
         let mut data = vec![distances.clone()];
         for (_, p) in &interpolated {
@@ -41,14 +52,6 @@ impl Problems {
         }
 
         save_data("SrF_Rb_triplet_dec_interpolated", "distances\tpotential_decomposition", &data)
-            .unwrap();
-
-        let mut data = vec![pot_array_singlet.distances.clone()];
-        for (_, p) in &pot_array_singlet.potentials {
-            data.push(p.clone());
-        }
-
-        save_data("SrF_Rb_singlet_dec", "distances\tpotential_decomposition", &data)
             .unwrap();
 
         let interpolated = get_interpolated(&pot_array_singlet);
@@ -117,7 +120,6 @@ fn read_potentials(max_degree: u32) -> [PotentialArray; 2] {
 
         let r_diff: f64 = splitted_diff[0].parse().unwrap();
         let value_diff: f64 = splitted_diff[1].parse().unwrap();
-        print!("{value_diff}, ");
 
         assert!(r_diff == r);
 
@@ -181,6 +183,219 @@ fn read_potentials(max_degree: u32) -> [PotentialArray; 2] {
     [singlets, triplets]
 }
 
+fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
+    let filename = "Rb_SrF/pot.data.txt";
+    let mut path = std::env::current_dir().unwrap();
+    path.push("data");
+    path.push(filename);
+    let f = File::open(&path).expect(&format!("couldn't find potential in provided path {path:?}"));
+    let f = BufReader::new(f);
+
+    let filename = "Rb_SrF/casscf_ex.txt";
+    let mut path = std::env::current_dir().unwrap();
+    path.push("data");
+    path.push(filename);
+    let f2 = File::open(&path).expect(&format!("couldn't find potential in provided path {path:?}"));
+    let f2 = BufReader::new(f2);
+
+    let angle_count = 1 + 180 / 5;
+    let r_count = 30;
+    let mut values_singlet = Mat::zeros(r_count, angle_count);
+    let mut values_exch = Mat::zeros(r_count, angle_count);
+    let mut distances = vec![0.; r_count];
+    let angles: Vec<f64> = (0..=180).step_by(5)
+        .map(|x| x as f64 / 180. * PI)
+        .collect();
+
+    for ((i, line_singlet), line_diff) in f.lines().skip(1).enumerate().zip(f2.lines().skip(1)) {
+        let line_singlet = line_singlet.unwrap();
+        let splitted_singlet: Vec<&str> = line_singlet.trim().split_whitespace().collect();
+
+        let r: f64 = splitted_singlet[0].parse().unwrap();
+        let value: f64 = splitted_singlet[1].parse().unwrap();
+
+        let angle_index = i / r_count;
+        let r_index = i % r_count;
+
+        if angle_index > 0 {
+            assert!(distances[r_index] == Distance(r, Angstrom).to_au())
+        }
+
+        let line_diff = line_diff.unwrap();
+        let splitted_diff: Vec<&str> = line_diff.trim().split_whitespace().collect();
+
+        let r_diff: f64 = splitted_diff[0].parse().unwrap();
+        let value_diff: f64 = splitted_diff[1].parse().unwrap();
+
+        assert!(r_diff == r);
+
+        distances[r_index] = Distance(r, Angstrom).to_au();
+        values_singlet[(r_index, angle_index)] = Energy(value, CmInv).to_au();
+        values_exch[(r_index, angle_index)] = Energy(value_diff, CmInv).to_au();
+    }
+
+    let rkhs_singlets = values_singlet.col_iter()
+        .map(|col| interpolate_rkhs(&distances, &col.iter().copied().collect::<Vec<f64>>()))
+        .collect::<Vec<ReproducingKernelInterpolation>>();
+
+    let rkhs_exch = values_exch.col_iter()
+        .map(|col| interpolate_rkhs(&distances, &col.iter().copied().collect::<Vec<f64>>()))
+        .collect::<Vec<ReproducingKernelInterpolation>>();
+
+    let filename = "weights.txt";
+    path.pop();
+    path.push(filename);
+    let f = File::open(&path).expect(&format!("couldn't find potential in provided path {path:?}"));
+    let mut f = BufReader::new(f);
+
+    let mut weights = String::new();
+    f.read_line(&mut weights).unwrap();
+    let weights: Vec<f64> = weights.trim()
+        .split_whitespace()
+        .map(|s| s.parse().unwrap())
+        .collect();
+
+    let mut tail_far = Vec::new();
+    for _ in 0..=max_degree {
+        tail_far.push(Composite::new(Dispersion::new(0., 0)));
+    }
+
+    tail_far[0].add_potential(Dispersion::new(-3495.30040855597, -6))
+        .add_potential(Dispersion::new(-516911.950541056, -8));
+    tail_far[1].add_potential(Dispersion::new(17274.8363457991, -7))
+        .add_potential(Dispersion::new(4768422.32042577, -9));
+    tail_far[2].add_potential(Dispersion::new(-288.339392609436, -6))
+        .add_potential(Dispersion::new(-341345.136436851, -8));
+    tail_far[3].add_potential(Dispersion::new(-12287.2175217778, -7))
+        .add_potential(Dispersion::new(-1015530.4019772, -9));
+    tail_far[4].add_potential(Dispersion::new(-51933.9885816, -8))
+        .add_potential(Dispersion::new(-3746260.46991, -10));
+
+    let mut exch_far = Vec::new();
+    for _ in 0..=max_degree {
+        exch_far.push((0., 0.));
+    }
+
+    let b_exch = Energy(f64::exp(15.847688), CmInv).to_au();
+    let a_exch = -1.5090630 / Angstrom::TO_AU_MUL;
+    exch_far[0] = (b_exch, a_exch);
+
+    let b_exch = Energy(-f64::exp(16.3961123), CmInv).to_au();
+    let a_exch = -1.508641657417 / Angstrom::TO_AU_MUL;
+    exch_far[1] = (b_exch, a_exch);
+
+    let b_exch = Energy(f64::exp(15.14425644), CmInv).to_au();
+    let a_exch = -1.44547680 / Angstrom::TO_AU_MUL;
+    exch_far[2] = (b_exch, a_exch);
+
+    let b_exch = Energy(-f64::exp(12.53830479), CmInv).to_au();
+    let a_exch = -1.33404298 / Angstrom::TO_AU_MUL;
+    exch_far[3] = (b_exch, a_exch);
+
+    let b_exch = Energy(f64::exp(9.100058), CmInv).to_au();
+    let a_exch = -1.251990 / Angstrom::TO_AU_MUL;
+    exch_far[4] = (b_exch, a_exch);
+
+    let transition = |r, r_min, r_max| {
+        if r <= r_min {
+            1.
+        } else if r >= r_max {
+            0.
+        } else {
+            let x = ((r - r_max) - (r_min - r)) / (r_max - r_min);
+            0.5 - 0.25 * f64::sin(PI / 2. * x) * (3. - f64::sin(PI / 2. * x).powi(2))
+        }
+    };
+
+    let distances_extended = linspace(distances[0], 50., 500);
+    let mut potentials_singlet = Vec::new();
+    let mut potentials_triplet = Vec::new();
+    let polynomials: Vec<Vec<f64>> = angles.iter()
+        .map(|x| legendre_polynomials(max_degree, x.cos()))
+        .collect();
+
+    for lambda in 0..=max_degree {
+        let tail = &tail_far[lambda as usize];
+        let exch = exch_far[lambda as usize];
+
+        let values_singlet = distances_extended.par_iter()
+            .map(|x| {
+                let value_rkhs: f64 = weights.iter()
+                    .zip(rkhs_singlets.iter())
+                    .zip(polynomials.iter().map(|ps| ps[lambda as usize]))
+                    .map(|((w, rkhs), p)| {
+                        (lambda as f64 + 0.5) * w * p * rkhs.value(*x)
+                    })
+                    .sum();
+                let value_far = tail.value(*x);
+
+                let r_min = Distance(9., Angstrom).to_au();
+                let r_max = Distance(11., Angstrom).to_au();
+
+                let x = transition(*x, r_min, r_max);
+
+                x * value_rkhs + (1. - x) * value_far
+            })
+            .collect::<Vec<f64>>();
+        potentials_singlet.push((lambda as u32, values_singlet));
+
+        let values_triplet = distances_extended.par_iter()
+            .map(|x| {
+                let value_rkhs: f64 = weights.iter()
+                    .zip(rkhs_singlets.iter())
+                    .zip(polynomials.iter().map(|ps| ps[lambda as usize]))
+                    .map(|((w, rkhs), p)| {
+                        (lambda as f64 + 0.5) * w * p * rkhs.value(*x)
+                    })
+                    .sum();
+                let value_far = tail.value(*x);
+
+                let r_min = Distance(9., Angstrom).to_au();
+                let r_max = Distance(11., Angstrom).to_au();
+
+                let contrib = transition(*x, r_min, r_max);
+                let singlet_part = contrib * value_rkhs + (1. - contrib) * value_far;
+
+                let exch_rkhs: f64 = weights.iter()
+                    .zip(rkhs_exch.iter())
+                    .zip(polynomials.iter().map(|ps| ps[lambda as usize]))
+                    .map(|((w, rkhs), p)| {
+                        (lambda as f64 + 0.5) * w * p * rkhs.value(*x)
+                    })
+                    .sum();
+                let exch_far = exch.0 * f64::exp(exch.1 * x);
+
+                let r_min = Distance(4.5, Angstrom).to_au();
+                let r_max = if lambda == 0 {
+                    Distance(6.5, Angstrom).to_au()
+                } else if lambda < 4 {
+                    Distance(7.5, Angstrom).to_au()
+                } else {
+                    Distance(5.5, Angstrom).to_au()
+                };
+
+                let contrib = transition(*x, r_min, r_max);
+                let exch_contrib = contrib * exch_rkhs + (1. - contrib) * exch_far;
+
+                singlet_part + exch_contrib
+            })
+            .collect::<Vec<f64>>();
+        potentials_triplet.push((lambda as u32, values_triplet));
+    }
+
+    let singlets = PotentialArray {
+        potentials: potentials_singlet,
+        distances: distances_extended.clone()
+    };
+
+    let triplets = PotentialArray {
+        potentials: potentials_triplet,
+        distances: distances_extended
+    };
+
+    [singlets, triplets]
+}
+
 fn get_interpolated(pot_array: &PotentialArray) -> Vec<(u32, impl SimplePotential)> {
     let interp_potentials = interpolate_potentials(pot_array, 3);
     
@@ -188,7 +403,6 @@ fn get_interpolated(pot_array: &PotentialArray) -> Vec<(u32, impl SimplePotentia
     for _ in &interp_potentials {
         potentials_far.push(Composite::new(Dispersion::new(0., 0)));
     }
-
     potentials_far[0].add_potential(Dispersion::new(-3495.30040855597, -6))
         .add_potential(Dispersion::new(-516911.950541056, -8));
     potentials_far[1].add_potential(Dispersion::new(17274.8363457991, -7))
@@ -201,15 +415,12 @@ fn get_interpolated(pot_array: &PotentialArray) -> Vec<(u32, impl SimplePotentia
         .add_potential(Dispersion::new(-3746260.46991, -10));
 
     let transition = |r| {
-        let r_min = Distance(9., Angstrom).to_au();
-        let r_max = Distance(10., Angstrom).to_au();
-
-        if r <= r_min {
+        if r <= 40. {
             1.
-        } else if r >= r_max {
+        } else if r >= 50. {
             0.
         } else {
-            0.5 * (1. + f64::cos(PI * (r - r_min) / (r_max - r_min)))
+            0.5 * (1. + f64::cos(PI * (r - 40.) / 10.))
         }
     };
 
@@ -221,4 +432,74 @@ fn get_interpolated(pot_array: &PotentialArray) -> Vec<(u32, impl SimplePotentia
             (lambda, combined)
         })
         .collect()
+}
+
+struct ReproducingKernelInterpolation {
+    m: u32,
+    alpha_factors: Vec<f64>,
+    beta_factors: Vec<f64>,
+    distances: Vec<f64>
+}
+
+impl Potential for ReproducingKernelInterpolation {
+    type Space = f64;
+
+    fn value_inplace(&self, r: f64, value: &mut Self::Space) {
+        let result = self.alpha_factors.iter()
+            .zip(self.distances.iter())
+            .map(|(alpha, &r_i)| {
+                let r_lower = r.min(r_i);
+                let r_upper = r.max(r_i);
+
+                alpha / r_upper.powi(self.m as i32 + 1) 
+                    * self.beta_factors.iter()
+                        .enumerate()
+                        .map(|(k, beta)| beta * (r_lower / r_upper).powi(k as i32))
+                        .sum::<f64>()
+            })
+            .sum::<f64>();
+        *value = result
+    }
+
+    fn size(&self) -> usize {
+        1
+    }
+}
+
+fn interpolate_rkhs(points: &[f64], values: &[f64]) -> ReproducingKernelInterpolation {
+    assert!(points.len() == values.len());
+    let m = 5;
+    let betas = vec![
+        0.05357142857142857, 
+        -0.07142857142857142,
+        0.025
+    ];
+
+    let q_matrix = Mat::from_fn(points.len(), points.len(), |i, j| {
+        let r_i = points[i];
+        let r_j = points[j];
+
+        let r_lower = r_j.min(r_i);
+        let r_upper = r_j.max(r_i);
+
+        1. / r_upper.powi(m as i32 + 1) 
+            * betas.iter()
+                .enumerate()
+                .map(|(k, beta)| beta * (r_lower / r_upper).powi(k as i32))
+                .sum::<f64>()
+    });
+
+    let values = Col::from_fn(values.len(), |i| values[i]);
+
+    let cholesky = q_matrix.cholesky(Side::Lower).unwrap();
+    let alphas = cholesky.solve(values.as_ref());
+
+    let alphas = alphas.iter().copied().collect();
+
+    ReproducingKernelInterpolation {
+        m,
+        alpha_factors: alphas,
+        beta_factors: betas,
+        distances: points.to_vec(),
+    }
 }
