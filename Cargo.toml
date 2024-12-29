@@ -4,7 +4,7 @@ members = [
     "abm",
     "pyo3-crates/abm-py",
     "scattering-solver",
-    "scattering-problems", "benches",
+    "scattering-problems",
 ]
 resolver = "2"
 

@@ -1,7 +1,7 @@
 use abm::{utility::save_spectrum, HifiProblemBuilder};
 use clebsch_gordan::{half_i32, half_integer::HalfI32, half_u32};
 use quantum::{params::{particle::Particle, particle_factory::RotConst}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{energy_units::{CmInv, Energy}, mass_units::{Dalton, Mass}, Au}, utility::linspace};
-use scattering_problems::{alkali_rotor::{AlkaliRotorProblem, AlkaliRotorProblemBuilder}, utility::{AnisoHifi, GammaSpinRot, RotorDoubleJTotMax, RotorJMax, RotorLMax}};
+use scattering_problems::{alkali_rotor::{AlkaliRotorProblem, AlkaliRotorProblemBuilder}, utility::{AnisoHifi, GammaSpinRot, RotorJTotMax, RotorJMax, RotorLMax}};
 
 use rayon::prelude::*;
 
@@ -43,7 +43,7 @@ fn get_particle() -> Particle {
 
     caf.insert(RotorJMax(4));
     caf.insert(RotorLMax(2));
-    caf.insert(RotorDoubleJTotMax(2));
+    caf.insert(RotorJTotMax(2));
     caf.insert(RotConst(Energy(0.24129, CmInv).to_au()));
     caf.insert(GammaSpinRot(Energy(4.4778e-4, CmInv).to_au()));
     caf.insert(AnisoHifi(Energy(2.84875e-3, CmInv).to_au()));

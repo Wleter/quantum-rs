@@ -54,6 +54,7 @@ impl SubPotential for InterpolatedPotential {
     }
 }
 
+#[derive(Clone)]
 pub struct TransitionedPotential<P, V, F>
 where
     P: SimplePotential,

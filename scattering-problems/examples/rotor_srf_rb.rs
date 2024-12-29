@@ -1,9 +1,14 @@
-use std::{f64::consts::PI, fs::File, io::{BufRead, BufReader}};
+use std::{f64::consts::PI, fs::File, io::{BufRead, BufReader}, time::Instant};
 
+use abm::{DoubleHifiProblemBuilder, HifiProblemBuilder};
+use clebsch_gordan::{half_i32, half_integer::HalfI32, half_u32};
 use faer::{prelude::SpSolver, Col, Mat, Side};
-use quantum::{problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::{Angstrom, Distance}, energy_units::{CmInv, Energy}, Unit}, utility::{legendre_polynomials, linspace}};
-use scattering_problems::potential_interpolation::{interpolate_potentials, PotentialArray, TransitionedPotential};
-use scattering_solver::{potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::save_data};
+use hhmmss::Hhmmss;
+use indicatif::ParallelProgressIterator;
+use num::complex::Complex64;
+use quantum::{params::{particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::{Angstrom, Distance}, energy_units::{CmInv, Energy, Kelvin}, mass_units::{Dalton, Mass}, Au, Unit}, utility::{legendre_polynomials, linspace}};
+use scattering_problems::{alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder}, potential_interpolation::{interpolate_potentials, PotentialArray, TransitionedPotential}, utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorJTotMax, RotorLMax}};
+use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::save_data};
 
 use rayon::prelude::*;
 
@@ -15,8 +20,8 @@ struct Problems;
 
 problems_impl!(Problems, "CaF + Rb Feshbach",
     "potentials" => |_| Self::potentials(),
-    "single elastic cross section" => |_| Self::single_elastic_cross_section(),
-    "elastic cross section" => |_| Self::elastic_cross_section(),
+    "single elastic cross section" => |_| Self::single_cross_sections(),
+    "elastic cross section" => |_| Self::cross_sections(),
 );
 
 impl Problems {
@@ -68,12 +73,60 @@ impl Problems {
             .unwrap();
     }
 
-    fn single_elastic_cross_section() {
+    fn single_cross_sections() {
 
     }
 
-    fn elastic_cross_section() {
+    fn cross_sections() {
+        let entrance = 5;
+        let inelastic_channel = 2;
 
+        let projection = half_i32!(-1);
+        let energy_relative = Energy(1e-7, Kelvin);
+        let mag_fields = linspace(0., 1000., 500);
+        let atoms = get_particles(energy_relative);
+        let alkali_problem = get_problem(projection, &atoms);
+
+        ///////////////////////////////////
+
+        let start = Instant::now();
+        let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
+            let mut atoms = get_particles(energy_relative);
+            let alkali_problem = alkali_problem.scattering_at_field(mag_field, entrance);
+            
+            atoms.insert(alkali_problem.asymptotic);
+            let potential = &alkali_problem.potential;
+
+            let id = Mat::<f64>::identity(potential.size(), potential.size());
+            let boundary = Boundary::new(8.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+            let step_rule = MultiStepRule::new(1e-3, f64::INFINITY, 500.);
+            let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+
+            numerov.propagate_to(800.);
+            let s_matrix = numerov.data.calculate_s_matrix();
+
+            let scattering_length = s_matrix.get_scattering_length();
+            let elastic_cross = s_matrix.get_elastic_cross_sect();
+            let inelastic = s_matrix.get_inelastic_cross_sect_to(inelastic_channel);
+
+            (scattering_length, elastic_cross, inelastic)
+        })
+        .collect::<Vec<(Complex64, f64, f64)>>();
+
+        let elapsed = start.elapsed();
+        println!("calculated in {}", elapsed.hhmmssxxx());
+
+        let scatterings_re = scatterings.iter().map(|x| x.0.re).collect();
+        let scatterings_im = scatterings.iter().map(|x| x.0.im).collect();
+        let elastic_cross = scatterings.iter().map(|x| x.1).collect();
+        let inelastic_cross = scatterings.iter().map(|x| x.2).collect();
+
+
+        let header = "mag_field\tscattering_re\tscattering_im\telastic\tinelastic33";
+        let data = vec![mag_fields, scatterings_re, scatterings_im, elastic_cross, inelastic_cross];
+
+        save_data(&format!("SrF_Rb_scatterings"), header, &data)
+            .unwrap()
     }
 }
 
@@ -396,7 +449,7 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
     [singlets, triplets]
 }
 
-fn get_interpolated(pot_array: &PotentialArray) -> Vec<(u32, impl SimplePotential)> {
+fn get_interpolated(pot_array: &PotentialArray) -> Vec<(u32, impl SimplePotential + Clone)> {
     let interp_potentials = interpolate_potentials(pot_array, 3);
     
     let mut potentials_far = Vec::new();
@@ -432,6 +485,44 @@ fn get_interpolated(pot_array: &PotentialArray) -> Vec<(u32, impl SimplePotentia
             (lambda, combined)
         })
         .collect()
+}
+
+fn get_particles(energy: Energy<impl Unit>) -> Particles {
+    let rb = create_atom("Rb87").unwrap();
+    let srf = Particle::new("SrF", Mass(88. + 19., Dalton));
+
+    let mut particles = Particles::new_pair(rb, srf, energy);
+
+    let mass = 47.9376046914861;
+    particles.insert(Mass(mass, Dalton).to(Au));
+
+    particles.insert(RotorLMax(5));
+    particles.insert(RotorJMax(5));
+    particles.insert(RotorJTotMax(0));
+    particles.insert(RotConst(Energy(0.24975935, CmInv).to_au()));
+    particles.insert(GammaSpinRot(Energy(2.4974e-3, CmInv).to_au()));
+    particles.insert(AnisoHifi(Energy(1.0096e-3, CmInv).to_au()));
+
+    particles
+}
+
+fn get_problem(projection: HalfI32, particles: &Particles) -> AlkaliRotorAtomProblem<impl SimplePotential + Clone, impl SimplePotential + Clone> {
+    let hifi_srf = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(1/2))
+        .with_hyperfine_coupling(Energy(3.2383e-3 + 1.0096e-3 / 3., CmInv).to_au());
+
+    let hifi_rb = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(3/2))
+        .with_hyperfine_coupling(Energy(0.113990, CmInv).to_au());
+
+    let hifi_problem = DoubleHifiProblemBuilder::new(hifi_srf, hifi_rb)
+        .with_projection(projection);
+
+    let [singlet, triplet] = read_extended(25);
+
+    let singlets = get_interpolated(&singlet);
+    let triplets = get_interpolated(&triplet);
+
+    AlkaliRotorAtomProblemBuilder::new(hifi_problem, triplets, singlets)
+        .build(particles)
 }
 
 struct ReproducingKernelInterpolation {

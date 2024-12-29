@@ -1,9 +1,9 @@
 use abm::{get_hifi, get_zeeman_prop, utility::diagonalize, HifiProblemBuilder};
-use clebsch_gordan::{half_i32, half_integer::{HalfI32, HalfU32}, half_u32, wigner_3j, wigner_6j};
+use clebsch_gordan::{half_i32, half_integer::{HalfI32, HalfU32}, half_u32};
 use faer::Mat;
 use quantum::{cast_variant, params::{particle::Particle, particle_factory::RotConst}, states::{operator::Operator, spins::spin_projections, state::State, state_type::StateType, States, StatesBasis}};
 
-use crate::{get_aniso_hifi, get_spin_rot, utility::{AnisoHifi, GammaSpinRot, RotorDoubleJTotMax, RotorJMax, RotorLMax}};
+use crate::{get_aniso_hifi, get_spin_rot, utility::{AnisoHifi, GammaSpinRot, RotorJTotMax, RotorJMax, RotorLMax}};
 
 #[derive(Clone)]
 pub struct AlkaliRotorProblemBuilder {
@@ -30,7 +30,7 @@ impl AlkaliRotorProblemBuilder {
     pub fn build(self, particle: &Particle) -> AlkaliRotorProblem {
         let l_max = particle.get::<RotorLMax>().expect("Did not find SystemLMax parameter in particles").0;
         let j_max = particle.get::<RotorJMax>().expect("Did not find RotorJMax parameter in particles").0;
-        let j_tot_max = particle.get::<RotorDoubleJTotMax>().map_or(0, |x| x.0);
+        let j_tot_max = particle.get::<RotorJTotMax>().map_or(0, |x| x.0);
         // todo! change to rotor particle having RotConst
         let rot_const = particle.get::<RotConst>().expect("Did not find RotConst parameter in the particles").0;
         let gamma_spin_rot = particle.get::<GammaSpinRot>().unwrap_or(&GammaSpinRot(0.)).0;

@@ -1,10 +1,10 @@
 use abm::{get_hifi, get_zeeman_prop, utility::diagonalize, DoubleHifiProblemBuilder, Symmetry};
-use clebsch_gordan::{half_i32, half_integer::{HalfI32, HalfU32}, half_u32, wigner_3j, wigner_6j};
+use clebsch_gordan::{half_i32, half_integer::{HalfI32, HalfU32}, half_u32};
 use faer::Mat;
 use quantum::{cast_variant, params::{particle_factory::RotConst, particles::Particles}, states::{operator::Operator, spins::spin_projections, state::State, state_type::StateType, States, StatesBasis}};
 use scattering_solver::{boundary::Asymptotic, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, masked_potential::MaskedPotential, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{Potential, SimplePotential}}, utility::AngMomentum};
 
-use crate::{get_aniso_hifi, get_rotor_atom_potential_masking, get_spin_rot, utility::{AnisoHifi, GammaSpinRot, RotorDoubleJTotMax, RotorJMax, RotorLMax}, ScatteringProblem};
+use crate::{get_aniso_hifi, get_rotor_atom_potential_masking, get_spin_rot, utility::{AnisoHifi, GammaSpinRot, RotorJTotMax, RotorJMax, RotorLMax}, ScatteringProblem};
 
 #[derive(Clone)]
 pub struct AlkaliRotorAtomProblemBuilder<P, V>
@@ -48,7 +48,7 @@ where
     pub fn build(self, particles: &Particles) -> AlkaliRotorAtomProblem<P, V> {
         let l_max = particles.get::<RotorLMax>().expect("Did not find SystemLMax parameter in particles").0;
         let j_max = particles.get::<RotorJMax>().expect("Did not find RotorJMax parameter in particles").0;
-        let j_tot_max = particles.get::<RotorDoubleJTotMax>().map_or(0, |x| x.0);
+        let j_tot_max = particles.get::<RotorJTotMax>().map_or(0, |x| x.0);
         // todo! change to rotor particle having RotConst
         let rot_const = particles.get::<RotConst>().expect("Did not find RotConst parameter in the particles").0;
         let gamma_spin_rot = particles.get::<GammaSpinRot>().unwrap_or(&GammaSpinRot(0.)).0;

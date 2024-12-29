@@ -34,7 +34,7 @@ pub struct RotorJMax(pub u32);
 pub struct RotorJTot(pub u32);
 
 #[derive(Clone, Copy, Debug)]
-pub struct RotorDoubleJTotMax(pub u32);
+pub struct RotorJTotMax(pub u32);
 
 #[derive(Clone, Copy, Debug)]
 pub struct GammaSpinRot(pub f64);

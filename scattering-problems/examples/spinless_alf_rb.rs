@@ -283,9 +283,9 @@ fn get_potentials(pot_array: &PotentialArray, particles: &Particles, lj_entrance
 
 fn get_particles(is_rb_87: bool , energy: Energy<Au>) -> Particles {
     let rb = if is_rb_87 { create_atom("Rb87").unwrap() } else { create_atom("Rb85").unwrap() };
-    let srf = Particle::new("AlF", Mass(27. + 19., Dalton));
+    let alf = Particle::new("AlF", Mass(27. + 19., Dalton));
 
-    let mut particles = Particles::new_pair(rb, srf, energy);
+    let mut particles = Particles::new_pair(rb, alf, energy);
 
     let mass = if is_rb_87 {
         30.0707761438229

@@ -2,7 +2,7 @@ pub mod braket;
 pub mod state;
 pub mod state_type;
 
-use std::ops::Deref;
+use std::{fmt::{Display, Debug}, ops::Deref};
 
 use state_type::{StateType, StateTypeIter};
 
@@ -141,6 +141,10 @@ impl<T, V> FromIterator<StatesElement<T, V>> for StatesBasis<T, V> {
             elements.0.push(val);
         }
 
+        if elements.0.is_empty() {
+            panic!("Tried to create 0 length states basis");
+        }
+
         elements
     }
 }
@@ -159,6 +163,19 @@ impl<T, V> Deref for StatesBasis<T, V> {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl<T: Debug, V: Debug> Display for StatesBasis<T, V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for state in &self.0 {
+            for (s, v) in state.pairwise_iter() {
+                write!(f, "|{s:?}, {v:?} ⟩  ")?
+            }
+            writeln!(f, "")?
+        }
+
+        Ok(())
     }
 }
 

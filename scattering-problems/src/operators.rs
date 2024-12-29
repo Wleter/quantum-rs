@@ -1,7 +1,7 @@
 #[macro_export]
 macro_rules! get_spin_rot {
     ($basis:expr, $rot:path, $spin:path, $gamma:expr) => {
-        Operator::from_mel(
+        quantum::states::operator::Operator::from_mel(
             $basis, 
             [$rot((0, 0, 0)), $spin(half_u32!(0))],
             |[ang_braket, s_braket]| {
@@ -28,13 +28,13 @@ macro_rules! get_spin_rot {
                     let l_bra = HalfU32::from_doubled(2 * l_bra);
                     let j_tot_bra = HalfU32::from_doubled(2 * j_tot_bra);
                     let j_tot_ket = HalfU32::from_doubled(2 * j_tot_ket);
-                    
+
                     let mut wigner_sum = 0.;
                     for p in [half_i32!(-1), half_i32!(0), half_i32!(1)] { 
                         wigner_sum += (-1.0f64).powi(p.double_value() / 2) 
-                            * wigner_6j(j_bra, j_tot_bra, l_bra, j_tot_ket, j_bra, half_u32!(1))
-                            * wigner_3j(j_tot_bra, half_u32!(1), j_tot_ket, -m_r_bra, p, m_r_ket)
-                            * wigner_3j(s_bra, half_u32!(1), s_bra, -ms_bra, -p, ms_ket)
+                            * clebsch_gordan::wigner_6j(j_bra, j_tot_bra, l_bra, j_tot_ket, j_bra, half_u32!(1))
+                            * clebsch_gordan::wigner_3j(j_tot_bra, half_u32!(1), j_tot_ket, -m_r_bra, p, m_r_ket)
+                            * clebsch_gordan::wigner_3j(s_bra, half_u32!(1), s_bra, -ms_bra, -p, ms_ket)
                     }
 
                     $gamma * factor * sign * wigner_sum
@@ -49,7 +49,7 @@ macro_rules! get_spin_rot {
 #[macro_export]
 macro_rules! get_aniso_hifi {
     ($basis:expr, $rot:path, $spin_s:path, $spin_i:path, $coupling:expr) => {
-        Operator::from_mel(
+        quantum::states::operator::Operator::from_mel(
             $basis, 
             [$rot((0, 0, 0)), $spin_s(half_u32!(0)), $spin_i(half_u32!(0))],
             |[ang_braket, s_braket, i_braket]| {
@@ -83,12 +83,12 @@ macro_rules! get_aniso_hifi {
                     let j_tot_bra = HalfU32::from_doubled(2 * j_tot_bra);
                     let j_tot_ket = HalfU32::from_doubled(2 * j_tot_ket);
 
-                    let wigner = wigner_6j(j_bra, j_tot_bra, l_bra, j_tot_ket, j_ket, half_u32!(2))
-                        * wigner_3j(half_u32!(1), half_u32!(1), half_u32!(2), mi_bra - mi_ket, ms_bra - ms_ket, mr_bra - mr_ket)
-                        * wigner_3j(j_tot_bra, half_u32!(2), j_tot_ket, -mr_bra, mr_bra - mr_ket, mr_ket)
-                        * wigner_3j(j_bra, half_u32!(2), j_ket, half_i32!(0), half_i32!(0), half_i32!(0))
-                        * wigner_3j(i_bra, half_u32!(1), i_bra, -mi_bra, mi_bra - mi_ket, mi_ket)
-                        * wigner_3j(s_bra, half_u32!(1), s_bra, -ms_bra, ms_bra - ms_ket, ms_ket);
+                    let wigner = clebsch_gordan::wigner_6j(j_bra, j_tot_bra, l_bra, j_tot_ket, j_ket, half_u32!(2))
+                        * clebsch_gordan::wigner_3j(half_u32!(1), half_u32!(1), half_u32!(2), mi_bra - mi_ket, ms_bra - ms_ket, mr_bra - mr_ket)
+                        * clebsch_gordan::wigner_3j(j_tot_bra, half_u32!(2), j_tot_ket, -mr_bra, mr_bra - mr_ket, mr_ket)
+                        * clebsch_gordan::wigner_3j(j_bra, half_u32!(2), j_ket, half_i32!(0), half_i32!(0), half_i32!(0))
+                        * clebsch_gordan::wigner_3j(i_bra, half_u32!(1), i_bra, -mi_bra, mi_bra - mi_ket, mi_ket)
+                        * clebsch_gordan::wigner_3j(s_bra, half_u32!(1), s_bra, -ms_bra, ms_bra - ms_ket, ms_ket);
 
                     $coupling * f64::sqrt(30.) / 3. * sign * factor * wigner
                 } else {
@@ -103,7 +103,7 @@ macro_rules! get_aniso_hifi {
 #[macro_export]
 macro_rules! get_rotor_atom_potential_masking {
     (Singlet $lambda:expr; $basis:expr, $rot:path, $rotor_s:path, $atom_s:path) => {
-        Operator::from_mel(
+        quantum::states::operator::Operator::from_mel(
             $basis, 
             [$rot((0, 0, 0)), $rotor_s(half_u32!(0)), $atom_s(half_u32!(0))],
             |[ang_braket, s_braket, sa_braket]| {
@@ -136,11 +136,11 @@ macro_rules! get_rotor_atom_potential_masking {
                     let j_tot_bra = HalfU32::from_doubled(2 * j_tot_bra);
                     let lambda = HalfU32::from_doubled(2 * $lambda);
 
-                    let wigner = wigner_6j(j_bra, l_bra, j_tot_bra, l_ket, j_ket, lambda)
-                        * wigner_3j(j_bra, lambda, j_ket, half_i32!(0), half_i32!(0), half_i32!(0))
-                        * wigner_3j(l_bra, lambda, l_ket, half_i32!(0), half_i32!(0), half_i32!(0))
-                        * wigner_3j(s_bra, sa_bra, half_u32!(0), ms_bra, msa_bra, half_i32!(0))
-                        * wigner_3j(s_bra, sa_bra, half_u32!(0), ms_ket, msa_ket, half_i32!(0));
+                    let wigner = clebsch_gordan::wigner_6j(j_bra, l_bra, j_tot_bra, l_ket, j_ket, lambda)
+                        * clebsch_gordan::wigner_3j(j_bra, lambda, j_ket, half_i32!(0), half_i32!(0), half_i32!(0))
+                        * clebsch_gordan::wigner_3j(l_bra, lambda, l_ket, half_i32!(0), half_i32!(0), half_i32!(0))
+                        * clebsch_gordan::wigner_3j(s_bra, sa_bra, half_u32!(0), ms_bra, msa_bra, half_i32!(0))
+                        * clebsch_gordan::wigner_3j(s_bra, sa_bra, half_u32!(0), ms_ket, msa_ket, half_i32!(0));
 
                     sign * factor * wigner
                 } else {
@@ -150,7 +150,7 @@ macro_rules! get_rotor_atom_potential_masking {
         )
     };
     (Triplet $lambda:expr; $basis:expr, $rot:path, $rotor_s:path, $atom_s:path) => {
-        Operator::from_mel(
+        quantum::states::operator::Operator::from_mel(
             $basis, 
             [$rot((0, 0, 0)), $rotor_s(half_u32!(0)), $atom_s(half_u32!(0))],
             |[ang_braket, s_braket, sa_braket]| {
@@ -186,13 +186,13 @@ macro_rules! get_rotor_atom_potential_masking {
                     let mut triplet_wigner = 0.;
                     for ms_tot in [half_i32!(-1), half_i32!(0), half_i32!(1)] {
                        triplet_wigner += 3. * (-1.0f64).powi(ms_tot.double_value()) 
-                        * wigner_3j(s_bra, sa_bra, half_u32!(1), ms_bra, msa_bra, -ms_tot)
-                        * wigner_3j(s_bra, sa_bra, half_u32!(1), ms_ket, msa_ket, -ms_tot)
+                        * clebsch_gordan::wigner_3j(s_bra, sa_bra, half_u32!(1), ms_bra, msa_bra, -ms_tot)
+                        * clebsch_gordan::wigner_3j(s_bra, sa_bra, half_u32!(1), ms_ket, msa_ket, -ms_tot)
                     }
 
-                    let wigner = wigner_6j(j_bra, l_bra, j_tot_bra, l_ket, j_ket, lambda)
-                        * wigner_3j(j_bra, lambda, j_ket, half_i32!(0), half_i32!(0), half_i32!(0))
-                        * wigner_3j(l_bra, lambda, l_ket, half_i32!(0), half_i32!(0), half_i32!(0));
+                    let wigner = clebsch_gordan::wigner_6j(j_bra, l_bra, j_tot_bra, l_ket, j_ket, lambda)
+                        * clebsch_gordan::wigner_3j(j_bra, lambda, j_ket, half_i32!(0), half_i32!(0), half_i32!(0))
+                        * clebsch_gordan::wigner_3j(l_bra, lambda, l_ket, half_i32!(0), half_i32!(0), half_i32!(0));
 
                     sign * factor * wigner * triplet_wigner
                 } else {
@@ -200,5 +200,115 @@ macro_rules! get_rotor_atom_potential_masking {
                 }
             }
         )
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use approx::assert_ulps_eq;
+    use clebsch_gordan::{half_i32, half_integer::{HalfI32, HalfU32}, half_u32};
+    use quantum::states::{spins::spin_projections, state::State, state_type::StateType, States, StatesBasis};
+
+    use crate::alkali_rotor::SpinRotor;
+
+    pub struct BasisConfig {
+        s: HalfU32,
+        i: HalfU32,
+
+        l_max: u32,
+        j_max: u32,
+        j_tot_max: u32,
+        tot_proj: HalfI32
+    }
+
+    fn get_basis(config: BasisConfig) -> StatesBasis<SpinRotor, HalfI32> {
+        let l_max = config.l_max;
+        let j_max = config.j_max; 
+        let j_tot_max = config.j_tot_max;
+        let tot_proj = config.tot_proj;
+
+        let ls: Vec<u32> = (0..=l_max).collect();
+
+        let mut angular_states = vec![];
+        for j_tot in 0..=j_tot_max {
+            for &l in &ls {
+                let j_lower = (l as i32 - j_tot as i32).unsigned_abs().min(j_max);
+                let j_upper = (l + j_tot).min(j_max);
+                
+                for j in j_lower..=j_upper {
+                    let projections = spin_projections(HalfU32::from_doubled(2 * j_tot));
+                    let state = State::new(SpinRotor::Angular((l, j, j_tot)), projections);
+                    angular_states.push(state);
+                }
+            }
+        }
+
+        let s_rotor = State::new(
+            SpinRotor::RotorS(config.s),
+            spin_projections(config.s),
+        );
+        let i_rotor = State::new(
+            SpinRotor::RotorI(config.i),
+            spin_projections(config.i),
+        );
+
+        let mut states = States::default();
+        states.push_state(StateType::Sum(angular_states))
+            .push_state(StateType::Irreducible(s_rotor))
+            .push_state(StateType::Irreducible(i_rotor));
+
+        let basis = match tot_proj {
+            m_tot => {
+                states.iter_elements()
+                    .filter(|els| {
+                        els.values.iter().copied().sum::<HalfI32>() == m_tot
+                    })
+                    .collect()
+            },
+        };
+
+        basis
+    }
+
+    #[test]
+    fn test_spin_rot_coupling() {
+        let config = BasisConfig {
+            s: half_u32!(1/2),
+            i: half_u32!(0),
+            l_max: 2,
+            j_max: 2,
+            j_tot_max: 1,
+            tot_proj: half_i32!(1/2),
+        };
+        let basis = get_basis(config);
+        println!("{basis}");
+
+        let spin_rot_op = get_spin_rot!(&basis, SpinRotor::Angular, SpinRotor::RotorS, 1.).into_backed();
+
+        assert_ulps_eq!(spin_rot_op[(0, 0)], -0.5);
+        assert_ulps_eq!(spin_rot_op[(0, 9)], 1. / f64::sqrt(2.));
+        assert_ulps_eq!(spin_rot_op[(5, 8)], -1.);
+    }
+
+    #[test]
+    fn test_aniso_hifi() {
+        let config = BasisConfig {
+            s: half_u32!(1/2),
+            i: half_u32!(1/2),
+            l_max: 1,
+            j_max: 1,
+            j_tot_max: 1,
+            tot_proj: half_i32!(1),
+        };
+        let basis = get_basis(config);
+        println!("{basis}");
+
+        let aniso_hifi_op = get_aniso_hifi!(&basis, SpinRotor::Angular, 
+            SpinRotor::RotorS, SpinRotor::RotorI, 1.).into_backed();
+        println!("{aniso_hifi_op:.2?}");
+
+        assert_ulps_eq!(aniso_hifi_op[(0, 0)], -1. / 30.);
+        assert_ulps_eq!(aniso_hifi_op[(0, 3)], -1. / 30.);
+        assert_ulps_eq!(aniso_hifi_op[(2, basis.len() - 1)], -1. / f64::sqrt(800.));
     }
 }
