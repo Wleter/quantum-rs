@@ -195,7 +195,7 @@ impl Problems {
 
         let energies: Vec<Vec<f64>> = mag_fields.par_iter()
             .map(|mag_field| {
-                let (levels, _) = alkali_problem.levels_at_field(*mag_field);
+                let (levels, _) = alkali_problem.levels_at_field(0, *mag_field);
 
                 levels.iter().map(|x| Energy(*x, Au).to(GHz).value()).collect()
             })
@@ -297,9 +297,9 @@ fn get_particles(energy: Energy<impl Unit>) -> Particles {
     let rb = particle_factory::create_atom("Rb87").unwrap();
 
     let mut particles = Particles::new_pair(caf, rb, energy);
-    particles.insert(RotorLMax(0));
+    particles.insert(RotorLMax(2));
     particles.insert(RotorJMax(2));
-    particles.insert(RotorJTotMax(2));
+    particles.insert(RotorJTotMax(0));
     particles.insert(RotConst(Energy(10.3, GHz).to_au()));
     particles.insert(GammaSpinRot(Energy(40., MHz).to_au()));
     particles.insert(AnisoHifi(Energy(3. * 14., MHz).to_au()));

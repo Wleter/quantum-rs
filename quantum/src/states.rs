@@ -2,7 +2,7 @@ pub mod braket;
 pub mod state;
 pub mod state_type;
 
-use std::{fmt::{Display, Debug}, ops::Deref};
+use std::{fmt::{Debug, Display}, ops::{Deref, DerefMut}};
 
 use state_type::{StateType, StateTypeIter};
 
@@ -163,6 +163,12 @@ impl<T, V> Deref for StatesBasis<T, V> {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl<T, V> DerefMut for StatesBasis<T, V> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
