@@ -147,7 +147,7 @@ where
             .expect("Closed entrance channel")
             .0;
 
-        SMatrix::new(s_matrix, momenta, entrance)
+        SMatrix::new(s_matrix, momenta[self.asymptotic.entrance], entrance)
     }
 }
 

@@ -1,5 +1,6 @@
 use std::{fs::{create_dir_all, File}, io::Write, path::Path};
 use faer::{dyn_stack::{GlobalPodBuffer, PodStack}, linalg::{cholesky::bunch_kaufman::compute::{cholesky_in_place, cholesky_in_place_req}, lu::{self, partial_pivoting::{compute::lu_in_place_req, inverse::invert_req}}, temp_mat_req, temp_mat_uninit}, perm::PermRef, unzipped, zipped, Conj, MatMut, MatRef, Parallelism};
+use serde::Serialize;
 
 #[derive(Clone, Copy, Debug)]
 pub struct AngMomentum(pub u32);
@@ -40,6 +41,31 @@ pub fn save_data(
     println!("saved data on {}", path.display());
     Ok(())
 }
+
+pub fn save_serialize(
+    filename: &str,
+    data: &impl Serialize,
+) -> Result<(), std::io::Error> {
+    let mut path = std::env::current_dir().unwrap();
+    path.push("data");
+    path.push(filename);
+    path.set_extension("json");
+    let filepath = path.parent().unwrap();
+
+    let buf = serde_json::to_string(data).unwrap();
+
+    if !Path::new(filepath).exists() {
+        create_dir_all(filepath)?;
+        println!("created path {}", filepath.display());
+    }
+
+    let mut file = File::create(&path)?;
+    file.write_all(buf.as_bytes())?;
+
+    println!("saved data on {}", path.display());
+    Ok(())
+}
+
 
 pub fn inverse_inplace(mat: MatRef<f64>, mut out: MatMut<f64>, perm: &mut [usize], perm_inv: &mut [usize]) {
     zipped!(out.as_mut(), mat)
