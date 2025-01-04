@@ -26,6 +26,17 @@ impl SingleSMatrix {
     pub fn get_inelastic_cross_sect(&self) -> f64 {
         PI / self.momentum.powi(2) * (1.0 - self.s_matrix.norm()).powi(2)
     }
+
+    pub fn observables(&self) -> ScatteringObservables  {
+        let inelastic_cross_sections = vec![self.get_inelastic_cross_sect()];
+        
+        ScatteringObservables { 
+            entrance: 0,
+            scattering_length: self.get_scattering_length(),
+            elastic_cross_section: self.get_elastic_cross_sect(),
+            inelastic_cross_sections
+        }
+    }
 }
 
 pub struct SMatrix {
@@ -67,7 +78,7 @@ impl SMatrix {
         PI / self.momentum.powi(2) * s_element.norm_sqr()
     }
 
-    pub fn cross_sections(&self) -> ScatteringObservables  {
+    pub fn observables(&self) -> ScatteringObservables  {
         let mut inelastic_cross_sections = self.s_matrix.row(self.entrance)
             .iter()
             .map(|s| PI / self.momentum.powi(2) * s.norm_sqr())
