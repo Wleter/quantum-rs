@@ -37,10 +37,10 @@ macro_rules! cast_variant {
 fn get_mel<'a, const N: usize, T, V, F, E>(
     elements: &'a StatesBasis<T, V>,
     action_states: &[T; N],
-    mat_element: F,
-) -> impl Fn(usize, usize) -> E + 'a
+    mut mat_element: F,
+) -> impl FnMut(usize, usize) -> E + 'a
 where
-    F: Fn([StateBraket<T, V>; N]) -> E + 'a,
+    F: FnMut([StateBraket<T, V>; N]) -> E + 'a,
     T: Copy + PartialEq,
     V: Copy + PartialEq,
     E: Zero,
@@ -91,7 +91,7 @@ where
                 StateBraket { ket, bra }
             });
 
-            mat_element(brakets) // introduce caching
+            mat_element(brakets)
         }
     }
 }
@@ -99,10 +99,10 @@ where
 fn get_diagonal_mel<'a, const N: usize, T, V, F, E>(
     elements: &'a StatesBasis<T, V>,
     action_states: &[T; N],
-    mat_element: F,
-) -> impl Fn(usize, usize) -> E + 'a
+    mut mat_element: F,
+) -> impl FnMut(usize, usize) -> E + 'a
 where
-    F: Fn([(T, V); N]) -> E + 'a,
+    F: FnMut([(T, V); N]) -> E + 'a,
     T: Copy + PartialEq,
     V: Copy + PartialEq,
     E: Zero,
@@ -137,7 +137,7 @@ where
                 ket
             });
 
-            mat_element(ket) // introduce caching
+            mat_element(ket)
         }
     }
 }
@@ -145,10 +145,10 @@ where
 fn get_transformation<'a, T1, V1, T2, V2, F, E>(
     elements: &'a StatesBasis<T1, V1>,
     elements_transformed: &'a StatesBasis<T2, V2>,
-    mat_element: F,
-) -> impl Fn(usize, usize) -> E + 'a
+    mut mat_element: F,
+) -> impl FnMut(usize, usize) -> E + 'a
 where
-    F: Fn(&StatesElement<T1, V1>, &StatesElement<T2, V2>) -> E + 'a,
+    F: FnMut(&StatesElement<T1, V1>, &StatesElement<T2, V2>) -> E + 'a,
     T1: Copy + PartialEq,
     V1: Copy + PartialEq,
     T2: Copy + PartialEq,
@@ -160,7 +160,7 @@ where
             let elements_i = elements_transformed.get_unchecked(i);
             let elements_j = elements.get_unchecked(j);
 
-            mat_element(elements_j, elements_i) // introduce caching
+            mat_element(elements_j, elements_i)
         }
     }
 }
@@ -176,7 +176,7 @@ impl<E: Entity + Zero> Operator<Mat<E>> {
         mat_element: F,
     ) -> Self
     where
-        F: Fn([StateBraket<T, V>; N]) -> E,
+        F: FnMut([StateBraket<T, V>; N]) -> E,
     {
         let mel = get_mel(elements, &action_states, mat_element);
         let mat = Mat::from_fn(elements.len(), elements.len(), mel);
@@ -190,7 +190,7 @@ impl<E: Entity + Zero> Operator<Mat<E>> {
         mat_element: F,
     ) -> Self
     where
-        F: Fn([(T, V); N]) -> E,
+        F: FnMut([(T, V); N]) -> E,
     {
         let mel = get_diagonal_mel(elements, &action_states, mat_element);
         let mat = Mat::from_fn(elements.len(), elements.len(), mel);
@@ -204,7 +204,7 @@ impl<E: Entity + Zero> Operator<Mat<E>> {
         mat_element: F,
     ) -> Self
     where
-        F: Fn(&StatesElement<T1, V1>, &StatesElement<T2, V2>) -> E + 'a,
+        F: FnMut(&StatesElement<T1, V1>, &StatesElement<T2, V2>) -> E + 'a,
         T1: Copy + PartialEq,
         V1: Copy + PartialEq,
         T2: Copy + PartialEq,
@@ -237,7 +237,7 @@ impl<E: nalgebra::Scalar + Zero> Operator<DMatrix<E>> {
         mat_element: F,
     ) -> Self
     where
-        F: Fn([StateBraket<T, V>; N]) -> E,
+        F: FnMut([StateBraket<T, V>; N]) -> E,
     {
         let mel = get_mel(elements, &action_states, mat_element);
         let mat = DMatrix::from_fn(elements.len(), elements.len(), mel);
@@ -251,7 +251,7 @@ impl<E: nalgebra::Scalar + Zero> Operator<DMatrix<E>> {
         mat_element: F,
     ) -> Self
     where
-        F: Fn([(T, V); N]) -> E,
+        F: FnMut([(T, V); N]) -> E,
     {
         let mel = get_diagonal_mel(elements, &action_states, mat_element);
         let mat = DMatrix::from_fn(elements.len(), elements.len(), mel);
@@ -265,7 +265,7 @@ impl<E: nalgebra::Scalar + Zero> Operator<DMatrix<E>> {
         mat_element: F,
     ) -> Self
     where
-        F: Fn(&StatesElement<T1, V1>, &StatesElement<T2, V2>) -> E + 'a,
+        F: FnMut(&StatesElement<T1, V1>, &StatesElement<T2, V2>) -> E + 'a,
         T1: Copy + PartialEq,
         V1: Copy + PartialEq,
         T2: Copy + PartialEq,
@@ -295,7 +295,7 @@ impl<const N: usize, E: nalgebra::Scalar + Zero> Operator<SMatrix<E, N, N>> {
         mat_element: F,
     ) -> Self
     where
-        F: Fn([StateBraket<T, V>; M]) -> E,
+        F: FnMut([StateBraket<T, V>; M]) -> E,
     {
         assert!(
             N < 10,
@@ -318,7 +318,7 @@ impl<const N: usize, E: nalgebra::Scalar + Zero> Operator<SMatrix<E, N, N>> {
         mat_element: F,
     ) -> Self
     where
-        F: Fn([(T, V); M]) -> E,
+        F: FnMut([(T, V); M]) -> E,
     {
         assert!(
             N < 10,
@@ -356,7 +356,7 @@ impl<E: Zero> Operator<Array2<E>> {
         mat_element: F,
     ) -> Self
     where
-        F: Fn([StateBraket<T, V>; N]) -> E,
+        F: FnMut([StateBraket<T, V>; N]) -> E,
     {
         let mel = get_mel(elements, &action_states, mat_element);
         let mat = Array2::from_shape_fn((elements.len(), elements.len()), |(i, j)| mel(i, j));
@@ -370,7 +370,7 @@ impl<E: Zero> Operator<Array2<E>> {
         mat_element: F,
     ) -> Self
     where
-        F: Fn([(T, V); N]) -> E,
+        F: FnMut([(T, V); N]) -> E,
     {
         let mel = get_diagonal_mel(elements, &action_states, mat_element);
         let mat = Array2::from_shape_fn((elements.len(), elements.len()), |(i, j)| mel(i, j));
@@ -384,7 +384,7 @@ impl<E: Zero> Operator<Array2<E>> {
         mat_element: F,
     ) -> Self
     where
-        F: Fn(&StatesElement<T1, V1>, &StatesElement<T2, V2>) -> E + 'a,
+        F: FnMut(&StatesElement<T1, V1>, &StatesElement<T2, V2>) -> E + 'a,
         T1: Copy + PartialEq,
         V1: Copy + PartialEq,
         T2: Copy + PartialEq,
@@ -413,13 +413,13 @@ mod test {
     use super::Operator;
     use crate::states::{state::State, state_type::StateType, States};
 
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     enum StateIds {
         ElectronSpin(u32),
         Vibrational,
     }
 
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     enum ElementValues {
         Spin(i32),
         Vibrational(i32),
@@ -478,7 +478,7 @@ mod test {
         ];
         assert_eq!(expected, operator.backed);
 
-        let operator =
+        let operator = 
             Operator::<Mat<f64>>::from_mel(&elements, [StateIds::ElectronSpin(0)], |[el_state]| {
                 let bra = el_state.bra;
 
@@ -516,8 +516,7 @@ mod test {
                 } else {
                     0.0
                 }
-            },
-        );
+            });
 
         let expected = mat![
             [0.0, 0.0, 0.0, 0.0, 2178.0, 2198.0, 2218.0, 198.0],
@@ -553,6 +552,46 @@ mod test {
             [0.0, 0.0, 0.0, 0.0, 0.0, 200.0, 0.0, 0.0],
             [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 202.0, 0.0],
             [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        ];
+
+        assert_eq!(expected, operator.backed);
+    }
+
+    #[test]
+    #[cfg(feature = "faer")]
+    fn test_faer_operators_cached() {
+        use faer::{Mat, mat};
+        use crate::{cached_mel, make_cache};
+
+        let elements = prepare_states().get_basis();
+
+        let operator = make_cache!(cache, Operator::<Mat<f64>>::from_mel(
+            &elements,
+            [StateIds::ElectronSpin(0), StateIds::Vibrational],
+            cached_mel!(cache, |[el_state, vib]| {
+                let ket_spin = cast_variant!(el_state.ket.0, StateIds::ElectronSpin);
+                let bra_spin = cast_variant!(el_state.bra.0, StateIds::ElectronSpin);
+
+                let ket_spin_z = cast_variant!(el_state.ket.1, ElementValues::Spin);
+                let bra_spin_z = cast_variant!(el_state.bra.1, ElementValues::Spin);
+                if vib.ket != vib.bra {
+                    ((ket_spin * 1000 + bra_spin * 100) as i32 + ket_spin_z * 10 + bra_spin_z)
+                        as f64
+                } else {
+                    0.0
+                }
+            }))
+        );
+
+        let expected = mat![
+            [0.0, 0.0, 0.0, 0.0, 2178.0, 2198.0, 2218.0, 198.0],
+            [0.0, 0.0, 0.0, 0.0, 2180.0, 2200.0, 2220.0, 200.0],
+            [0.0, 0.0, 0.0, 0.0, 2182.0, 2202.0, 2222.0, 202.0],
+            [0.0, 0.0, 0.0, 0.0, 1980.0, 2000.0, 2020.0, 0.0],
+            [2178.0, 2198.0, 2218.0, 198.0, 0.0, 0.0, 0.0, 0.0],
+            [2180.0, 2200.0, 2220.0, 200.0, 0.0, 0.0, 0.0, 0.0],
+            [2182.0, 2202.0, 2222.0, 202.0, 0.0, 0.0, 0.0, 0.0],
+            [1980.0, 2000.0, 2020.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ];
 
         assert_eq!(expected, operator.backed);

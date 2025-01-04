@@ -62,7 +62,7 @@ impl<T: Copy, V: Copy> States<T, V> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct StatesElement<T, V> {
     pub variants: Vec<T>,
     pub values: Vec<V>,
