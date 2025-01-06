@@ -8,7 +8,7 @@ fn main() {
     piv_lu();
 
     #[cfg(feature = "allocations")]
-    ldlt();
+    lblt();
 }
 
 #[cfg(feature = "allocations")]
@@ -24,7 +24,7 @@ fn piv_lu() {
 }
 
 #[cfg(feature = "allocations")]
-fn ldlt() {
+fn lblt() {
     use benches::setup;
     use scattering_solver::utility::inverse_symmetric_inplace;
 

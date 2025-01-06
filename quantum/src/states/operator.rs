@@ -358,7 +358,7 @@ impl<E: Zero> Operator<Array2<E>> {
     where
         F: FnMut([StateBraket<T, V>; N]) -> E,
     {
-        let mel = get_mel(elements, &action_states, mat_element);
+        let mut mel = get_mel(elements, &action_states, mat_element);
         let mat = Array2::from_shape_fn((elements.len(), elements.len()), |(i, j)| mel(i, j));
 
         Self { backed: mat }
@@ -372,7 +372,7 @@ impl<E: Zero> Operator<Array2<E>> {
     where
         F: FnMut([(T, V); N]) -> E,
     {
-        let mel = get_diagonal_mel(elements, &action_states, mat_element);
+        let mut mel = get_diagonal_mel(elements, &action_states, mat_element);
         let mat = Array2::from_shape_fn((elements.len(), elements.len()), |(i, j)| mel(i, j));
 
         Self { backed: mat }
@@ -390,7 +390,7 @@ impl<E: Zero> Operator<Array2<E>> {
         T2: Copy + PartialEq,
         V2: Copy + PartialEq,
     {
-        let mel = get_transformation(elements, elements_transformed, mat_element);
+        let mut mel = get_transformation(elements, elements_transformed, mat_element);
         let mat = Array2::from_shape_fn((elements_transformed.len(), elements.len()), |(i, j)| {
             mel(i, j)
         });
@@ -603,6 +603,8 @@ mod test {
         use faer::Mat;
         use nalgebra::{DMatrix, SMatrix};
         use ndarray::Array2;
+
+        use crate::states::braket::StateBraket;
 
         let elements = prepare_states().get_basis();
 

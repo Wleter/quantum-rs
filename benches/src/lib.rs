@@ -25,7 +25,9 @@ mod tests {
 
     #[bench]
     fn bench_inverse_piv_lu_50(b: &mut Bencher) {
-        let (mat, mut out, mut perm, mut perm_inv) = setup(50);
+        let (mut mat, mut out, mut perm, mut perm_inv) = setup(50);
+        inverse_inplace(mat.as_ref(), out.as_mut(), &mut perm, &mut perm_inv);
+        inverse_inplace(out.as_ref(), mat.as_mut(), &mut perm, &mut perm_inv);
 
         b.iter(|| {
             inverse_inplace(mat.as_ref(), out.as_mut(), &mut perm, &mut perm_inv)
@@ -34,7 +36,10 @@ mod tests {
 
     #[bench]
     fn bench_inverse_piv_lu_100(b: &mut Bencher) {
-        let (mat, mut out, mut perm, mut perm_inv) = setup(100);
+        let (mut mat, mut out, mut perm, mut perm_inv) = setup(100);
+        inverse_inplace(mat.as_ref(), out.as_mut(), &mut perm, &mut perm_inv);
+        inverse_inplace(out.as_ref(), mat.as_mut(), &mut perm, &mut perm_inv);
+
 
         b.iter(|| {
             inverse_inplace(mat.as_ref(), out.as_mut(), &mut perm, &mut perm_inv)
@@ -43,7 +48,10 @@ mod tests {
 
     #[bench]
     fn bench_inverse_piv_lu_500(b: &mut Bencher) {
-        let (mat, mut out, mut perm, mut perm_inv) = setup(500);
+        let (mut mat, mut out, mut perm, mut perm_inv) = setup(500);
+        inverse_inplace(mat.as_ref(), out.as_mut(), &mut perm, &mut perm_inv);
+        inverse_inplace(out.as_ref(), mat.as_mut(), &mut perm, &mut perm_inv);
+
 
         b.iter(|| {
             inverse_inplace(mat.as_ref(), out.as_mut(), &mut perm, &mut perm_inv)
@@ -52,7 +60,10 @@ mod tests {
 
     #[bench]
     fn bench_inverse_lblt_50(b: &mut Bencher) {
-        let (mat, mut out, mut perm, mut perm_inv) = setup(50);
+        let (mut mat, mut out, mut perm, mut perm_inv) = setup(50);
+        inverse_symmetric_inplace(mat.as_ref(), out.as_mut(), &mut perm, &mut perm_inv);
+        inverse_symmetric_inplace(out.as_ref(), mat.as_mut(), &mut perm, &mut perm_inv);
+
 
         b.iter(|| {
             inverse_symmetric_inplace(mat.as_ref(), out.as_mut(), &mut perm, &mut perm_inv)
@@ -61,7 +72,9 @@ mod tests {
 
     #[bench]
     fn bench_inverse_lblt_100(b: &mut Bencher) {
-        let (mat, mut out, mut perm, mut perm_inv) = setup(100);
+        let (mut mat, mut out, mut perm, mut perm_inv) = setup(100);
+        inverse_symmetric_inplace(mat.as_ref(), out.as_mut(), &mut perm, &mut perm_inv);
+        inverse_symmetric_inplace(out.as_ref(), mat.as_mut(), &mut perm, &mut perm_inv);
 
         b.iter(|| {
             inverse_symmetric_inplace(mat.as_ref(), out.as_mut(), &mut perm, &mut perm_inv)
@@ -70,7 +83,9 @@ mod tests {
 
     #[bench]
     fn bench_inverse_lblt_500(b: &mut Bencher) {
-        let (mat, mut out, mut perm, mut perm_inv) = setup(500);
+        let (mut mat, mut out, mut perm, mut perm_inv) = setup(500);
+        inverse_symmetric_inplace(mat.as_ref(), out.as_mut(), &mut perm, &mut perm_inv);
+        inverse_symmetric_inplace(out.as_ref(), mat.as_mut(), &mut perm, &mut perm_inv);
 
         b.iter(|| {
             inverse_symmetric_inplace(mat.as_ref(), out.as_mut(), &mut perm, &mut perm_inv)
@@ -79,7 +94,11 @@ mod tests {
 
     #[bench]
     fn bench_inverse_lblt_500_alloc(b: &mut Bencher) {
-        let (mat, _, _, _) = setup(2000);
+        let (mat, _, _, _) = setup(500);
+        let out = mat.lblt(faer::Side::Upper);
+        out.inverse();
+        let out = mat.lblt(faer::Side::Upper);
+        out.inverse();
 
         b.iter(|| {
             let out = mat.lblt(faer::Side::Upper);
@@ -89,7 +108,11 @@ mod tests {
 
     #[bench]
     fn bench_inverse_piv_lu_500_alloc(b: &mut Bencher) {
-        let (mat, _, _, _) = setup(2000);
+        let (mat, _, _, _) = setup(500);
+        let out = mat.lblt(faer::Side::Upper);
+        out.inverse();
+        let out = mat.lblt(faer::Side::Upper);
+        out.inverse();
 
         b.iter(|| {
             let out = mat.partial_piv_lu();

@@ -6,6 +6,7 @@ members = [
     "scattering-solver",
     "scattering-problems",
 ]
+exclude = ["benches"]
 resolver = "2"
 
 [workspace.package]
