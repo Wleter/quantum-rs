@@ -1,10 +1,9 @@
 use abm::{abm_states::HifiStates, DoubleHifiProblemBuilder};
 use clebsch_gordan::half_u32;
-use faer::Mat;
 use quantum::{cast_variant, states::operator::Operator};
-use scattering_solver::{boundary::Asymptotic, potentials::{dispersion_potential::Dispersion, masked_potential::MaskedPotential, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{Potential, SimplePotential}}, utility::AngMomentum};
+use scattering_solver::{boundary::Asymptotic, potentials::{dispersion_potential::Dispersion, masked_potential::MaskedPotential, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{MatPotential, Potential, SimplePotential}}, utility::AngMomentum};
 
-use crate::ScatteringProblem;
+use crate::{IndexBasisDescription, ScatteringProblem};
 
 #[derive(Clone)]
 pub struct AlkaliAtomsProblemBuilder<P, V>
@@ -33,7 +32,7 @@ where
         }
     }
 
-    pub fn build(self, magnetic_field: f64, entrance: usize) -> ScatteringProblem<impl Potential<Space = Mat<f64>>> {
+    pub fn build(self, magnetic_field: f64) -> ScatteringProblem<impl MatPotential, IndexBasisDescription> {
         let hifi = self.hifi_problem.build();
         let basis = hifi.get_basis();
         
@@ -66,11 +65,12 @@ where
         ScatteringProblem {
             asymptotic: Asymptotic {
                 centrifugal: vec![AngMomentum(0); full_potential.size()],
-                entrance,
+                entrance: 0,
                 channel_energies: hifi_states.0.iter().map(|x| x.to_au()).collect(),
                 channel_states: hifi_states.1,
             },
             potential: full_potential,
+            basis_description: IndexBasisDescription
         }
     }
 }

@@ -3,7 +3,7 @@ use std::time::Instant;
 use faer::Mat;
 use num::Complex;
 use quantum::{params::{particle_factory::create_atom, particles::Particles}, problems_impl, units::{distance_units::Distance, energy_units::{Energy, Kelvin}, mass_units::Mass, Au}, utility::linspace};
-use scattering_solver::{boundary::{Asymptotic, Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, numerov_modifier::{Sampling, WaveStorage}, propagator::MultiStepRule}, potentials::{dispersion_potential::Dispersion, gaussian_coupling::GaussianCoupling, multi_coupling::MultiCoupling, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::Potential, potential_factory::create_lj}, utility::{save_data, AngMomentum}};
+use scattering_solver::{boundary::{Asymptotic, Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, numerov_modifier::{Sampling, WaveStorage}, propagator::MultiStepRule}, potentials::{dispersion_potential::Dispersion, gaussian_coupling::GaussianCoupling, multi_coupling::MultiCoupling, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{MatPotential, Potential}, potential_factory::create_lj}, utility::{save_data, AngMomentum}};
 
 
 pub struct TwoChannel;
@@ -32,7 +32,7 @@ impl TwoChannel {
         particles
     }
 
-    fn potential() -> impl Potential<Space = Mat<f64>> {
+    fn potential() -> impl MatPotential {
         let potential_lj1 = create_lj(Energy(0.002, Au), Distance(9., Au));
         let mut potential_lj2 = create_lj(Energy(0.0021, Au), Distance(8.9, Au));
         potential_lj2.add_potential(Dispersion::new(Energy(1., Kelvin).to_au(), 0));

@@ -1,6 +1,6 @@
 use faer::{linalg::matmul::matmul, prelude::{c64, SolverCore}, unzipped, zipped, Mat, MatMut};
 use quantum::{params::particles::Particles, units::{energy_units::Energy, mass_units::Mass, Au}, utility::{asymptotic_bessel_j, asymptotic_bessel_n, bessel_j_ratio, bessel_n_ratio}};
-use crate::{boundary::{Asymptotic, Boundary}, numerovs::{numerov_modifier::{PropagatorModifier, SampleConfig, WaveStorage}, propagator::{MultiStep, MultiStepRule, Numerov, NumerovResult, PropagatorData, StepAction, StepRule}}, observables::s_matrix::SMatrix, potentials::{dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::inverse_inplace};
+use crate::{boundary::{Asymptotic, Boundary}, numerovs::{numerov_modifier::{PropagatorModifier, SampleConfig, WaveStorage}, propagator::{MultiStep, MultiStepRule, Numerov, NumerovResult, PropagatorData, StepAction, StepRule}}, observables::s_matrix::SMatrix, potentials::{dispersion_potential::Dispersion, potential::{MatPotential, SimplePotential}}, utility::inverse_inplace};
 
 use core::f64;
 use std::{f64::consts::PI, mem::swap};
@@ -24,7 +24,7 @@ pub struct MultiRatioNumerovStep
 #[derive(Clone)]
 pub struct MultiNumerovData<'a, P>
 where 
-    P: Potential<Space = Mat<f64>>
+    P: MatPotential
 {
     pub r: f64,
     pub dr: f64,
@@ -49,7 +49,7 @@ where
 
 impl<P> MultiNumerovData<'_, P> 
 where 
-    P: Potential<Space = Mat<f64>>
+    P: MatPotential
 {
     pub fn get_g_func(&mut self, r: f64, out: MatMut<f64>) {
         self.potential.value_inplace(r, &mut self.potential_buffer);
@@ -153,7 +153,7 @@ where
 
 impl<'a, P, S, M> Numerov<MultiNumerovData<'a, P>, S, M> 
 where 
-    P: Potential<Space = Mat<f64>>,
+    P: MatPotential,
     S: StepRule<MultiNumerovData<'a, P>>,
     M: MultiStep<MultiNumerovData<'a, P>>
 {
@@ -168,7 +168,7 @@ where
 
 impl<'a, P, S> Numerov<MultiNumerovData<'a, P>, S, MultiRatioNumerovStep>
 where 
-    P: Potential<Space = Mat<f64>>,
+    P: MatPotential,
     S: StepRule<MultiNumerovData<'a, P>>,
 {
     pub fn new(potential: &'a P, particles: &'a Particles, step_rules: S, boundary: Boundary<Mat<f64>>) -> Self {
@@ -245,7 +245,7 @@ where
 
 impl<P> PropagatorData for MultiNumerovData<'_, P> 
 where 
-    P: Potential<Space = Mat<f64>>
+    P: MatPotential
 {
     fn step_size(&self) -> f64 {
         self.dr
@@ -278,7 +278,7 @@ where
 
 impl<P> StepRule<MultiNumerovData<'_, P>> for MultiStepRule<MultiNumerovData<'_, P>>
 where 
-    P: Potential<Space = Mat<f64>>
+    P: MatPotential
 {
     fn get_step(&self, data: &MultiNumerovData<P>) -> f64 {
         let max_g_val = data.current_g_func.diagonal()
@@ -311,7 +311,7 @@ where
 
 impl<P> MultiStep<MultiNumerovData<'_, P>> for MultiRatioNumerovStep
 where 
-    P: Potential<Space = Mat<f64>>
+    P: MatPotential
 {
     fn step(&mut self, data: &mut MultiNumerovData<P>) {
         data.r += data.dr;
@@ -395,7 +395,7 @@ where
 
 impl<P> PropagatorModifier<MultiNumerovData<'_, P>> for WaveStorage<Mat<f64>> 
 where 
-    P: Potential<Space = Mat<f64>>
+    P: MatPotential
 {
     fn before(&mut self, data: &mut MultiNumerovData<'_, P>, r_stop: f64) {
         if let SampleConfig::Step(value) = &mut self.sampling {

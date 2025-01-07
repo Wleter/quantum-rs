@@ -1,7 +1,7 @@
 
 use faer::Mat;
 
-use crate::{observables::s_matrix::SingleSMatrix, potentials::potential::{Potential, SimplePotential}};
+use crate::{observables::s_matrix::SingleSMatrix, potentials::potential::{MatPotential, SimplePotential}};
 
 use super::{multi_numerov::MultiNumerovData, propagator::PropagatorData, single_numerov::SingleNumerovData};
 
@@ -214,7 +214,7 @@ where
 
 impl<P> PropagatorModifier<MultiNumerovData<'_, P>> for NumerovLogging<Mat<f64>>
 where 
-    P: Potential<Space = Mat<f64>>
+    P: MatPotential
 {
     fn before(&mut self, data: &mut MultiNumerovData<'_, P>, r_stop: f64) {
         self.r_min = data.r;

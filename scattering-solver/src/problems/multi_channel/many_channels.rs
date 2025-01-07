@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use faer::Mat;
 use quantum::{params::{particle_factory::create_atom, particles::Particles}, problems_impl, units::{distance_units::Distance, energy_units::{Energy, Kelvin}, Au}, utility::linspace};
-use scattering_solver::{boundary::{Asymptotic, Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, numerov_modifier::NumerovLogging, propagator::MultiStepRule}, potentials::{dispersion_potential::Dispersion, multi_coupling::MultiCoupling, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::Potential, potential_factory::create_lj}, utility::AngMomentum};
+use scattering_solver::{boundary::{Asymptotic, Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, numerov_modifier::NumerovLogging, propagator::MultiStepRule}, potentials::{dispersion_potential::Dispersion, multi_coupling::MultiCoupling, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{MatPotential, Potential}, potential_factory::create_lj}, utility::AngMomentum};
 pub struct ManyChannels;
 
 problems_impl!(ManyChannels, "large number of channels",
@@ -30,7 +30,7 @@ impl ManyChannels {
         particles
     }
 
-    fn potential() -> impl Potential<Space = Mat<f64>> {
+    fn potential() -> impl MatPotential {
         let wells = linspace(0.0019, 0.0022, N);
         let potentials = wells.iter()
             .map(|well| {

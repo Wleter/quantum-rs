@@ -7,8 +7,8 @@ use hhmmss::Hhmmss;
 use indicatif::{ParallelProgressIterator, ProgressIterator};
 use num::complex::Complex64;
 use quantum::{params::{particle_factory, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::energy_units::{Energy, Kelvin, MHz}, utility::linspace};
-use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, ScatteringProblem};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::Potential}, utility::save_data};
+use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, IndexBasisDescription, ScatteringProblem};
+use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{MatPotential, Potential}}, utility::save_data};
 
 use rayon::prelude::*;
 
@@ -24,7 +24,7 @@ problems_impl!(Problems, "Li2 Feshbach",
 );
 
 impl Problems {
-    fn get_potential(projection: HalfI32, mag_field: f64) -> ScatteringProblem<impl Potential<Space = Mat<f64>>> {
+    fn get_potential(projection: HalfI32, mag_field: f64) -> ScatteringProblem<impl MatPotential, IndexBasisDescription> {
         let first = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(1))
             .with_hyperfine_coupling(Energy(228.2 / 1.5, MHz).to_au());
 
@@ -38,7 +38,7 @@ impl Problems {
         li2_singlet.add_potential(Dispersion::new(1.112e7, -12));
 
         AlkaliAtomsProblemBuilder::new(hifi_problem, li2_triplet, li2_singlet)
-            .build(mag_field, 0)
+            .build(mag_field)
     }
 
     fn get_particles() -> Particles {

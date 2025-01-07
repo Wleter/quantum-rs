@@ -8,8 +8,8 @@ use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
 use num::complex::Complex64;
 use quantum::{params::{particle::Particle, particle_factory::{self, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{energy_units::{Energy, GHz, Kelvin, MHz}, mass_units::{Dalton, Mass}, Au, Unit}, utility::linspace};
-use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder}, utility::{AnisoHifi, GammaSpinRot, RotorJTotMax, RotorJMax, RotorLMax}, ScatteringProblem};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule, single_numerov::SingleRatioNumerov}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::save_data};
+use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder}, utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorJTotMax, RotorLMax}, IndexBasisDescription, ScatteringProblem};
+use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule, single_numerov::SingleRatioNumerov}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{MatPotential, Potential, SimplePotential}}, utility::save_data};
 
 use rayon::prelude::*;
 
@@ -102,7 +102,6 @@ impl Problems {
         ///////////////////////////////////
 
         let projection = half_i32!(1);
-        let entrance = 0;
         let energy = Energy(1e-7, Kelvin);
 
         let config_triplet = 0;
@@ -117,7 +116,7 @@ impl Problems {
         let start = Instant::now();
         
         let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
-            let alkali_problem = get_potential_iso(config_triplet, config_singlet, projection, mag_field, entrance);
+            let alkali_problem = get_potential_iso(config_triplet, config_singlet, projection, mag_field);
 
             let mut caf_rb = get_particles(energy);
             caf_rb.insert(alkali_problem.asymptotic);
@@ -150,8 +149,6 @@ impl Problems {
         ///////////////////////////////////
 
         let projection = half_i32!(2);
-        let channel = 0;
-
         let config_triplet = 0;
         let config_singlet = 0;
 
@@ -163,7 +160,7 @@ impl Problems {
         let caf_rb = get_particles(energy_relative);
         let alkali_problem = get_problem(config_triplet, config_singlet, projection, &caf_rb);
 
-        let alkali_problem = alkali_problem.scattering_at_field(100., channel);
+        let alkali_problem = alkali_problem.scattering_at_field(100.);
         let potential = &alkali_problem.potential;
 
         let mut mat = Mat::zeros(potential.size(), potential.size());
@@ -209,7 +206,6 @@ impl Problems {
         ///////////////////////////////////
 
         let projection = half_i32!(1);
-        let channel = 0;
 
         let config_triplet = 0;
         let config_singlet = 2;
@@ -224,7 +220,7 @@ impl Problems {
         let start = Instant::now();
         let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
             let mut atoms = get_particles(energy_relative);
-            let alkali_problem = alkali_problem.scattering_at_field(mag_field, channel);
+            let alkali_problem = alkali_problem.scattering_at_field(mag_field);
             
             atoms.insert(alkali_problem.asymptotic);
             let potential = &alkali_problem.potential;
@@ -276,7 +272,7 @@ fn potential_aniso() -> Composite<Dispersion> {
     singlet
 }
 
-fn get_potential_iso(config_triplet: usize, config_singlet: usize, projection: HalfI32, mag_field: f64, entrance: usize) -> ScatteringProblem<impl Potential<Space = Mat<f64>>> {
+fn get_potential_iso(config_triplet: usize, config_singlet: usize, projection: HalfI32, mag_field: f64) -> ScatteringProblem<impl MatPotential, IndexBasisDescription> {
     let hifi_caf = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(1/2))
         .with_hyperfine_coupling(Energy(120., MHz).to_au());
 
@@ -289,7 +285,7 @@ fn get_potential_iso(config_triplet: usize, config_singlet: usize, projection: H
     let singlet = singlet_iso(config_singlet);
 
     AlkaliAtomsProblemBuilder::new(hifi_problem, triplet, singlet)
-        .build(mag_field, entrance)
+        .build(mag_field)
 }
 
 fn get_particles(energy: Energy<impl Unit>) -> Particles {

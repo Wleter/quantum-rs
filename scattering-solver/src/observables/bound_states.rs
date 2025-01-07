@@ -24,7 +24,7 @@ impl<P: SimplePotential> PropagatorModifier<SingleNumerovData<'_, P>> for NodeCo
     }
 }
 
-impl<P: Potential<Space = Mat<f64>>> PropagatorModifier<MultiNumerovDataFaer<'_, P>> for NodeCounting {
+impl<P: MatPotential> PropagatorModifier<MultiNumerovDataFaer<'_, P>> for NodeCounting {
     fn after_step(&mut self, data: &mut MultiNumerovDataFaer<'_, P>) {
         if data.psi1.determinant() < 0. {
             self.node_count += 1

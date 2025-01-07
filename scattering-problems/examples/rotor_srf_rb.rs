@@ -92,9 +92,10 @@ impl Problems {
         let start = Instant::now();
         let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
             let mut atoms = get_particles(energy_relative);
-            let alkali_problem = alkali_problem.scattering_at_field(mag_field, entrance);
-            
-            atoms.insert(alkali_problem.asymptotic);
+            let alkali_problem = alkali_problem.scattering_at_field(mag_field);
+            let mut asymptotic = alkali_problem.asymptotic;
+            asymptotic.entrance = entrance;
+            atoms.insert(asymptotic);
             let potential = &alkali_problem.potential;
 
             let id = Mat::<f64>::identity(potential.size(), potential.size());

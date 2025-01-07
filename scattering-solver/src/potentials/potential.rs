@@ -41,3 +41,7 @@ pub trait SimplePotential: Potential<Space = f64> {
 }
 
 impl<P: Potential<Space = f64>> SimplePotential for P { }
+
+pub trait MatPotential: Potential<Space = Mat<f64>> { }
+
+impl<P: Potential<Space = Mat<f64>>> MatPotential for P { }

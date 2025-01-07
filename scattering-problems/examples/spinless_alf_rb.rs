@@ -5,8 +5,8 @@ use gauss_quad::GaussLegendre;
 use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
 use quantum::{params::{particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::Angstrom, energy_units::{CmInv, Energy, Kelvin}, mass_units::{Dalton, Mass}, Au, Unit}, utility::{legendre_polynomials, linspace, logspace}};
-use scattering_problems::{potential_interpolation::{interpolate_potentials, PotentialArray, TransitionedPotential}, rotor_atom::RotorAtomProblemBuilder, utility::{RotorJMax, RotorJTot, RotorLMax}, ScatteringProblem};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, potentials::{dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::save_data};
+use scattering_problems::{potential_interpolation::{interpolate_potentials, PotentialArray, TransitionedPotential}, rotor_atom::{RotorAtomBasisDescription, RotorAtomBasisElement, RotorAtomProblemBuilder}, utility::{RotorJMax, RotorJTot, RotorLMax}, BasisDescription, ScatteringProblem};
+use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, potentials::{dispersion_potential::Dispersion, potential::{MatPotential, Potential, SimplePotential}}, utility::save_data};
 
 use rayon::prelude::*;
 
@@ -55,6 +55,11 @@ impl Problems {
         let energy_relative = Energy(1e-7, Kelvin);
         let pot_array = read_potential();
 
+        let entrance = RotorAtomBasisElement {
+            l: 0,
+            j: 0,
+        };
+
         ///////////////////////////////
         
         let start = Instant::now();
@@ -63,14 +68,16 @@ impl Problems {
         particles.insert(RotorLMax(80));
         particles.insert(RotorJMax(80));
 
-        let scattering_problem = get_potentials(&pot_array, &particles, (0, 0));
-        let potential = &scattering_problem.potential;
-        particles.insert(scattering_problem.asymptotic);
+        let scattering_problem = get_potentials(&pot_array, &particles);
+        let potential = scattering_problem.potential;
+        let mut asymptotic = scattering_problem.asymptotic;
+        asymptotic.entrance = scattering_problem.basis_description.index_for(&entrance);
+        particles.insert(asymptotic);
 
         let id = Mat::<f64>::identity(potential.size(), potential.size());
         let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
         let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-        let mut numerov = MultiRatioNumerov::new(potential, &particles, step_rule, boundary);
+        let mut numerov = MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
 
         numerov.propagate_to(200.);
         let cross_section = numerov.data.calculate_s_matrix().get_elastic_cross_sect();
@@ -90,6 +97,11 @@ impl Problems {
         let rot_max = 80;
         let pot_array = read_potential();
 
+        let entrance = RotorAtomBasisElement {
+            l: 0,
+            j: 0,
+        };
+
         ///////////////////////////////
 
         for is_rb_87 in [true, false] {
@@ -104,14 +116,16 @@ impl Problems {
                     particles.insert(RotorLMax(*x));
                     particles.insert(RotorJMax(*x));
     
-                    let scattering_problem = get_potentials(&pot_array, &particles, (0, 0));
-                    let potential = &scattering_problem.potential;
-                    particles.insert(scattering_problem.asymptotic);
+                    let scattering_problem = get_potentials(&pot_array, &particles);
+                    let potential = scattering_problem.potential;
+                    let mut asymptotic = scattering_problem.asymptotic;
+                    asymptotic.entrance = scattering_problem.basis_description.index_for(&entrance);
+                    particles.insert(asymptotic);
         
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
                     let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
                     let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                    let mut numerov = MultiRatioNumerov::new(potential, &particles, step_rule, boundary);
+                    let mut numerov = MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
         
                     numerov.propagate_to(200.);
                     let cross_section = numerov.data.calculate_s_matrix().get_elastic_cross_sect();
@@ -137,6 +151,11 @@ impl Problems {
 
         ///////////////////////////////
 
+        let entrance = RotorAtomBasisElement {
+            l: 1,
+            j: 1,
+        };
+
         let pot_array = read_potential();
 
         for is_rb_87 in [true, false] {
@@ -152,14 +171,16 @@ impl Problems {
                     particles.insert(RotorLMax(64));
                     particles.insert(RotorJMax(64));
     
-                    let scattering_problem = get_potentials(&pot_array, &particles, (1, 1));
-                    let potential = &scattering_problem.potential;
-                    particles.insert(scattering_problem.asymptotic);
+                    let scattering_problem = get_potentials(&pot_array, &particles);
+                    let potential = scattering_problem.potential;
+                    let mut asymptotic = scattering_problem.asymptotic;
+                    asymptotic.entrance = scattering_problem.basis_description.index_for(&entrance);
+                    particles.insert(asymptotic);
         
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
                     let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
                     let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                    let mut numerov = MultiRatioNumerov::new(potential, &particles, step_rule, boundary);
+                    let mut numerov = MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
         
                     numerov.propagate_to(200.);
                     let s_matrix = numerov.data.calculate_s_matrix();
@@ -195,6 +216,11 @@ impl Problems {
         let energies = logspace(-7., 0., 500);
         let j_tot_max = 5;
 
+        let entrance = RotorAtomBasisElement {
+            l: 1,
+            j: 1,
+        };
+
         ///////////////////////////////
 
         let pot_array = read_potential();
@@ -216,14 +242,16 @@ impl Problems {
                         particles.insert(RotorJMax(64));
                         particles.insert(RotorJTot(j_tot));
         
-                        let scattering_problem = get_potentials(&pot_array, &particles, (1, 1));
-                        let potential = &scattering_problem.potential;
-                        particles.insert(scattering_problem.asymptotic);
+                        let scattering_problem = get_potentials(&pot_array, &particles);
+                        let potential = scattering_problem.potential;
+                        let mut asymptotic = scattering_problem.asymptotic;
+                        asymptotic.entrance = scattering_problem.basis_description.index_for(&entrance);
+                        particles.insert(asymptotic);
             
                         let id = Mat::<f64>::identity(potential.size(), potential.size());
                         let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
                         let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                        let mut numerov = MultiRatioNumerov::new(potential, &particles, step_rule, boundary);
+                        let mut numerov = MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
             
                         numerov.propagate_to(200.);
                         let s_matrix = numerov.data.calculate_s_matrix();
@@ -248,7 +276,7 @@ impl Problems {
     }
 }
 
-fn get_potentials(pot_array: &PotentialArray, particles: &Particles, lj_entrance: (u32, u32)) -> ScatteringProblem<impl Potential<Space = Mat<f64>>> {
+fn get_potentials(pot_array: &PotentialArray, particles: &Particles) -> ScatteringProblem<impl MatPotential, RotorAtomBasisDescription> {
     let interp_potentials = interpolate_potentials(pot_array, 3);
     
     let mut potentials_far = Vec::new();
@@ -277,7 +305,7 @@ fn get_potentials(pot_array: &PotentialArray, particles: &Particles, lj_entrance
         })
         .collect();
 
-    RotorAtomProblemBuilder::new(potentials, lj_entrance)
+    RotorAtomProblemBuilder::new(potentials)
         .build(particles)
 }
 

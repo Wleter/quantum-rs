@@ -2,9 +2,9 @@ use abm::{get_hifi, get_zeeman_prop, utility::diagonalize, DoubleHifiProblemBuil
 use clebsch_gordan::{half_i32, half_integer::{HalfI32, HalfU32}, half_u32};
 use faer::Mat;
 use quantum::{cast_variant, params::{particle_factory::RotConst, particles::Particles}, states::{operator::Operator, spins::spin_projections, state::State, state_type::StateType, States, StatesBasis}};
-use scattering_solver::{boundary::Asymptotic, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, masked_potential::MaskedPotential, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{Potential, SimplePotential}}, utility::AngMomentum};
+use scattering_solver::{boundary::Asymptotic, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, masked_potential::MaskedPotential, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{MatPotential, SimplePotential}}, utility::AngMomentum};
 
-use crate::{get_aniso_hifi, get_rotor_atom_potential_masking, get_spin_rot, utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorJTotMax, RotorLMax}, AngularBlock, AngularBlocks, ScatteringProblem};
+use crate::{angular_block::{AngularBlock, AngularBlocks}, get_aniso_hifi, get_rotor_atom_potential_masking, get_spin_rot, utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorJTotMax, RotorLMax}, BasisDescription, IndexBasisDescription, ScatteringProblem};
 
 #[derive(Clone)]
 pub struct AlkaliRotorAtomProblemBuilder<P, V>
@@ -54,7 +54,7 @@ where
 
         let l_max = particles.get::<RotorLMax>()
             .expect("Did not find SystemLMax parameter in particles").0;
-        let ordered_basis = self.get_ordered_basis(particles);
+        let ordered_basis = self.basis(particles);
 
         let angular_block_basis = (0..=l_max).map(|l| {
                 let red_basis = ordered_basis.iter().filter(|s| {
@@ -100,8 +100,8 @@ where
 
                 AngularBlock {
                     ang_momentum: AngMomentum(*l),
-                    mag_inv: hifi + aniso_hifi.as_ref() + j_centrifugal.as_ref() + spin_rot.as_ref(),
-                    mag_prop: zeeman_prop,
+                    field_inv: hifi + aniso_hifi.as_ref() + j_centrifugal.as_ref() + spin_rot.as_ref(),
+                    field_prop: zeeman_prop,
                 }
             })
             .collect();
@@ -136,7 +136,7 @@ where
         }
     }
 
-    fn get_ordered_basis(&self, particles: &Particles) -> StatesBasis<SpinRotorAtom, HalfI32> {
+    fn basis(&self, particles: &Particles) -> StatesBasis<SpinRotorAtom, HalfI32> {
         let l_max = particles.get::<RotorLMax>()
             .expect("Did not find SystemLMax parameter in particles").0;
         let j_max = particles.get::<RotorJMax>()
@@ -216,7 +216,7 @@ where
     P: SimplePotential + Clone,
     V: SimplePotential + Clone
 {
-    pub fn scattering_at_field(&self, mag_field: f64, entrance: usize) -> ScatteringProblem<impl Potential<Space = Mat<f64>>> {
+    pub fn scattering_at_field(&self, mag_field: f64) -> ScatteringProblem<impl MatPotential, impl BasisDescription> {
         let (energies, states) = self.angular_blocks.diagonalize(mag_field);
 
         let energy_levels = energies.iter()
@@ -251,19 +251,20 @@ where
         let asymptotic = Asymptotic {
             channel_energies: energies,
             centrifugal: self.angular_blocks.angular_states(),
-            entrance,
+            entrance: 0,
             channel_states: states,
         };
         
         ScatteringProblem {
             potential: full_potential,
             asymptotic,
+            basis_description: IndexBasisDescription
         }
     }
 
     pub fn levels_at_field(&self, l: u32, mag_field: f64) -> (Vec<f64>, Mat<f64>) {
         let block = &self.angular_blocks.0[l as usize];
-        let internal = &block.mag_inv + mag_field * &block.mag_prop;
+        let internal = &block.field_inv + mag_field * &block.field_prop;
 
         diagonalize(internal.as_ref())
     }
