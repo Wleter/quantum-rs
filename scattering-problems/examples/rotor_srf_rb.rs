@@ -5,10 +5,9 @@ use clebsch_gordan::{half_i32, half_integer::HalfI32, half_u32};
 use faer::{prelude::SpSolver, Col, Mat, Side};
 use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
-use num::complex::Complex64;
 use quantum::{params::{particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::{Angstrom, Distance}, energy_units::{CmInv, Energy, Kelvin}, mass_units::{Dalton, Mass}, Au, Unit}, utility::{legendre_polynomials, linspace}};
-use scattering_problems::{alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder}, potential_interpolation::{interpolate_potentials, PotentialArray, TransitionedPotential}, utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorJTotMax, RotorLMax}};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::save_data};
+use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder}, potential_interpolation::{interpolate_potentials, PotentialArray, TransitionedPotential}, utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorJTotMax, RotorLMax}};
+use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, observables::s_matrix::{ScatteringDependence, ScatteringObservables}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::{save_data, save_serialize}};
 
 use rayon::prelude::*;
 
@@ -20,8 +19,9 @@ struct Problems;
 
 problems_impl!(Problems, "CaF + Rb Feshbach",
     "potentials" => |_| Self::potentials(),
-    "single elastic cross section" => |_| Self::single_cross_sections(),
-    "elastic cross section" => |_| Self::cross_sections(),
+    "single cross section calculation" => |_| Self::single_cross_sections(),
+    "atom approximation cross section calculation" => |_| Self::atom_approximation_cross_sections(),
+    "cross sections calculation" => |_| Self::cross_sections(),
 );
 
 impl Problems {
@@ -74,16 +74,109 @@ impl Problems {
     }
 
     fn single_cross_sections() {
-
-    }
-
-    fn cross_sections() {
-        let entrance = 5;
-        let inelastic_channel = 2;
+        let entrance = 4;
+        let mag_field = 100.;
 
         let projection = half_i32!(-1);
         let energy_relative = Energy(1e-7, Kelvin);
-        let mag_fields = linspace(0., 1000., 500);
+        let atoms = get_particles(energy_relative);
+        let alkali_problem = get_problem(projection, &atoms);
+
+        ///////////////////////////////////
+
+        let start = Instant::now();
+        let mut atoms = get_particles(energy_relative);
+        let alkali_problem = alkali_problem.scattering_at_field(mag_field);
+        let mut asymptotic = alkali_problem.asymptotic;
+        asymptotic.entrance = entrance;
+        atoms.insert(asymptotic);
+        let potential = &alkali_problem.potential;
+        
+        let elapsed = start.elapsed();
+        println!("prepared in {}", elapsed.hhmmssxxx());
+        let start = Instant::now();
+
+        let id = Mat::<f64>::identity(potential.size(), potential.size());
+        let boundary = Boundary::new(8.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+        let step_rule = MultiStepRule::default();
+        let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+
+        numerov.propagate_to(800.);
+
+        let scattering = numerov.data.calculate_s_matrix().observables();
+
+        let elapsed = start.elapsed();
+        println!("calculated in {}", elapsed.hhmmssxxx());
+
+        println!("{:?}", scattering)
+    }
+
+    fn atom_approximation_cross_sections() {
+        let entrance = 4;
+        let mag_fields = linspace(0., 2000., 1000);
+
+        let projection = half_i32!(-1);
+        let energy_relative = Energy(1e-7, Kelvin);
+
+        ////////////////////////////////////
+
+        let hifi_srf = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(1/2))
+            .with_hyperfine_coupling(Energy(3.2383e-3 + 1.0096e-3 / 3., CmInv).to_au());
+
+        let hifi_rb = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(3/2))
+            .with_hyperfine_coupling(Energy(0.113990, CmInv).to_au());
+
+        let hifi_problem = DoubleHifiProblemBuilder::new(hifi_srf, hifi_rb)
+            .with_projection(projection);
+
+        let [singlet, triplet] = read_extended(25);
+
+        let singlets = get_interpolated(&singlet);
+        let triplets = get_interpolated(&triplet);
+        let singlet = singlets[0].1.clone();
+        let triplet = triplets[0].1.clone();
+
+        let alkali_problem = AlkaliAtomsProblemBuilder::new(hifi_problem, triplet, singlet);
+
+        ///////////////////////////////////
+
+        let start = Instant::now();
+        let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
+            let mut atoms = get_particles(energy_relative);
+            let alkali_problem = alkali_problem.clone().build(mag_field);
+            let mut asymptotic = alkali_problem.asymptotic;
+            asymptotic.entrance = entrance;
+            atoms.insert(asymptotic);
+            let potential = &alkali_problem.potential;
+
+            let id = Mat::<f64>::identity(potential.size(), potential.size());
+            let boundary = Boundary::new(8.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+            let step_rule = MultiStepRule::default();
+            let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+
+            numerov.propagate_to(800.);
+
+            numerov.data.calculate_s_matrix().observables()
+        })
+        .collect::<Vec<ScatteringObservables>>();
+
+        let elapsed = start.elapsed();
+        println!("calculated in {}", elapsed.hhmmssxxx());
+
+        let data = ScatteringDependence {
+            parameters: mag_fields,
+            observables: scatterings
+        };
+
+        save_serialize("SrF_Rb_scatterings_n_0", &data).unwrap()
+    }
+
+    fn cross_sections() {
+        let entrance = 4;
+
+        let projection = half_i32!(-1);
+        let energy_relative = Energy(1e-7, Kelvin);
+        let mag_fields = linspace(0., 2000., 1000);
         let atoms = get_particles(energy_relative);
         let alkali_problem = get_problem(projection, &atoms);
 
@@ -100,34 +193,24 @@ impl Problems {
 
             let id = Mat::<f64>::identity(potential.size(), potential.size());
             let boundary = Boundary::new(8.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-            let step_rule = MultiStepRule::new(1e-3, f64::INFINITY, 500.);
+            let step_rule = MultiStepRule::default();
             let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
 
             numerov.propagate_to(800.);
-            let s_matrix = numerov.data.calculate_s_matrix();
 
-            let scattering_length = s_matrix.get_scattering_length();
-            let elastic_cross = s_matrix.get_elastic_cross_sect();
-            let inelastic = s_matrix.get_inelastic_cross_sect_to(inelastic_channel);
-
-            (scattering_length, elastic_cross, inelastic)
+            numerov.data.calculate_s_matrix().observables()
         })
-        .collect::<Vec<(Complex64, f64, f64)>>();
+        .collect::<Vec<ScatteringObservables>>();
 
         let elapsed = start.elapsed();
         println!("calculated in {}", elapsed.hhmmssxxx());
 
-        let scatterings_re = scatterings.iter().map(|x| x.0.re).collect();
-        let scatterings_im = scatterings.iter().map(|x| x.0.im).collect();
-        let elastic_cross = scatterings.iter().map(|x| x.1).collect();
-        let inelastic_cross = scatterings.iter().map(|x| x.2).collect();
+        let data = ScatteringDependence {
+            parameters: mag_fields,
+            observables: scatterings
+        };
 
-
-        let header = "mag_field\tscattering_re\tscattering_im\telastic\tinelastic33";
-        let data = vec![mag_fields, scatterings_re, scatterings_im, elastic_cross, inelastic_cross];
-
-        save_data(&format!("SrF_Rb_scatterings"), header, &data)
-            .unwrap()
+        save_serialize("SrF_Rb_scatterings", &data).unwrap()
     }
 }
 

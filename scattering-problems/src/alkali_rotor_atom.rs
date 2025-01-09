@@ -56,6 +56,8 @@ where
             .expect("Did not find SystemLMax parameter in particles").0;
         let ordered_basis = self.basis(particles);
 
+        assert!(ordered_basis.is_sorted_by_key(|s| cast_variant!(s.variants[0], SpinRotorAtom::Angular).0));
+
         let angular_block_basis = (0..=l_max).map(|l| {
                 let red_basis = ordered_basis.iter().filter(|s| {
                     matches!(s.variants[0], SpinRotorAtom::Angular((l_current, _, _)) if l == l_current)

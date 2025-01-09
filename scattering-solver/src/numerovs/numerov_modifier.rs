@@ -228,6 +228,6 @@ where
     }
 
     fn after_prop(&mut self, _data: &mut MultiNumerovData<'_, P>) {
-        println!("propagated with after {} steps", self.steps_no)
+        println!("propagated solution after {} steps", self.steps_no)
     }
 }

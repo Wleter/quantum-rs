@@ -94,7 +94,7 @@ impl SMatrix {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ScatteringObservables {
     pub entrance: usize,
     pub scattering_length: Complex64,
@@ -102,8 +102,8 @@ pub struct ScatteringObservables {
     pub inelastic_cross_sections: Vec<f64>
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ScatteringDependence {
     pub parameters: Vec<f64>,
-    pub cross_sections: Vec<ScatteringObservables>
+    pub observables: Vec<ScatteringObservables>
 }

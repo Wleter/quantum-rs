@@ -25,7 +25,7 @@ class ScatteringDependence:
                 elastic_cross_section = item['elastic_cross_section'],
                 inelastic_cross_sections = item['inelastic_cross_sections']
             )
-            for item in data['cross_sections']
+            for item in data['observables']
         ]
 
         return ScatteringDependence(
@@ -36,8 +36,8 @@ class ScatteringDependence:
     def s_lengths(self) -> list[complex]:
         return list(map(lambda x: x.scattering_length, self.cross_sections))
     
-    def elastic_cross_sections(self) -> list[complex]:
+    def elastic_cross_sections(self) -> list[float]:
         return list(map(lambda x: x.elastic_cross_section, self.cross_sections))
     
-    def inelastic_cross_sections(self, channel: int) -> list[complex]:
+    def inelastic_cross_sections(self, channel: int) -> list[float]:
         return list(map(lambda x: x.inelastic_cross_sections[channel], self.cross_sections))

@@ -79,7 +79,8 @@ where
         };
 
         let description = RotorAtomBasisDescription {
-            basis: rotor_basis
+            basis: rotor_basis,
+            j_tot
         };
 
         ScatteringProblem {
@@ -124,7 +125,8 @@ where
 }
 
 pub struct RotorAtomBasisDescription {
-    pub basis: StatesBasis<RotorAtomStates, u32>
+    pub basis: StatesBasis<RotorAtomStates, u32>,
+    pub j_tot: u32
 }
 
 pub struct RotorAtomBasisElement {
