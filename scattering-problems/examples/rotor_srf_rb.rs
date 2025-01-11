@@ -26,7 +26,7 @@ problems_impl!(Problems, "CaF + Rb Feshbach",
 
 impl Problems {
     fn potentials() {
-        let distances = linspace(7., 80., 800);
+        let distances = linspace(5., 80., 800);
 
         let [pot_array_singlet, pot_array_triplet] = read_potentials(25);
         let mut data = vec![pot_array_triplet.distances.clone()];
@@ -97,8 +97,8 @@ impl Problems {
         let start = Instant::now();
 
         let id = Mat::<f64>::identity(potential.size(), potential.size());
-        let boundary = Boundary::new(8.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-        let step_rule = MultiStepRule::default();
+        let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+        let step_rule = MultiStepRule::new(1e-3, f64::INFINITY, 400.);
         let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
 
         numerov.propagate_to(800.);
@@ -139,10 +139,10 @@ impl Problems {
         let alkali_problem = AlkaliAtomsProblemBuilder::new(hifi_problem, triplet, singlet);
 
         ///////////////////////////////////
+        let atoms = get_particles(energy_relative);
 
         let start = Instant::now();
-        let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
-            let mut atoms = get_particles(energy_relative);
+        let scatterings = mag_fields.par_iter().progress().map_with(atoms, |atoms, &mag_field| {
             let alkali_problem = alkali_problem.clone().build(mag_field);
             let mut asymptotic = alkali_problem.asymptotic;
             asymptotic.entrance = entrance;
@@ -150,8 +150,8 @@ impl Problems {
             let potential = &alkali_problem.potential;
 
             let id = Mat::<f64>::identity(potential.size(), potential.size());
-            let boundary = Boundary::new(8.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-            let step_rule = MultiStepRule::default();
+            let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+            let step_rule = MultiStepRule::new(1e-3, f64::INFINITY, 400.);
             let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
 
             numerov.propagate_to(800.);
@@ -181,10 +181,10 @@ impl Problems {
         let alkali_problem = get_problem(projection, &atoms);
 
         ///////////////////////////////////
+        let atoms = get_particles(energy_relative);
 
         let start = Instant::now();
-        let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
-            let mut atoms = get_particles(energy_relative);
+        let scatterings = mag_fields.par_iter().progress().map_with(atoms, |atoms, &mag_field| {
             let alkali_problem = alkali_problem.scattering_at_field(mag_field);
             let mut asymptotic = alkali_problem.asymptotic;
             asymptotic.entrance = entrance;
@@ -192,8 +192,8 @@ impl Problems {
             let potential = &alkali_problem.potential;
 
             let id = Mat::<f64>::identity(potential.size(), potential.size());
-            let boundary = Boundary::new(8.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-            let step_rule = MultiStepRule::default();
+            let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+            let step_rule = MultiStepRule::new(1e-3, f64::INFINITY, 400.);
             let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
 
             numerov.propagate_to(800.);
@@ -238,12 +238,12 @@ fn read_potentials(max_degree: u32) -> [PotentialArray; 2] {
         .map(|x| x as f64 / 180. * PI)
         .collect();
 
-    for ((i, line_singlet), line_diff) in f.lines().skip(1).enumerate().zip(f2.lines().skip(1)) {
-        let line_singlet = line_singlet.unwrap();
-        let splitted_singlet: Vec<&str> = line_singlet.trim().split_whitespace().collect();
+    for ((i, line_triplet), line_diff) in f.lines().skip(1).enumerate().zip(f2.lines().skip(1)) {
+        let line_triplet = line_triplet.unwrap();
+        let splitted_triplet: Vec<&str> = line_triplet.trim().split_whitespace().collect();
 
-        let r: f64 = splitted_singlet[0].parse().unwrap();
-        let value: f64 = splitted_singlet[1].parse().unwrap();
+        let r: f64 = splitted_triplet[0].parse().unwrap();
+        let value: f64 = splitted_triplet[1].parse().unwrap();
 
         let angle_index = i / r_count;
         let r_index = i % r_count;
@@ -261,8 +261,8 @@ fn read_potentials(max_degree: u32) -> [PotentialArray; 2] {
         assert!(r_diff == r);
 
         distances[r_index] = Distance(r, Angstrom).to_au();
-        values_singlet[(angle_index, r_index)] = Energy(value, CmInv).to_au();
-        values_triplet[(angle_index, r_index)] = Energy(value + value_diff, CmInv).to_au();
+        values_singlet[(angle_index, r_index)] = Energy(value - value_diff, CmInv).to_au();
+        values_triplet[(angle_index, r_index)] = Energy(value, CmInv).to_au();
     }
 
     let filename = "weights.txt";
@@ -337,19 +337,19 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
 
     let angle_count = 1 + 180 / 5;
     let r_count = 30;
-    let mut values_singlet = Mat::zeros(r_count, angle_count);
+    let mut values_triplet = Mat::zeros(r_count, angle_count);
     let mut values_exch = Mat::zeros(r_count, angle_count);
     let mut distances = vec![0.; r_count];
     let angles: Vec<f64> = (0..=180).step_by(5)
         .map(|x| x as f64 / 180. * PI)
         .collect();
 
-    for ((i, line_singlet), line_diff) in f.lines().skip(1).enumerate().zip(f2.lines().skip(1)) {
-        let line_singlet = line_singlet.unwrap();
-        let splitted_singlet: Vec<&str> = line_singlet.trim().split_whitespace().collect();
+    for ((i, line_triplet), line_diff) in f.lines().skip(1).enumerate().zip(f2.lines().skip(1)) {
+        let line_triplet = line_triplet.unwrap();
+        let splitted_triplet: Vec<&str> = line_triplet.trim().split_whitespace().collect();
 
-        let r: f64 = splitted_singlet[0].parse().unwrap();
-        let value: f64 = splitted_singlet[1].parse().unwrap();
+        let r: f64 = splitted_triplet[0].parse().unwrap();
+        let value: f64 = splitted_triplet[1].parse().unwrap();
 
         let angle_index = i / r_count;
         let r_index = i % r_count;
@@ -367,11 +367,11 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
         assert!(r_diff == r);
 
         distances[r_index] = Distance(r, Angstrom).to_au();
-        values_singlet[(r_index, angle_index)] = Energy(value, CmInv).to_au();
+        values_triplet[(r_index, angle_index)] = Energy(value, CmInv).to_au();
         values_exch[(r_index, angle_index)] = Energy(value_diff, CmInv).to_au();
     }
 
-    let rkhs_singlets = values_singlet.col_iter()
+    let rkhs_triplet = values_triplet.col_iter()
         .map(|col| interpolate_rkhs(&distances, &col.iter().copied().collect::<Vec<f64>>()))
         .collect::<Vec<ReproducingKernelInterpolation>>();
 
@@ -455,10 +455,10 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
         let tail = &tail_far[lambda as usize];
         let exch = exch_far[lambda as usize];
 
-        let values_singlet = distances_extended.par_iter()
+        let values_triplet = distances_extended.par_iter()
             .map(|x| {
                 let value_rkhs: f64 = weights.iter()
-                    .zip(rkhs_singlets.iter())
+                    .zip(rkhs_triplet.iter())
                     .zip(polynomials.iter().map(|ps| ps[lambda as usize]))
                     .map(|((w, rkhs), p)| {
                         (lambda as f64 + 0.5) * w * p * rkhs.value(*x)
@@ -474,12 +474,12 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
                 x * value_rkhs + (1. - x) * value_far
             })
             .collect::<Vec<f64>>();
-        potentials_singlet.push((lambda as u32, values_singlet));
+        potentials_triplet.push((lambda as u32, values_triplet));
 
-        let values_triplet = distances_extended.par_iter()
+        let values_singlet = distances_extended.par_iter()
             .map(|x| {
                 let value_rkhs: f64 = weights.iter()
-                    .zip(rkhs_singlets.iter())
+                    .zip(rkhs_triplet.iter())
                     .zip(polynomials.iter().map(|ps| ps[lambda as usize]))
                     .map(|((w, rkhs), p)| {
                         (lambda as f64 + 0.5) * w * p * rkhs.value(*x)
@@ -491,7 +491,7 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
                 let r_max = Distance(11., Angstrom).to_au();
 
                 let contrib = transition(*x, r_min, r_max);
-                let singlet_part = contrib * value_rkhs + (1. - contrib) * value_far;
+                let triplet_part = contrib * value_rkhs + (1. - contrib) * value_far;
 
                 let exch_rkhs: f64 = weights.iter()
                     .zip(rkhs_exch.iter())
@@ -514,10 +514,10 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
                 let contrib = transition(*x, r_min, r_max);
                 let exch_contrib = contrib * exch_rkhs + (1. - contrib) * exch_far;
 
-                singlet_part + exch_contrib
+                triplet_part - exch_contrib
             })
             .collect::<Vec<f64>>();
-        potentials_triplet.push((lambda as u32, values_triplet));
+        potentials_singlet.push((lambda as u32, values_singlet));
     }
 
     let singlets = PotentialArray {
@@ -580,8 +580,8 @@ fn get_particles(energy: Energy<impl Unit>) -> Particles {
     let mass = 47.9376046914861;
     particles.insert(Mass(mass, Dalton).to(Au));
 
-    particles.insert(RotorLMax(5));
-    particles.insert(RotorJMax(5));
+    particles.insert(RotorLMax(10));
+    particles.insert(RotorJMax(10));
     particles.insert(RotorJTotMax(0));
     particles.insert(RotConst(Energy(0.24975935, CmInv).to_au()));
     particles.insert(GammaSpinRot(Energy(2.4974e-3, CmInv).to_au()));

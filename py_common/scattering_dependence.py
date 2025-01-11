@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 import json
+import numpy as np
+import numpy.typing as npt
 
 @dataclass
 class ScatteringObserwables:
@@ -33,11 +35,11 @@ class ScatteringDependence:
             cross_sections=cross_sections
         )
     
-    def s_lengths(self) -> list[complex]:
-        return list(map(lambda x: x.scattering_length, self.cross_sections))
+    def s_lengths(self) -> npt.NDArray[np.complex64]:
+        return np.array(list(map(lambda x: x.scattering_length, self.cross_sections)))
     
-    def elastic_cross_sections(self) -> list[float]:
-        return list(map(lambda x: x.elastic_cross_section, self.cross_sections))
+    def elastic_cross_sections(self) -> npt.NDArray[np.float64]:
+        return np.array(list(map(lambda x: x.elastic_cross_section, self.cross_sections)))
     
-    def inelastic_cross_sections(self, channel: int) -> list[float]:
-        return list(map(lambda x: x.inelastic_cross_sections[channel], self.cross_sections))
+    def inelastic_cross_sections(self, channel: int) -> npt.NDArray[np.float64]:
+        return np.array(list(map(lambda x: x.inelastic_cross_sections[channel], self.cross_sections)))
