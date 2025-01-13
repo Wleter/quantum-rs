@@ -1,6 +1,6 @@
-use faer::{linalg::matmul::matmul, prelude::{c64, SolverCore}, unzipped, zipped, Mat, MatMut};
+use faer::{linalg::{matmul::matmul, solvers::DenseSolveCore}, prelude::*, unzip, zip};
 use quantum::{params::particles::Particles, units::{energy_units::Energy, mass_units::Mass, Au}, utility::{asymptotic_bessel_j, asymptotic_bessel_n, bessel_j_ratio, bessel_n_ratio}};
-use crate::{boundary::{Asymptotic, Boundary}, numerovs::{numerov_modifier::{PropagatorModifier, SampleConfig, WaveStorage}, propagator::{MultiStep, MultiStepRule, Numerov, NumerovResult, PropagatorData, StepAction, StepRule}}, observables::s_matrix::SMatrix, potentials::{dispersion_potential::Dispersion, potential::{MatPotential, SimplePotential}}, utility::inverse_inplace};
+use crate::{boundary::{Asymptotic, Boundary}, numerovs::{numerov_modifier::{PropagatorModifier, SampleConfig, WaveStorage}, propagator::{MultiStep, MultiStepRule, Numerov, NumerovResult, PropagatorData, StepAction, StepRule}}, observables::s_matrix::SMatrix, potentials::{dispersion_potential::Dispersion, potential::{MatPotential, SimplePotential}}, utility::inverse_symmetric_inplace};
 
 use core::f64;
 use std::{f64::consts::PI, mem::swap};
@@ -62,8 +62,8 @@ where
             .for_each(|(x, l)| *x += (l.0 * (l.0 + 1)) as f64 * centr_prop);
         
 
-        zipped!(out, self.unit.as_ref(), self.potential_buffer.as_ref())
-            .for_each(|unzipped!(o, u, p)| *o = 2.0 * self.mass * (self.energy * u - p));
+        zip!(out, self.unit.as_ref(), self.potential_buffer.as_ref())
+            .for_each(|unzip!(o, u, p)| *o = 2.0 * self.mass * (self.energy * u - p));
     }
 
     pub fn calculate_s_matrix(&self) -> SMatrix {
@@ -261,8 +261,8 @@ where
             .zip(self.asymptotic.centrifugal.iter())
             .for_each(|(x, l)| *x += (l.0 * (l.0 + 1)) as f64 * centr_prop);
 
-        zipped!(self.current_g_func.as_mut(), self.unit.as_ref(), self.potential_buffer.as_ref())
-            .for_each(|unzipped!(c, u, p)| 
+        zip!(self.current_g_func.as_mut(), self.unit.as_ref(), self.potential_buffer.as_ref())
+            .for_each(|unzip!(c, u, p)| 
                 *c = 2.0 * self.mass * (self.energy * u - p)
             );
     }
@@ -316,20 +316,20 @@ where
     fn step(&mut self, data: &mut MultiNumerovData<P>) {
         data.r += data.dr;
 
-        zipped!(self.buffer1.as_mut(), data.unit.as_ref(), data.current_g_func.as_ref())
-            .for_each(|unzipped!(b1, u, c)| 
+        zip!(self.buffer1.as_mut(), data.unit.as_ref(), data.current_g_func.as_ref())
+            .for_each(|unzip!(b1, u, c)| 
                 *b1 = u + data.dr * data.dr / 12. * c
             );
 
-        inverse_inplace(self.buffer1.as_ref(), self.f3.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
+        inverse_symmetric_inplace(self.buffer1.as_ref(), self.f3.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
 
-        inverse_inplace(data.psi1.as_ref(), data.psi2.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
-        matmul(self.buffer2.as_mut(), self.f2.as_ref(), data.psi2.as_ref(), None, 1., faer::Parallelism::None);
-        zipped!(self.buffer2.as_mut(), data.unit.as_ref(), self.f1.as_ref())
-            .for_each(|unzipped!(b2, u, f1)| 
+        inverse_symmetric_inplace(data.psi1.as_ref(), data.psi2.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
+        matmul(&mut self.buffer2, faer::Accum::Replace, &self.f2, &data.psi2, 1., faer::Par::Seq);
+        zip!(self.buffer2.as_mut(), data.unit.as_ref(), self.f1.as_ref())
+            .for_each(|unzip!(b2, u, f1)| 
                 *b2 = 12. * u - 10. * f1 - *b2
             );
-        matmul(data.psi2.as_mut(), self.f3.as_ref(), self.buffer2.as_ref(), None, 1., faer::Parallelism::None);
+        matmul(&mut data.psi2, faer::Accum::Replace, &self.f3, &self.buffer2, 1., faer::Par::Seq);
 
         swap(&mut self.f3, &mut self.f2);
         swap(&mut self.f2, &mut self.f1);
@@ -341,53 +341,53 @@ where
     fn halve_step(&mut self, data: &mut MultiNumerovData<P>) {
         data.dr /= 2.0;
 
-        zipped!(self.f2.as_mut(), data.unit.as_ref())
-            .for_each(|unzipped!(f2, u)| 
+        zip!(self.f2.as_mut(), data.unit.as_ref())
+            .for_each(|unzip!(f2, u)| 
                 *f2 = *f2 / 4. + 0.75 * u
             );
 
-        zipped!(self.f1.as_mut(), data.unit.as_ref())
-            .for_each(|unzipped!(f1, u)| 
+        zip!(self.f1.as_mut(), data.unit.as_ref())
+            .for_each(|unzip!(f1, u)| 
                 *f1 = *f1 / 4. + 0.75 * u
             );
 
         data.get_g_func(data.r - data.dr, self.buffer1.as_mut());
-        zipped!(self.buffer1.as_mut(), data.unit.as_ref())
-            .for_each(|unzipped!(b1, u)| 
+        zip!(self.buffer1.as_mut(), data.unit.as_ref())
+            .for_each(|unzip!(b1, u)| 
                 *b1 = 2. * u - data.dr * data.dr * 10. / 12. * *b1
             );
 
-        inverse_inplace(self.buffer1.as_ref(), self.buffer2.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
+        inverse_symmetric_inplace(self.buffer1.as_ref(), self.buffer2.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
 
-        zipped!(self.f2.as_mut(), data.unit.as_ref(), self.buffer1.as_ref())
-            .for_each(|unzipped!(f2, u, b1)| 
+        zip!(self.f2.as_mut(), data.unit.as_ref(), self.buffer1.as_ref())
+            .for_each(|unzip!(f2, u, b1)| 
                 *f2 = 1.2 * u - b1 / 10.
             );
 
-        matmul(self.buffer1.as_mut(), self.f1.as_ref(), data.psi1.as_ref(), None, 1., faer::Parallelism::None);
-        self.buffer1 += self.f2.as_ref();
-        matmul(data.psi2.as_mut(), self.buffer2.as_ref(), self.buffer1.as_ref(), None, 1., faer::Parallelism::None);
+        matmul(&mut self.buffer1, faer::Accum::Replace, &self.f1, &data.psi1, 1., faer::Par::Seq);
+        self.buffer1 += &self.f2;
+        matmul(&mut data.psi2, faer::Accum::Replace, &self.buffer2, &self.buffer1, 1., faer::Par::Seq);
 
-        inverse_inplace(data.psi2.as_ref(), self.buffer1.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
+        inverse_symmetric_inplace(data.psi2.as_ref(), self.buffer1.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
 
-        matmul(self.buffer2.as_mut(), data.psi1.as_ref(), self.buffer1.as_ref(), None, 1., faer::Parallelism::None);
+        matmul(&mut self.buffer2, faer::Accum::Replace, &data.psi1, &self.buffer1, 1., faer::Par::Seq);
         swap(&mut data.psi1, &mut self.buffer2);
     }
 
     fn double_step(&mut self, data: &mut MultiNumerovData<P>) {
         data.dr *= 2.;
 
-        zipped!(self.f2.as_mut(), data.unit.as_ref(), self.f3.as_ref())
-            .for_each(|unzipped!(f2, u, f3)| 
+        zip!(self.f2.as_mut(), data.unit.as_ref(), self.f3.as_ref())
+            .for_each(|unzip!(f2, u, f3)| 
                 *f2 = 4.0 * f3 - 3. * u
             );
 
-        zipped!(self.f1.as_mut(), data.unit.as_ref())
-            .for_each(|unzipped!(f1, u)| 
+        zip!(self.f1.as_mut(), data.unit.as_ref())
+            .for_each(|unzip!(f1, u)| 
                 *f1 = 4.0 * *f1 - 3. * u
             );
 
-        matmul(self.buffer1.as_mut(), data.psi1.as_ref(), data.psi2.as_ref(), None, 1., faer::Parallelism::None);
+        matmul(&mut self.buffer1, faer::Accum::Replace, &data.psi1, &data.psi2, 1., faer::Par::Seq);
         swap(&mut self.buffer1, &mut data.psi1);
     }
 }

@@ -5,8 +5,8 @@ members = [
     "pyo3-crates/abm-py",
     "scattering-solver",
     "scattering-problems",
+    "benches"
 ]
-exclude = ["benches"]
 resolver = "2"
 
 [workspace.package]
@@ -15,7 +15,7 @@ edition = "2021"
 
 [workspace.dependencies]
 num = {version = "0.4.3", features = ["serde"]}
-faer = "0.20"
+faer = "0.21.2"
 rayon = "1.6.0"
 indicatif = { version = "0.17.9", features = ["rayon"] }
 clebsch-gordan = { git = "https://github.com/Wleter/clebsch-gordan" }

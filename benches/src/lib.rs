@@ -19,8 +19,8 @@ pub fn setup(size: usize) -> (Mat<f64>, Mat<f64>, Vec<usize>, Vec<usize>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use faer::prelude::SolverCore;
     use scattering_solver::utility::{inverse_inplace, inverse_symmetric_inplace};
+    use faer::linalg::solvers::DenseSolveCore;
     use test::Bencher;
 
     #[bench]

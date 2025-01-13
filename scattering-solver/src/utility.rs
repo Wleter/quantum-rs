@@ -1,6 +1,8 @@
 use std::{fs::{create_dir_all, File}, io::Write, path::Path};
-use faer::{dyn_stack::{GlobalPodBuffer, PodStack}, linalg::{cholesky::bunch_kaufman::compute::{cholesky_in_place, cholesky_in_place_req}, lu::{self, partial_pivoting::{compute::lu_in_place_req, inverse::invert_req}}, temp_mat_req, temp_mat_uninit}, perm::PermRef, unzipped, zipped, Conj, MatMut, MatRef, Parallelism};
+use mat::AsMatMut;
 use serde::Serialize;
+
+use faer::{dyn_stack::{MemBuffer, MemStack}, linalg::{self, cholesky, lu, temp_mat_scratch, temp_mat_uninit}, perm::PermRef, prelude::*, unzip, zip};
 
 #[derive(Clone, Copy, Debug)]
 pub struct AngMomentum(pub u32);
@@ -68,41 +70,59 @@ pub fn save_serialize(
 
 
 pub fn inverse_inplace(mat: MatRef<f64>, mut out: MatMut<f64>, perm: &mut [usize], perm_inv: &mut [usize]) {
-    zipped!(out.as_mut(), mat)
-        .for_each(|unzipped!(o, m)| *o = *m);
-
+    assert!(mat.nrows() == mat.ncols());
     let dim: usize = mat.nrows();
+    zip!(out.as_mut(), mat)
+        .for_each(|unzip!(o, m)| *o = *m);
 
-    lu::partial_pivoting::compute::lu_in_place(
+    lu::partial_pivoting::factor::lu_in_place(
         out.as_mut(), 
         perm, 
         perm_inv, 
-        faer::Parallelism::None, 
-        PodStack::new(&mut GlobalPodBuffer::new(
-            lu_in_place_req::<usize, f64>(
+        faer::Par::Seq, 
+        MemStack::new(&mut MemBuffer::new(
+            lu::partial_pivoting::factor::lu_in_place_scratch::<usize, f64>(
                 dim, 
                 dim,
-                Parallelism::None,
+                faer::Par::Seq,
                 Default::default(),
-            ).unwrap()
+            )
         )),
-        Default::default()
+        default()
     );
+
+    let mut buffer = MemBuffer::new(
+        temp_mat_scratch::<f64>(dim, dim)
+            .and(temp_mat_scratch::<f64>(dim, dim))
+    );
+    let mut stack = MemStack::new(&mut buffer);
 
     let perm_ref = unsafe {
         PermRef::new_unchecked(perm, perm_inv, dim)
     };
 
-    lu::partial_pivoting::inverse::invert_in_place(
-        out.as_mut(), 
+    let (mut l, stack) = unsafe { temp_mat_uninit::<f64, _, _>(dim, dim, &mut stack) };
+    let mut l = l.as_mat_mut();
+
+    let (mut u, _) = unsafe { temp_mat_uninit::<f64, _, _>(dim, dim, stack) };
+    let mut u = u.as_mat_mut();
+
+    u.as_mat_mut().copy_from_triangular_upper(&out);
+
+    zip!(&mut l).for_each_triangular_upper(linalg::zip::Diag::Skip, |unzip!(x)| *x = 0.);
+    l.as_mut().diagonal_mut().fill(1.);
+
+    lu::partial_pivoting::inverse::inverse(
+        out.as_mut(),
+        l.as_ref(),
+        u.as_ref(),
         perm_ref, 
-        faer::Parallelism::None,
-        PodStack::new(&mut GlobalPodBuffer::new(
-            invert_req::<usize, f64>(
+        faer::Par::Seq,
+        MemStack::new(&mut MemBuffer::new(
+            lu::partial_pivoting::inverse::inverse_scratch::<usize, f64>(
                 dim, 
-                dim,
-                Parallelism::None,
-            ).unwrap()
+                Par::Seq,
+            )
         ))
     );
 }
@@ -111,59 +131,71 @@ pub fn inverse_inplace(mat: MatRef<f64>, mut out: MatMut<f64>, perm: &mut [usize
 pub fn inverse_symmetric_inplace(mat: MatRef<f64>, mut out: MatMut<f64>, perm: &mut [usize], perm_inv: &mut [usize]) {
     let dim: usize = mat.nrows();
 
-    let mut buffer = GlobalPodBuffer::new(
-        temp_mat_req::<f64>(dim, 1).unwrap()
+    let mut buffer = MemBuffer::new(
+        temp_mat_scratch::<f64>(dim, 1)
+            .and(temp_mat_scratch::<f64>(dim, 1))
+            .and(temp_mat_scratch::<f64>(dim, dim))
     );
-    let col_stack = PodStack::new(&mut buffer);
-    let mut sub_diag = temp_mat_uninit::<f64>(dim, 1, col_stack).0;
-    
-    let mut buffer = GlobalPodBuffer::new(
-        temp_mat_req::<f64>(dim, dim).unwrap()
-    );
-    let mat_stack = PodStack::new(&mut buffer);
-    let mut mat_temp = temp_mat_uninit::<f64>(dim, dim, mat_stack).0;
+    let mut stack = MemStack::new(&mut buffer);
+    let (mut sub_diag, stack) = unsafe { temp_mat_uninit::<f64, _, _>(dim, 1, &mut stack) };
+    let mut sub_diag = sub_diag.as_mat_mut()
+        .col_mut(0)
+        .as_diagonal_mut();
 
-    zipped!(mat_temp.as_mut(), mat)
-        .for_each(|unzipped!(o, m)| *o = *m);
+    let (mut diag, stack) = unsafe { temp_mat_uninit::<f64, _, _>(dim, 1, stack) };
+    let mut diag = diag.as_mat_mut()
+        .col_mut(0)
+        .as_diagonal_mut();
 
-    cholesky_in_place(
-        mat_temp.as_mut(), 
-        sub_diag.as_mut().col_mut(0), 
+    let (mut l, _) = unsafe { temp_mat_uninit::<f64, _, _>(dim, dim, stack) };
+    let mut l = l.as_mat_mut();
+
+    zip!(&mut l, &mat)
+        .for_each(|unzip!(l, m)| *l = *m);
+
+    cholesky::bunch_kaufman::factor::cholesky_in_place(
+        l.as_mut(), 
+        sub_diag.as_mut(), 
         Default::default(), 
         perm, 
         perm_inv, 
-        faer::Parallelism::None, 
-        PodStack::new(&mut GlobalPodBuffer::new(
-            cholesky_in_place_req::<usize, f64>(
+        faer::Par::Seq, 
+        MemStack::new(&mut MemBuffer::new(
+            cholesky::bunch_kaufman::factor::cholesky_in_place_scratch::<usize, f64>(
                 dim,
-                Parallelism::None,
+                Par::Seq,
                 Default::default(),
-            ).unwrap()
+            )
         )),
         Default::default()
     );
 
-    out.fill_zero();
-    out.as_mut()
-        .diagonal_mut()
-        .column_vector_mut()
-        .iter_mut()
-        .for_each(|x| *x = 1.);
+    diag.copy_from(l.as_ref().diagonal());
+    l.as_mut().diagonal_mut().fill(1.);
+    zip!(&mut l).for_each_triangular_upper(linalg::zip::Diag::Skip, |unzip!(x)| *x = 0.);
 
-    faer::linalg::cholesky::bunch_kaufman::solve::solve_in_place_with_conj(
-        mat_temp.as_ref(),
-        sub_diag.col(0),
-        Conj::No,
-        unsafe { PermRef::new_unchecked(perm, perm_inv, dim) },
-        out,
-        Parallelism::None,
-        PodStack::new(&mut GlobalPodBuffer::new(
-            faer::linalg::cholesky::bunch_kaufman::solve::solve_in_place_req::<usize, f64>(
+    let perm_ref = unsafe {
+        PermRef::new_unchecked(perm, perm_inv, dim)
+    };
+
+    cholesky::bunch_kaufman::inverse::inverse(
+        out.as_mut(),
+        l.as_ref(),
+        diag.as_ref(),
+        sub_diag.as_ref(),
+        perm_ref,
+        Par::Seq,
+        MemStack::new(&mut MemBuffer::new(
+            cholesky::bunch_kaufman::inverse::inverse_scratch::<usize, f64>(
                 dim,
-                dim,
-                Parallelism::None,
+                Par::Seq,
             )
-            .unwrap(),
         )),
     );
+
+    // for j in 0..dim {
+    //     for i in 0..j {
+    //         out[(j, i)] = out[(i, j)];
+    //     }
+    // }
 }

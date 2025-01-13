@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 scattering-solver = { path = "../scattering-solver/" }
-faer = { version = "0.20" }
+faer = { version = "0.21.2" }
 dhat = {version = "0.3", optional = true}
 
 [features]

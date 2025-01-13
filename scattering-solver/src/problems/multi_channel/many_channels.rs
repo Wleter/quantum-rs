@@ -63,7 +63,7 @@ impl ManyChannels {
         let step_rule = MultiStepRule::default();
         let mut numerov = MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
         let preparation = start.elapsed();
-        numerov.propagate_to_with(1e3, &mut NumerovLogging::default());
+        numerov.propagate_to_with(1e3, &mut NumerovLogging::new());
         let propagation = start.elapsed() - preparation;
 
         let s_matrix = numerov.data.calculate_s_matrix();

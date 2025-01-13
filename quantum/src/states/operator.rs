@@ -166,10 +166,10 @@ where
 }
 
 #[cfg(feature = "faer")]
-use faer::{Entity, Mat};
+use faer::Mat;
 
 #[cfg(feature = "faer")]
-impl<E: Entity + Zero> Operator<Mat<E>> {
+impl<E: Zero> Operator<Mat<E>> {
     pub fn from_mel<const N: usize, T: Copy + PartialEq, V: Copy + PartialEq, F>(
         elements: &StatesBasis<T, V>,
         action_states: [T; N],
@@ -218,7 +218,7 @@ impl<E: Entity + Zero> Operator<Mat<E>> {
 }
 
 #[cfg(feature = "faer")]
-impl<E: Entity> Deref for Operator<Mat<E>> {
+impl<E> Deref for Operator<Mat<E>> {
     type Target = Mat<E>;
 
     fn deref(&self) -> &Self::Target {
@@ -663,7 +663,7 @@ mod test {
     #[test]
     #[cfg(feature = "faer")]
     fn test_transformations() {
-        use faer::{assert_matrix_eq, mat, Mat};
+        use faer::{mat, unzip, zip, Mat};
 
         use crate::states::StatesElement;
 
@@ -725,7 +725,7 @@ mod test {
             &elements_sep,
             &elements_combined,
             transformation,
-        );
+        ).into_backed();
 
         let expected = mat![
             [1.000, 0.000, 0.000, 0.000],
@@ -733,6 +733,6 @@ mod test {
             [0.000, 0.000, 0.000, 1.000],
         ];
 
-        assert_matrix_eq!(expected, transformation_faer.into_backed(), comp = abs, tol = 1e-3);
+        zip!(&transformation_faer, &expected).for_each(|unzip!(acc, target)| assert!((acc - target).abs() < 1e-5));
     }
 }

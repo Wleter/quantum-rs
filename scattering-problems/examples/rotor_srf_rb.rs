@@ -2,7 +2,7 @@ use std::{f64::consts::PI, fs::File, io::{BufRead, BufReader}, time::Instant};
 
 use abm::{DoubleHifiProblemBuilder, HifiProblemBuilder};
 use clebsch_gordan::{half_i32, half_integer::HalfI32, half_u32};
-use faer::{prelude::SpSolver, Col, Mat, Side};
+use faer::{linalg::solvers::Solve, Col, Mat};
 use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
 use quantum::{params::{particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::{Angstrom, Distance}, energy_units::{CmInv, Energy, Kelvin}, mass_units::{Dalton, Mass}, Au, Unit}, utility::{legendre_polynomials, linspace}};
@@ -666,7 +666,7 @@ fn interpolate_rkhs(points: &[f64], values: &[f64]) -> ReproducingKernelInterpol
 
     let values = Col::from_fn(values.len(), |i| values[i]);
 
-    let cholesky = q_matrix.cholesky(Side::Lower).unwrap();
+    let cholesky = q_matrix.partial_piv_lu();
     let alphas = cholesky.solve(values.as_ref());
 
     let alphas = alphas.iter().copied().collect();

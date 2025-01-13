@@ -101,7 +101,7 @@ impl SpinOperators {
 #[cfg(feature = "faer")]
 mod test {
     use clebsch_gordan::{half_integer::HalfU32, half_u32};
-    use faer::{assert_matrix_eq, mat, Mat};
+    use faer::{mat, unzip, zip, Mat};
 
     use crate::{
         cast_variant,
@@ -149,7 +149,7 @@ mod test {
 
                 SpinOperators::dot((s1_bra, s1_ket), (s2_bra, s2_ket))
             },
-        );
+        ).into_backed();
 
         let expected = mat![
             [0.25, 0.0, 0.0, 0.0],
@@ -157,7 +157,7 @@ mod test {
             [0.0, 0.5, -0.25, 0.0],
             [0.0, 0.0, 0.0, 0.25],
         ];
-        assert_matrix_eq!(*op, expected);
+        zip!(&op, &expected).for_each(|unzip!(acc, target)| assert!((acc - target).abs() < 1e-5));
 
         let mut combined = States::default();
         let singlet = State::new(half_u32!(0), spin_projections(half_u32!(0)));
@@ -175,7 +175,7 @@ mod test {
             let s = Spin::new(comb.variants[0], comb.values[0]);
 
             SpinOperators::clebsch_gordan(s1, s2, s)
-        });
+        }).into_backed();
 
         let expected = mat![
             [0.0, 0.7071, -0.7071, 0.0],
@@ -183,6 +183,6 @@ mod test {
             [0.0, 0.7071, 0.7071, 0.0],
             [0.0, 0.0, 0.0, 1.0],
         ];
-        assert_matrix_eq!(*op, expected, comp = abs, tol = 1e-5);
+        zip!(&op, &expected).for_each(|unzip!(acc, target)| assert!((acc - target).abs() < 1e-5));
     }
 }

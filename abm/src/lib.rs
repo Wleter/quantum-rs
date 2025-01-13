@@ -1,6 +1,6 @@
 use abm_states::{ABMStates, ABMStatesSep, ABMStatesValues, HifiStates, HifiStatesSep};
 use consts::Consts;
-use faer::{unzipped, zipped, Mat, MatRef};
+use faer::{unzip, zip, Mat, MatRef};
 use quantum::{
     cast_variant,
     states::{operator::Operator, spins::{spin_projections, sum_spin_projections}, state::State, state_type::StateType, States, StatesBasis},
@@ -505,8 +505,8 @@ impl ABMProblemBuilder {
         );
 
         let mut hifi = &*transf * hifi * transf.transpose();
-        zipped!(hifi.as_mut(), fc_factors.as_ref())
-            .for_each(|unzipped!(h, fc)| *h *= fc);
+        zip!(hifi.as_mut(), fc_factors.as_ref())
+            .for_each(|unzip!(h, fc)| *h *= fc);
 
         let zeeman_prop = &*transf * zeeman_prop * transf.transpose();
 

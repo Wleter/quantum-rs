@@ -183,13 +183,24 @@ where
     }
 }
 
-#[derive(Default)]
 pub struct NumerovLogging<T> {
     r_min: f64,
     r_stop: f64,
     current: f64,
     steps_no: usize,
     _psi1: Option<T>,
+}
+
+impl<T> NumerovLogging<T> {
+    pub fn new() -> Self {
+        Self {
+            r_min: Default::default(),
+            r_stop: Default::default(),
+            current: Default::default(),
+            steps_no: Default::default(),
+            _psi1: None,
+        }
+    }
 }
 
 impl<P> PropagatorModifier<SingleNumerovData<'_, P>> for NumerovLogging<f64>
