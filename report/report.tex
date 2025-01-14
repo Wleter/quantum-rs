@@ -8,8 +8,30 @@
 \usepackage{caption}
 \usepackage[subrefformat=parens,labelformat=parens]{subcaption}
 \usepackage{wrapfig}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{derivative}
+
+\newgeometry{margin=3cm}
+
 
 \graphicspath{ {../plots} }
+
+\newcommand{\threejm}[6]{ \left(\begin{array}{ccc} #1 & #3 & #5\\
+    #2 & #4 & #6
+\end{array}
+\right)}
+\newcommand{\sixj}[6]{ \left\{\begin{array}{ccc} #1 & #3 & #5\\
+    #2 & #4 & #6
+\end{array}
+\right\}}
+\newcommand{\ninej}[9]{\left\{\begin{array}{ccc}
+#1 & #2 & #3\\
+#4 & #5 & #6\\
+#7 & #8 & #9
+\end{array}
+\right\}}
+
 
 \title{Calculation of diatom-atom collisions in a magnetic field}
 \author{Marcin Welter}
@@ -17,12 +39,123 @@
 \begin{document}
 \maketitle
 
-\section{Spinless diatom + atom collision}
 
 \section{Alkali like atom + atom collision}
+    For the problem of collision of two alkali like atoms A + B we consider following Hamiltonian
+    \[
+        \hat{H} = -\frac{1}{2\mu}\pdv[order=2]{}{R} + \frac{\hat{L}^2}{2\mu R^2}
+            + \hat{H}^\text{A}_\text{int} + \hat{H}^\text{B}_\text{int} + \hat{V}(R),
+    \]
+    where $R$ is the distance between atoms, $\mu$ is the reduced mass of two atoms, 
+    \(\hat{L}^2\) is the angular momentum of the two atoms,
+    \(\hat{H}^k_\text{int}\) is the internal structure of a k atom and \(\hat{V}(R)\) 
+    consists of triplet and singlet potential curves.
 
-\section{Alkali like diatom + atom collision}
+\subsection{Hyperfine and Zeeman structure}
+    Internal structure of alkali like atoms in the magnetic field consists of Zeeman splitting and
+    hyperfine structure. The internal hamiltonian for such atom $k$ is written as
+    \begin{equation}\label{eq:alkali_hamiltonian_int}
+        \hat{H}^k_\text{int} = \hat{H}^k_\text{Zee} + \hat{H}^k_\text{hf},
+    \end{equation}
+    with \(\hat{H}^k_\text{Zee} = -\gamma_e B \hat{s}^k_z - \gamma^k_n B \hat{i}^k_z\) and 
+    \(\hat{H}^k_\text{hf} = a^k_\text{hf} \ \hat{\mathbf{s}}^k \cdot \hat{\mathbf{i}}^k\).
 
-\section{Structure of the calculation program}
+    In the basis \(\ket{s m_s i m_i} \equiv \ket{m_s m_i}\) the matrix elements of the internal Hamiltonian are
+    \[
+        \braket{m_s m_i | H^k_\text{Zee} | m'_s m'_i} = -B(\gamma_e m_s + \gamma^k_n m_i) \delta^{m'_s m'_i}_{m_s m_i},
+    \]
+    for Zeeman part and the hyperfine part is
+    \[
+        \braket{m_s m_i | H^k_\text{hf} | m'_s m'_i} = a^k_\text{hf} 
+            \left(
+                m_s m_i \delta_{m_s m_i}^{m'_s m'_i} 
+                + \frac{1}{2}\sum_{p = \pm 1} C(s, m_s, m'_s) C(i, m_i, m'_i)\delta_{m_s m_i}^{m'_s + p, m'_i - p},
+            \right)
+    \]
+    where \(C(s, m_s, m'_s) = \sqrt{s(s + 1) - m_s m'_s}\). 
+    We see that the total projection $m_f = m_i + m_s$ is preserved.
+
+\subsection{Singlet and triplet potential curves}
+    Potential term consists of singlet and triplet potential curves, we can write it as
+    \[
+        \hat{V}(R) = \hat{\mathcal{P}}_1 V_1(R) + \hat{\mathcal{P}_0} V_0(R),
+    \]
+    where \(\mathcal{P}_S\) is a projection to the subspace with combined electron spin of two atoms equal to $S$
+    and \(V_S(R)\) is a corresponding potential curve.
+
+    In the electron spin basis \(\ket{m_s^\text{A}, m_s^\text{B}}\) of each atom,
+    the matrix elements of the projection operator are
+    \[
+        \braket{m_s^\text{A} m_s^\text{B} | \mathcal{P}_S | m_s^{'\text{A}} m_s^{'\text{B}}}
+            = \sum_{M_S} \braket{m_s^\text{A} m_s^\text{B} | S M_S}\!\braket{S M_S| m_s^{'\text{A}} m_s^{'\text{B}}}.
+    \]
+
+\subsection{Full basis}
+    Full basis is then \(\ket{m_s^\text{A} m_s^\text{B} m_i^\text{A} m_i^\text{B}}\) with total spin projection \(M_F\) being conserved.
+    Additionally, angular momentum and its projection are good quantum numbers.
+    For homo-nuclear we can transform the basis to the combined electron and nuclear spin for which the symmetry is evident
+    and we restrict ourselves to only the needed symmetry of the system.
+
+\section{Spinless rigid rotor + atom collision}
+    Here we consider a diatom + atom collision without spin structure in a rigid rotor approximation.
+    The Hamiltonian for such a system is
+    \[
+        \hat{H} = -\frac{1}{2\mu}\pdv[order=2]{}{R} + \frac{\hat{L}^2}{2\mu R^2} + \hat{H}_\text{rot} + V(R, \theta)
+    \]
+    where $R, \theta$ are the Jacobi coordinates, $\mu$ is the reduced mass of the atom and diatom, 
+    \(\hat{L}^2\) is the orbital angular momentum of the system,
+    \(\hat{H}_\text{rot}\) is the Hamiltonian of the rigid-rotor and \(\hat{V}(R, \theta)\) 
+    is the potential surface.
+
+    Rigid rotor Hamiltonian is
+    \[
+        \hat{H}_\text{rot} = B_e \hat{N}^2,
+    \]
+    where \(B_e\) is a rotational constant of the rotor.
+
+    We work in \(\ket{(lN)J M_J}\) basis being the combined angular momentum basis \(J\) of orbital angular momentum of the system
+    \(l\) and rotation of the molecule \(N\).
+    In this basis the matrix elements of the potential terms are
+    \[
+        \braket{(lN)J M_J |V(R, \theta)| (l'N')J' M'_J} = \sum_\lambda V_\lambda(R) f_\lambda(lN, l'N'; J) \delta^{JM_J}_{J'M'_J},
+    \]
+    where $V_\lambda(R)$ is the $\lambda$-th term of the Legendre decomposition of the potential $V(R, \theta)$
+    and
+    \begin{multline}
+        f_\lambda(lN, l'N'; J) = (-1)^{l + l' + J} \sqrt{(2N + 1)(2N' + 1)(2l + 1)(2l' + 1)} \\
+            \times \threejm{l}{0}{\lambda}{0}{l'}{0} \threejm{N}{0}{\lambda}{0}{N'}{0} \sixj{l}{N'}{\lambda}{J}{l'}{N},
+    \end{multline}
+    are the Percival-Seaton coefficients.
+    Other terms in the Hamiltonian are straightforward and total angular momentum \(J\) 
+    and its projection is conserved \(M_J\).
+    Additionally if the potential only have even numbered terms in the Legendre decomposition,
+    divisibility of \(l, N\) by two is conserved.
+
+\section{Alkali like rigid rotor + atom collision}
+    We now consider a alkali like diatom + atom collision, by that we mean
+    that the diatom consists of alkali like atom and a structureless atom that collide with the alkali like atom.
+
+
+\begin{equation}{\label{Hmol_spin_rot}}
+    \hat{H}_\text{mol}^\text{spin-rot} =  \gamma_\text{sr} \hat{\mathbf{N}}\cdot \hat{\mathbf{S}} + \frac{c\sqrt{6}}{3}\biggl{(}\frac{4\pi}{5}\biggr{)}^{1/2}
+    \sum_{q=-2}^2 (-1)^qY_{2-q}(\theta_r,\phi_r) [\hat{\mathbf{I}}\otimes \hat{\mathbf{S}}]^{(2)}_q.
+\end{equation}
+
+\begin{multline}\label{mel_Hmol_term3sr}
+    \langle (Nl)J_rM_r | \langle S M_S | \hat{H}_\text{mol}^\text{esr} | (N'l')J_r'M_r' \rangle | SM_S'\rangle 
+     = \delta_{ll'}\delta_{NN'} \gamma_\text{sr} p_3(N)p_3(S) [(2J_r+1)(2J_r'+1)]^{1/2}
+    \\ \times \sum_p (-1)^{p} (-1)^{J_r-M_r}(-1)^{N+l+J_r'+1} (-1)^{S-M_S} 
+    \\ \times \sixj{N}{J_r'}{J_r}{N}{l}{1} \threejm{J_r}{-M_r}{1}{p}{J_r'}{M_r'} \threejm{S}{-M_S}{1}{-p}{S}{M_S'} 
+\end{multline}
+
+\begin{multline}\label{mel_Hmol_term3ahf}
+    \langle (Nl)J_rM_r | \langle S M_S | \langle IM_I | \hat{H}_\text{mol}^\text{ahf} | (N'l')J_r'M_r' \rangle | SM_S'\rangle |IM_I'\rangle 
+    \\ =  \delta_{ll'} c\frac{\sqrt{30}}{3} (-1)^{J_r-M_r+l+J_r'}
+    p_3(I) p_3(S) [(2J_r+1)(2J_r'+1)]^{1/2} [(2N+1)(2N'+1)]^{1/2} 
+    \\ \times\sixj{N}{J_r'}{J_r}{N'}{l}{2}  \threejm{1}{M_I-M_I'}{1}{M_S-M_S'}{2}{M_r-M_r'} \threejm{N}{0}{2}{0}{N'}{0} 
+    \\ \times \threejm{J_r}{-M_r}{2}{M_r-M_r'}{J_r'}{M_r'}
+    \threejm{I}{-M_I}{1}{M_I-M_I'}{I}{M_I'}
+    \threejm{S}{-M_S}{1}{M_S-M_S'}{S}{M_S'}
+\end{multline}
 
 \end{document}
