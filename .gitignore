@@ -5,3 +5,4 @@ __pycache__/
 report/*
 !report/report.tex
 !report/report.pdf
+!report/*.bib
