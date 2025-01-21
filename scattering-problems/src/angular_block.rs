@@ -2,7 +2,7 @@ use abm::utility::diagonalize;
 use faer::{unzip, zip, Mat};
 use scattering_solver::utility::AngMomentum;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AngularBlock {
     pub ang_momentum: AngMomentum,
     pub field_inv: Mat<f64>,
@@ -15,7 +15,7 @@ impl AngularBlock {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AngularBlocks(pub Vec<AngularBlock>);
 
 impl AngularBlocks {

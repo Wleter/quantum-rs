@@ -1,7 +1,7 @@
 use std::{fs::{create_dir_all, File}, io::Write, path::Path};
 use serde::Serialize;
 
-use faer::{dyn_stack::{MemBuffer, MemStack}, linalg::{self, cholesky, lu, temp_mat_scratch, temp_mat_uninit, temp_mat_zeroed}, perm::PermRef, prelude::*, unzip, zip};
+use faer::{dyn_stack::{MemBuffer, MemStack}, get_global_parallelism, linalg::{self, cholesky, lu, temp_mat_scratch, temp_mat_uninit, temp_mat_zeroed}, perm::PermRef, prelude::*, unzip, zip};
 
 #[derive(Clone, Copy, Debug)]
 pub struct AngMomentum(pub u32);
@@ -73,6 +73,7 @@ pub fn inverse_inplace(
     perm: &mut [usize],
     perm_inv: &mut [usize],
 ) {
+    let par = get_global_parallelism();
     assert!(mat.nrows() == mat.ncols());
     let dim: usize = mat.nrows();
     zip!(out.as_mut(), mat).for_each(|unzip!(o, m)| *o = *m);
@@ -81,12 +82,12 @@ pub fn inverse_inplace(
         out.as_mut(),
         perm,
         perm_inv,
-        faer::Par::Seq,
+        par,
         MemStack::new(&mut MemBuffer::new(
             lu::partial_pivoting::factor::lu_in_place_scratch::<usize, f64>(
                 dim,
                 dim,
-                faer::Par::Seq,
+                par,
                 Default::default(),
             ),
         )),
@@ -117,9 +118,9 @@ pub fn inverse_inplace(
         l.as_ref(),
         u.as_ref(),
         perm_ref,
-        faer::Par::Seq,
+        par,
         MemStack::new(&mut MemBuffer::new(
-            lu::partial_pivoting::inverse::inverse_scratch::<usize, f64>(dim, faer::Par::Seq),
+            lu::partial_pivoting::inverse::inverse_scratch::<usize, f64>(dim, par),
         )),
     );
 }
@@ -131,6 +132,7 @@ pub fn inverse_symmetric_inplace(
     perm: &mut [usize],
     perm_inv: &mut [usize],
 ) {
+    let par = get_global_parallelism();
     let dim: usize = mat.nrows();
 
     let mut buffer = MemBuffer::new(
@@ -156,11 +158,11 @@ pub fn inverse_symmetric_inplace(
         Default::default(),
         perm,
         perm_inv,
-        faer::Par::Seq,
+        par,
         MemStack::new(&mut MemBuffer::new(
             cholesky::bunch_kaufman::factor::cholesky_in_place_scratch::<usize, f64>(
                 dim,
-                faer::Par::Seq,
+                par,
                 Default::default(),
             ),
         )),
@@ -181,7 +183,7 @@ pub fn inverse_symmetric_inplace(
         perm_ref,
         Par::Seq,
         MemStack::new(&mut MemBuffer::new(
-            cholesky::bunch_kaufman::inverse::inverse_scratch::<usize, f64>(dim, faer::Par::Seq),
+            cholesky::bunch_kaufman::inverse::inverse_scratch::<usize, f64>(dim, par),
         )),
     );
 }

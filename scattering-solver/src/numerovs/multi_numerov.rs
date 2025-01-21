@@ -1,4 +1,4 @@
-use faer::{linalg::{matmul::matmul, solvers::DenseSolveCore}, prelude::*, unzip, zip};
+use faer::{get_global_parallelism, linalg::{matmul::matmul, solvers::DenseSolveCore}, prelude::*, unzip, zip};
 use quantum::{params::particles::Particles, units::{energy_units::Energy, mass_units::Mass, Au}, utility::{asymptotic_bessel_j, asymptotic_bessel_n, bessel_j_ratio, bessel_n_ratio}};
 use crate::{boundary::{Asymptotic, Boundary}, numerovs::{numerov_modifier::{PropagatorModifier, SampleConfig, WaveStorage}, propagator::{MultiStep, MultiStepRule, Numerov, NumerovResult, PropagatorData, StepAction, StepRule}}, observables::s_matrix::SMatrix, potentials::{dispersion_potential::Dispersion, potential::{MatPotential, SimplePotential}}, utility::inverse_inplace};
 
@@ -314,6 +314,7 @@ where
     P: MatPotential
 {
     fn step(&mut self, data: &mut MultiNumerovData<P>) {
+        let par = get_global_parallelism();
         data.r += data.dr;
 
         zip!(self.buffer1.as_mut(), data.unit.as_ref(), data.current_g_func.as_ref())
@@ -324,12 +325,12 @@ where
         inverse_inplace(self.buffer1.as_ref(), self.f3.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
 
         inverse_inplace(data.psi1.as_ref(), data.psi2.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
-        matmul(&mut self.buffer2, faer::Accum::Replace, &self.f2, &data.psi2, 1., faer::Par::Seq);
+        matmul(&mut self.buffer2, faer::Accum::Replace, &self.f2, &data.psi2, 1., par);
         zip!(self.buffer2.as_mut(), data.unit.as_ref(), self.f1.as_ref())
             .for_each(|unzip!(b2, u, f1)| 
                 *b2 = 12. * u - 10. * f1 - *b2
             );
-        matmul(&mut data.psi2, faer::Accum::Replace, &self.f3, &self.buffer2, 1., faer::Par::Seq);
+        matmul(&mut data.psi2, faer::Accum::Replace, &self.f3, &self.buffer2, 1., par);
 
         swap(&mut self.f3, &mut self.f2);
         swap(&mut self.f2, &mut self.f1);
@@ -339,6 +340,7 @@ where
     }
 
     fn halve_step(&mut self, data: &mut MultiNumerovData<P>) {
+        let par = get_global_parallelism();
         data.dr /= 2.0;
 
         zip!(self.f2.as_mut(), data.unit.as_ref())
@@ -364,17 +366,18 @@ where
                 *f2 = 1.2 * u - b1 / 10.
             );
 
-        matmul(&mut self.buffer1, faer::Accum::Replace, &self.f1, &data.psi1, 1., faer::Par::Seq);
+        matmul(&mut self.buffer1, faer::Accum::Replace, &self.f1, &data.psi1, 1., par);
         self.buffer1 += &self.f2;
-        matmul(&mut data.psi2, faer::Accum::Replace, &self.buffer2, &self.buffer1, 1., faer::Par::Seq);
+        matmul(&mut data.psi2, faer::Accum::Replace, &self.buffer2, &self.buffer1, 1., par);
 
         inverse_inplace(data.psi2.as_ref(), self.buffer1.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
 
-        matmul(&mut self.buffer2, faer::Accum::Replace, &data.psi1, &self.buffer1, 1., faer::Par::Seq);
+        matmul(&mut self.buffer2, faer::Accum::Replace, &data.psi1, &self.buffer1, 1., par);
         swap(&mut data.psi1, &mut self.buffer2);
     }
 
     fn double_step(&mut self, data: &mut MultiNumerovData<P>) {
+        let par = get_global_parallelism();
         data.dr *= 2.;
 
         zip!(self.f2.as_mut(), data.unit.as_ref(), self.f3.as_ref())
@@ -387,7 +390,7 @@ where
                 *f1 = 4.0 * *f1 - 3. * u
             );
 
-        matmul(&mut self.buffer1, faer::Accum::Replace, &data.psi1, &data.psi2, 1., faer::Par::Seq);
+        matmul(&mut self.buffer1, faer::Accum::Replace, &data.psi1, &data.psi2, 1., par);
         swap(&mut self.buffer1, &mut data.psi1);
     }
 }

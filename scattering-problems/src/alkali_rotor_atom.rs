@@ -206,6 +206,7 @@ where
     }
 }
 
+#[derive(Clone)]
 pub struct AlkaliRotorAtomProblem<P: SimplePotential, V: SimplePotential> {
     pub basis: StatesBasis<SpinRotorAtom, HalfI32>,
     pub angular_blocks: AngularBlocks,
