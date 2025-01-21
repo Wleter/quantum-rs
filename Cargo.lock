@@ -301,12 +301,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "212d0f5754cb6769937f4501cc0e67f4f4483c8d2c3e1e922ee9edbe4ab4c7c0"
 
 [[package]]
-name = "downcast-rs"
-version = "1.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
-
-[[package]]
 name = "dyn-stack"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -367,9 +361,9 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
 name = "faer"
-version = "0.21.2"
+version = "0.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa910e3f7076908674740bc35f0f69be7d28d3bd541552a12540d162337cf0ea"
+checksum = "492ef86d9ddb19c1d8967698538cd22e0f2083fc6c76ca6e1ad9ee2f73db3c7c"
 dependencies = [
  "bytemuck",
  "dyn-stack",
@@ -1166,7 +1160,6 @@ name = "quantum"
 version = "0.1.0"
 dependencies = [
  "clebsch-gordan",
- "downcast-rs",
  "faer",
  "nalgebra",
  "ndarray 0.16.1",

@@ -97,7 +97,7 @@ pub fn inverse_inplace(
         .and(temp_mat_scratch::<f64>(dim, dim)));
     let mut stack = MemStack::new(&mut buffer);
 
-    let (mut l, stack) = unsafe { temp_mat_uninit::<f64, _, _>(dim, dim, &mut stack) };
+    let (mut l, stack) = temp_mat_zeroed::<f64, _, _>(dim, dim, &mut stack);
     let mut l = mat::AsMatMut::as_mat_mut(&mut l);
 
     let (mut u, _) = temp_mat_zeroed::<f64, _, _>(dim, dim, stack);
@@ -105,8 +105,9 @@ pub fn inverse_inplace(
 
     u.copy_from_triangular_upper(&out);
 
+    
+
     zip!(&mut l, &out).for_each_triangular_lower(linalg::zip::Diag::Skip, |unzip!(l, o)| *l = *o);
-    zip!(&mut l).for_each_triangular_upper(linalg::zip::Diag::Skip, |unzip!(x)| *x = 0.);
     l.as_mut().diagonal_mut().fill(1.);
 
     let perm_ref = unsafe { PermRef::new_unchecked(perm, perm_inv, dim) };

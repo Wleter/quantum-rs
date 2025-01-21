@@ -1,0 +1,418 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'quantum'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=quantum"
+                ],
+                "filter": {
+                    "name": "quantum",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'abm'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=abm"
+                ],
+                "filter": {
+                    "name": "abm",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'abm'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=abm",
+                    "--package=abm"
+                ],
+                "filter": {
+                    "name": "abm",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'abm'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=abm",
+                    "--package=abm"
+                ],
+                "filter": {
+                    "name": "abm",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'abm_py'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=abm-py"
+                ],
+                "filter": {
+                    "name": "abm_py",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'scattering_solver'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=scattering-solver"
+                ],
+                "filter": {
+                    "name": "scattering_solver",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'scattering-solver'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=scattering-solver",
+                    "--package=scattering-solver"
+                ],
+                "filter": {
+                    "name": "scattering-solver",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'scattering-solver'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=scattering-solver",
+                    "--package=scattering-solver"
+                ],
+                "filter": {
+                    "name": "scattering-solver",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'scattering_problems'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=scattering-problems"
+                ],
+                "filter": {
+                    "name": "scattering_problems",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'li2_feshbach'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=li2_feshbach",
+                    "--package=scattering-problems"
+                ],
+                "filter": {
+                    "name": "li2_feshbach",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'li2_feshbach'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=li2_feshbach",
+                    "--package=scattering-problems"
+                ],
+                "filter": {
+                    "name": "li2_feshbach",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'rotor_caf_rb'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=rotor_caf_rb",
+                    "--package=scattering-problems"
+                ],
+                "filter": {
+                    "name": "rotor_caf_rb",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'rotor_caf_rb'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=rotor_caf_rb",
+                    "--package=scattering-problems"
+                ],
+                "filter": {
+                    "name": "rotor_caf_rb",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'rotor_srf_rb'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=rotor_srf_rb",
+                    "--package=scattering-problems"
+                ],
+                "filter": {
+                    "name": "rotor_srf_rb",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'rotor_srf_rb'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=rotor_srf_rb",
+                    "--package=scattering-problems"
+                ],
+                "filter": {
+                    "name": "rotor_srf_rb",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'rotor_ybf'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=rotor_ybf",
+                    "--package=scattering-problems"
+                ],
+                "filter": {
+                    "name": "rotor_ybf",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'rotor_ybf'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=rotor_ybf",
+                    "--package=scattering-problems"
+                ],
+                "filter": {
+                    "name": "rotor_ybf",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'spinless_alf_rb'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=spinless_alf_rb",
+                    "--package=scattering-problems"
+                ],
+                "filter": {
+                    "name": "spinless_alf_rb",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'spinless_alf_rb'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=spinless_alf_rb",
+                    "--package=scattering-problems"
+                ],
+                "filter": {
+                    "name": "spinless_alf_rb",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'benches'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=benches"
+                ],
+                "filter": {
+                    "name": "benches",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'benches'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=benches",
+                    "--package=benches"
+                ],
+                "filter": {
+                    "name": "benches",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'benches'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=benches",
+                    "--package=benches"
+                ],
+                "filter": {
+                    "name": "benches",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

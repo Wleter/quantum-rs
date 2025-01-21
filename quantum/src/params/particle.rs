@@ -7,7 +7,7 @@ use crate::{
 
 /// Struct to hold information about a particle.
 /// To create a predefined particle use [`crate::particle_factory`].
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct Particle {
     name: String,
     pub params: Params,
