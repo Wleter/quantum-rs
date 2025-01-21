@@ -139,10 +139,11 @@ impl Problems {
         let alkali_problem = AlkaliAtomsProblemBuilder::new(hifi_problem, triplet, singlet);
 
         ///////////////////////////////////
-        let atoms = get_particles(energy_relative);
 
         let start = Instant::now();
-        let scatterings = mag_fields.par_iter().progress().map_with(atoms, |atoms, &mag_field| {
+        let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
+            let mut atoms = get_particles(energy_relative);
+
             let alkali_problem = alkali_problem.clone().build(mag_field);
             let mut asymptotic = alkali_problem.asymptotic;
             asymptotic.entrance = entrance;
@@ -181,10 +182,11 @@ impl Problems {
         let alkali_problem = get_problem(projection, &atoms);
 
         ///////////////////////////////////
-        let atoms = get_particles(energy_relative);
 
         let start = Instant::now();
-        let scatterings = mag_fields.par_iter().progress().map_with(atoms, |atoms, &mag_field| {
+        let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
+            let mut atoms = get_particles(energy_relative);
+
             let alkali_problem = alkali_problem.scattering_at_field(mag_field);
             let mut asymptotic = alkali_problem.asymptotic;
             asymptotic.entrance = entrance;
