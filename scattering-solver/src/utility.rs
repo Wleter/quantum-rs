@@ -109,8 +109,6 @@ pub fn inverse_inplace(
     zip!(&mut l).for_each_triangular_upper(linalg::zip::Diag::Skip, |unzip!(x)| *x = 0.);
     l.as_mut().diagonal_mut().fill(1.);
 
-    println!("{l:?}");
-
     let perm_ref = unsafe { PermRef::new_unchecked(perm, perm_inv, dim) };
 
     lu::partial_pivoting::inverse::inverse(

@@ -1,6 +1,6 @@
 use faer::{linalg::{matmul::matmul, solvers::DenseSolveCore}, prelude::*, unzip, zip};
 use quantum::{params::particles::Particles, units::{energy_units::Energy, mass_units::Mass, Au}, utility::{asymptotic_bessel_j, asymptotic_bessel_n, bessel_j_ratio, bessel_n_ratio}};
-use crate::{boundary::{Asymptotic, Boundary}, numerovs::{numerov_modifier::{PropagatorModifier, SampleConfig, WaveStorage}, propagator::{MultiStep, MultiStepRule, Numerov, NumerovResult, PropagatorData, StepAction, StepRule}}, observables::s_matrix::SMatrix, potentials::{dispersion_potential::Dispersion, potential::{MatPotential, SimplePotential}}, utility::inverse_symmetric_inplace};
+use crate::{boundary::{Asymptotic, Boundary}, numerovs::{numerov_modifier::{PropagatorModifier, SampleConfig, WaveStorage}, propagator::{MultiStep, MultiStepRule, Numerov, NumerovResult, PropagatorData, StepAction, StepRule}}, observables::s_matrix::SMatrix, potentials::{dispersion_potential::Dispersion, potential::{MatPotential, SimplePotential}}, utility::inverse_inplace};
 
 use core::f64;
 use std::{f64::consts::PI, mem::swap};
@@ -321,9 +321,9 @@ where
                 *b1 = u + data.dr * data.dr / 12. * c
             );
 
-        inverse_symmetric_inplace(self.buffer1.as_ref(), self.f3.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
+        inverse_inplace(self.buffer1.as_ref(), self.f3.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
 
-        inverse_symmetric_inplace(data.psi1.as_ref(), data.psi2.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
+        inverse_inplace(data.psi1.as_ref(), data.psi2.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
         matmul(&mut self.buffer2, faer::Accum::Replace, &self.f2, &data.psi2, 1., faer::Par::Seq);
         zip!(self.buffer2.as_mut(), data.unit.as_ref(), self.f1.as_ref())
             .for_each(|unzip!(b2, u, f1)| 
@@ -357,7 +357,7 @@ where
                 *b1 = 2. * u - data.dr * data.dr * 10. / 12. * *b1
             );
 
-        inverse_symmetric_inplace(self.buffer1.as_ref(), self.buffer2.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
+        inverse_inplace(self.buffer1.as_ref(), self.buffer2.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
 
         zip!(self.f2.as_mut(), data.unit.as_ref(), self.buffer1.as_ref())
             .for_each(|unzip!(f2, u, b1)| 
@@ -368,7 +368,7 @@ where
         self.buffer1 += &self.f2;
         matmul(&mut data.psi2, faer::Accum::Replace, &self.buffer2, &self.buffer1, 1., faer::Par::Seq);
 
-        inverse_symmetric_inplace(data.psi2.as_ref(), self.buffer1.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
+        inverse_inplace(data.psi2.as_ref(), self.buffer1.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
 
         matmul(&mut self.buffer2, faer::Accum::Replace, &data.psi1, &self.buffer1, 1., faer::Par::Seq);
         swap(&mut data.psi1, &mut self.buffer2);
