@@ -128,7 +128,7 @@ where
                         UncoupledSpinRotorAtom::AtomS(half_u32!(0))
                     ],
                     |[l, n, s, s_a]| {
-                        if s.bra.1 == s.ket.1 && s_a.bra.1 == s_a.ket.1 {
+                        if s.bra.0 == s.ket.0 && s_a.bra.0 == s_a.ket.0 {
                             let l_braket = cast_spin_braket!(l, UncoupledSpinRotorAtom::SystemL);
                             let n_braket = cast_spin_braket!(n, UncoupledSpinRotorAtom::RotorN);
                             let s_braket = cast_spin_braket!(s, UncoupledSpinRotorAtom::RotorS);
@@ -175,7 +175,7 @@ where
                         UncoupledSpinRotorAtom::AtomS(half_u32!(0))
                     ],
                     |[l, n, s, s_a]| {
-                        if s.bra.1 == s.ket.1 && s_a.bra.1 == s_a.ket.1 {
+                        if s.bra.0 == s.ket.0 && s_a.bra.0 == s_a.ket.0 {
                             let l_braket = cast_spin_braket!(l, UncoupledSpinRotorAtom::SystemL);
                             let n_braket = cast_spin_braket!(n, UncoupledSpinRotorAtom::RotorN);
                             let s_braket = cast_spin_braket!(s, UncoupledSpinRotorAtom::RotorS);

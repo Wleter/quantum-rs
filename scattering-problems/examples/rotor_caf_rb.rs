@@ -28,6 +28,7 @@ problems_impl!(Problems, "CaF + Rb Feshbach",
     "rotor feshbach" => |_| Self::feshbach_rotor(),
     "N_max convergence" => |_| Self::n_max_convergence(),
     "N_max convergence uncoupled representation" => |_| Self::n_max_convergence_uncoupled(),
+    "rotor feshbach uncoupled" => |_| Self::uncoupled_feshbach_rotor(),
 );
 
 impl Problems {
@@ -108,8 +109,6 @@ impl Problems {
             let energy = Energy(1e-7, Kelvin);
             
             let mag_fields = linspace(0., 1000., 4000);
-            
-            linspace(0., 1000., 1000);
     
             ///////////////////////////////////
     
@@ -352,6 +351,49 @@ impl Problems {
                 .unwrap()
         }
     }
+
+    fn uncoupled_feshbach_rotor() {
+        for (config_triplet, config_singlet) in Self::POTENTIAL_CONFIGS {
+            let projection = half_i32!(1);
+    
+            let energy_relative = Energy(1e-7, Kelvin);
+            let mag_fields = linspace(0., 1000., 4000);
+            let atoms = get_particles_uncoupled(energy_relative);
+            let alkali_problem = get_problem_uncoupled(config_triplet, config_singlet, projection, &atoms);
+    
+            ///////////////////////////////////
+    
+            let start = Instant::now();
+            let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
+                let mut atoms = get_particles_uncoupled(energy_relative);
+                let alkali_problem = alkali_problem.scattering_at_field(mag_field);
+                
+                atoms.insert(alkali_problem.asymptotic);
+                let potential = &alkali_problem.potential;
+    
+                let id = Mat::<f64>::identity(potential.size(), potential.size());
+                let boundary = Boundary::new(8.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                let step_rule = MultiStepRule::new(1e-3, f64::INFINITY, 500.);
+                let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+    
+                numerov.propagate_to(1.5e3);
+                numerov.data.calculate_s_matrix().get_scattering_length()
+            })
+            .collect::<Vec<Complex64>>();
+    
+            let elapsed = start.elapsed();
+            println!("calculated in {}", elapsed.hhmmssxxx());
+    
+            let scatterings_re = scatterings.iter().map(|x| x.re).collect();
+            let scatterings_im = scatterings.iter().map(|x| x.im).collect();
+    
+            let header = "mag_field\tscattering_re\tscattering_im";
+            let data = vec![mag_fields, scatterings_re, scatterings_im];
+    
+            save_data(&format!("CaF_Rb_uncoupled_scatterings_{config_triplet}_{config_singlet}"), header, &data)
+                .unwrap()
+        }
+    }
 }
 
 fn triplet_iso(config: usize) -> Composite<Dispersion> {
@@ -398,8 +440,8 @@ fn get_particles(energy: Energy<impl Unit>) -> Particles {
     let rb = particle_factory::create_atom("Rb87").unwrap();
 
     let mut particles = Particles::new_pair(caf, rb, energy);
-    particles.insert(RotorLMax(10));
-    particles.insert(RotorJMax(10));
+    particles.insert(RotorLMax(0));
+    particles.insert(RotorJMax(0));
     particles.insert(RotorJTotMax(0));
     particles.insert(RotConst(Energy(10.3, GHz).to_au()));
     particles.insert(GammaSpinRot(Energy(40., MHz).to_au()));
@@ -433,8 +475,8 @@ fn get_particles_uncoupled(energy: Energy<impl Unit>) -> Particles {
     let rb = particle_factory::create_atom("Rb87").unwrap();
 
     let mut particles = Particles::new_pair(caf, rb, energy);
-    particles.insert(RotorLMax(5));
-    particles.insert(RotorJMax(5));
+    particles.insert(RotorLMax(0));
+    particles.insert(RotorJMax(0));
     particles.insert(RotConst(Energy(10.3, GHz).to_au()));
     particles.insert(GammaSpinRot(Energy(40., MHz).to_au()));
     particles.insert(AnisoHifi(Energy(3. * 14., MHz).to_au()));
