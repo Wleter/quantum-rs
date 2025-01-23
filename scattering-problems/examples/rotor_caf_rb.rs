@@ -123,7 +123,7 @@ impl Problems {
     
                 let id = Mat::<f64>::identity(potential.size(), potential.size());
                 let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                let step_rule = MultiStepRule::default();
+                let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
                 let mut numerov = MultiRatioNumerov::new(potential, &caf_rb, step_rule, boundary);
     
                 numerov.propagate_to(1.5e3);
@@ -235,8 +235,8 @@ impl Problems {
                 let potential = &alkali_problem.potential;
     
                 let id = Mat::<f64>::identity(potential.size(), potential.size());
-                let boundary = Boundary::new(8.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                let step_rule = MultiStepRule::new(1e-3, f64::INFINITY, 500.);
+                let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
                 let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
     
                 numerov.propagate_to(1.5e3);
@@ -281,8 +281,8 @@ impl Problems {
                 let potential = &alkali_problem.potential;
     
                 let id = Mat::<f64>::identity(potential.size(), potential.size());
-                let boundary = Boundary::new(8.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                let step_rule = MultiStepRule::new(1e-3, f64::INFINITY, 500.);
+                let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
                 let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
     
                 numerov.propagate_to(1.5e3);
@@ -328,8 +328,8 @@ impl Problems {
                 let potential = &alkali_problem.potential;
     
                 let id = Mat::<f64>::identity(potential.size(), potential.size());
-                let boundary = Boundary::new(8.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                let step_rule = MultiStepRule::new(1e-3, f64::INFINITY, 500.);
+                let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
                 let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
     
                 numerov.propagate_to(1.5e3);
@@ -372,8 +372,8 @@ impl Problems {
                 let potential = &alkali_problem.potential;
     
                 let id = Mat::<f64>::identity(potential.size(), potential.size());
-                let boundary = Boundary::new(8.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                let step_rule = MultiStepRule::new(1e-3, f64::INFINITY, 500.);
+                let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
                 let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
     
                 numerov.propagate_to(1.5e3);
