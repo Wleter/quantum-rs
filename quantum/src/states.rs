@@ -141,10 +141,6 @@ impl<T, V> FromIterator<StatesElement<T, V>> for StatesBasis<T, V> {
             elements.0.push(val);
         }
 
-        if elements.0.is_empty() {
-            panic!("Tried to create 0 length states basis");
-        }
-
         elements
     }
 }

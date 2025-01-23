@@ -41,3 +41,16 @@ pub struct GammaSpinRot(pub f64);
 
 #[derive(Clone, Copy, Debug)]
 pub struct AnisoHifi(pub f64);
+
+#[macro_export]
+macro_rules! cast_spin_braket {
+    ($braket:expr, $pat:path) => {{
+        let s_bra = quantum::cast_variant!($braket.bra.0, $pat);
+        let s_bra = quantum::states::spins::Spin::new(s_bra, $braket.bra.1);
+
+        let s_ket = quantum::cast_variant!($braket.ket.0, $pat);
+        let s_ket = quantum::states::spins::Spin::new(s_ket, $braket.ket.1);
+
+        (s_bra, s_ket)
+    }};
+}

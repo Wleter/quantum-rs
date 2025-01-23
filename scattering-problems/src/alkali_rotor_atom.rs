@@ -12,9 +12,9 @@ where
     P: SimplePotential,
     V: SimplePotential
 {
-    hifi_problem: DoubleHifiProblemBuilder,
-    triplet_potential: Vec<(u32, P)>,
-    singlet_potential: Vec<(u32, V)>,
+    pub(super) hifi_problem: DoubleHifiProblemBuilder,
+    pub(super) triplet_potential: Vec<(u32, P)>,
+    pub(super) singlet_potential: Vec<(u32, V)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

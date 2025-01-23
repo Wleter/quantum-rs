@@ -8,6 +8,7 @@ pub mod potential_interpolation;
 pub mod operators;
 pub mod alkali_rotor;
 pub mod angular_block;
+pub mod uncoupled_alkali_rotor_atom;
 
 pub struct ScatteringProblem<P: Potential, B: BasisDescription> {
     pub potential: P,
