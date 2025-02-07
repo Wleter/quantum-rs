@@ -440,8 +440,8 @@ fn get_particles(energy: Energy<impl Unit>) -> Particles {
     let rb = particle_factory::create_atom("Rb87").unwrap();
 
     let mut particles = Particles::new_pair(caf, rb, energy);
-    particles.insert(RotorLMax(0));
-    particles.insert(RotorJMax(0));
+    particles.insert(RotorLMax(5));
+    particles.insert(RotorJMax(5));
     particles.insert(RotorJTotMax(0));
     particles.insert(RotConst(Energy(10.3, GHz).to_au()));
     particles.insert(GammaSpinRot(Energy(40., MHz).to_au()));
@@ -475,8 +475,8 @@ fn get_particles_uncoupled(energy: Energy<impl Unit>) -> Particles {
     let rb = particle_factory::create_atom("Rb87").unwrap();
 
     let mut particles = Particles::new_pair(caf, rb, energy);
-    particles.insert(RotorLMax(0));
-    particles.insert(RotorJMax(0));
+    particles.insert(RotorLMax(2));
+    particles.insert(RotorJMax(2));
     particles.insert(RotConst(Energy(10.3, GHz).to_au()));
     particles.insert(GammaSpinRot(Energy(40., MHz).to_au()));
     particles.insert(AnisoHifi(Energy(3. * 14., MHz).to_au()));
