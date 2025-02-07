@@ -42,13 +42,14 @@ urlcolor=blue,
 
 \title{Calculation of diatom-atom collisions in a magnetic field}
 \author{Marcin Welter}
+\date{Winter semester 2024/2025}
 
 \begin{document}
 \maketitle
 
 
 \section{Alkali like atom + atom collision}\label{sec:atom_atom}
-    For the problem of collision of two alkali like atoms A + B we consider following Hamiltonian
+    For the problem of collision of two alkali like atoms A + B we consider the following Hamiltonian
     \begin{equation}
         \hat{H} = -\frac{1}{2\mu}\pdv[order=2]{}{R} + \frac{\hat{L}^2}{2\mu R^2}
             + \hat{H}^\text{A}_\text{int} + \hat{H}^\text{B}_\text{int} + \hat{V}(R),
@@ -60,7 +61,7 @@ urlcolor=blue,
 
 \subsection{Hyperfine and Zeeman structure}
     Internal structure of alkali like atoms in the magnetic field consists of Zeeman splitting and
-    hyperfine structure. The internal hamiltonian for such atom $k$ is written as
+    hyperfine structure. The internal hamiltonian for such an atom $k$ is written as
     \begin{equation}\label{eq:alkali_hamiltonian_int}
         \hat{H}^k_\text{int} = \hat{H}^k_\text{Zee} + \hat{H}^k_\text{hf},
     \end{equation}
@@ -71,7 +72,7 @@ urlcolor=blue,
     \begin{equation}
         \braket{m_s m_i | H^k_\text{Zee} | m'_s m'_i} = -B(\gamma_e m_s + \gamma^k_n m_i) \delta^{m'_s m'_i}_{m_s m_i},
     \end{equation}
-    for Zeeman part and the hyperfine part is
+    for Zeeman part, and the hyperfine part is
     \begin{equation}
         \braket{m_s m_i | H^k_\text{hf} | m'_s m'_i} = a^k_\text{hf} 
             \left(
@@ -165,7 +166,7 @@ urlcolor=blue,
         \sum_{q=-2}^2 (-1)^qY_{2-q}(\theta_r,\phi_r) [\hat{\mathbf{i}}^\text{r} \otimes \hat{\mathbf{s}}^\text{r}]^{(2)}_q,
     \end{equation}
     is an anisotropic hyperfine contribution with anisotropic hyperfine constant being \(c\).
-    Last term is the hyperfine and Zeeman structure same as discussed for the atom case.
+    Last term is the hyperfine and Zeeman structure which is the same as in the atom case in Sec. \ref{sec:atom_atom}.
 
     The basis used is \(\ket{(l N) J M_J} \! \ket{(s^r) m_s^r} \ket{(i^r) m_i^r} \ket{(s^a) m_s^a} \ket{(i^a) m_i^a}\).
     In this basis, matrix elements of the spin-rot contribution are
