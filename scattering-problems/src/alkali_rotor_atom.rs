@@ -100,11 +100,16 @@ where
                 let aniso_hifi = get_aniso_hifi!(&basis, SpinRotorAtom::Angular, 
                     SpinRotorAtom::RotorS, SpinRotorAtom::RotorI, aniso_hifi);
 
-                AngularBlock {
-                    ang_momentum: AngMomentum(*l),
-                    field_inv: hifi + aniso_hifi.as_ref() + j_centrifugal.as_ref() + spin_rot.as_ref(),
-                    field_prop: zeeman_prop,
-                }
+                let field_inv = vec![
+                    hifi, 
+                    aniso_hifi.into_backed(),
+                    j_centrifugal.into_backed(),
+                    spin_rot.into_backed()
+                ];
+
+                let field_prop = vec![zeeman_prop];
+
+                AngularBlock::new(AngMomentum(*l), field_inv, field_prop)
             })
             .collect();
 
@@ -266,7 +271,7 @@ where
 
     pub fn levels_at_field(&self, l: u32, mag_field: f64) -> (Vec<f64>, Mat<f64>) {
         let block = &self.angular_blocks.0[l as usize];
-        let internal = &block.field_inv + mag_field * &block.field_prop;
+        let internal = &block.field_inv() + mag_field * &block.field_prop();
 
         diagonalize(internal.as_ref())
     }
