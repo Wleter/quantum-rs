@@ -139,9 +139,9 @@ pub enum Sampling {
 }
 
 pub struct ScatteringVsDistance<S> {
-    r_min: f64,
-    capacity: usize,
-    take_per: f64,
+    pub(super) r_min: f64,
+    pub(super) capacity: usize,
+    pub(super) take_per: f64,
     
     pub distances: Vec<f64>,
     pub s_matrices: Vec<S>

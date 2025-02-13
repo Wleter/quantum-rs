@@ -5,6 +5,8 @@ use crate::{boundary::{Asymptotic, Boundary}, numerovs::{numerov_modifier::{Prop
 use core::f64;
 use std::{f64::consts::PI, mem::swap};
 
+use super::numerov_modifier::ScatteringVsDistance;
+
 pub type MultiRatioNumerov<'a, P, S> = Numerov<
     MultiNumerovData<'a, P>, 
     S,
@@ -439,6 +441,29 @@ where
                     self.waves.push(self.last_value.clone());
                 }
             },
+        }
+    }
+}
+
+impl<P> PropagatorModifier<MultiNumerovData<'_, P>> for ScatteringVsDistance<SMatrix>
+where 
+    P: MatPotential
+{
+    fn before(&mut self, _data: &mut MultiNumerovData<'_, P>, r_stop: f64) {
+        self.take_per = (r_stop - self.r_min).abs() / (self.capacity as f64);
+    }
+
+    fn after_step(&mut self, data: &mut MultiNumerovData<'_, P>) {
+        if data.r < self.r_min {
+            return;
+        }
+
+        let append = self.distances.last().is_none_or(|r| (r - data.r).abs() >= self.take_per);
+
+        if append {
+            let s = data.calculate_s_matrix();
+            self.distances.push(data.r);
+            self.s_matrices.push(s)
         }
     }
 }

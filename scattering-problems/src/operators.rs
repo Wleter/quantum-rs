@@ -75,7 +75,9 @@ macro_rules! get_aniso_hifi {
                                 * ((2. * s_bra.value() + 1.) * s_bra.value() * (s_bra.value() + 1.)
                                     * (2. * i_bra.value() + 1.) * i_bra.value() * (i_bra.value() + 1.)).sqrt();
 
-                    let sign = (-1.0f64).powi((j_tot_bra + j_tot_ket + l_bra) as i32 - mr_bra.double_value() / 2);
+                    let sign = (-1.0f64).powi((j_tot_bra + j_tot_ket + l_bra) as i32
+                        + ((s_bra.double_value() + i_bra.double_value()) as i32 
+                            - mr_bra.double_value() - ms_bra.double_value() - mi_bra.double_value()) / 2);
 
                     let j_bra = HalfU32::from_doubled(2 * j_bra);
                     let j_ket = HalfU32::from_doubled(2 * j_ket);

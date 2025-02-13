@@ -39,9 +39,8 @@ impl Problems {
     }
 
     fn levels_uncoupled() {
-        let projection = half_i32!(1);
         let yb_f = get_particle_uncoupled();
-        let alkali_problem = get_problem_uncoupled(projection, &yb_f);
+        let alkali_problem = get_problem_uncoupled(&yb_f);
         println!("{}", alkali_problem.basis.len());
 
         let mag_fields = linspace(0., 70., 70);
@@ -55,7 +54,7 @@ impl Problems {
             .collect();
         
         let header = "magnetic field [G]\tEnergies [GHz]";
-        save_spectrum(header, &format!("YbF_levels_uncoupled_proj_{}", projection.double_value() / 2), &mag_fields, &energies)
+        save_spectrum(header, &format!("YbF_levels_uncoupled"), &mag_fields, &energies)
             .expect("error while saving YbF_Rb levels");
     }
 }
@@ -64,7 +63,7 @@ fn get_particle() -> Particle {
     let mut caf = Particle::new("YbF", Mass(192.9372652, Dalton));
 
     caf.insert(RotorJMax(4));
-    caf.insert(RotorLMax(2));
+    caf.insert(RotorLMax(4));
     caf.insert(RotorJTotMax(2));
     caf.insert(RotConst(Energy(0.24129, CmInv).to_au()));
     caf.insert(GammaSpinRot(Energy(4.4778e-4, CmInv).to_au()));
@@ -85,8 +84,8 @@ fn get_problem(projection: HalfI32, particle: &Particle) -> AlkaliRotorProblem {
 fn get_particle_uncoupled() -> Particle {
     let mut caf = Particle::new("YbF", Mass(192.9372652, Dalton));
 
-    caf.insert(RotorJMax(6));
-    caf.insert(RotorLMax(6));
+    caf.insert(RotorJMax(4));
+    caf.insert(RotorLMax(4));
     caf.insert(RotConst(Energy(0.24129, CmInv).to_au()));
     caf.insert(GammaSpinRot(Energy(4.4778e-4, CmInv).to_au()));
     caf.insert(AnisoHifi(Energy(2.84875e-3, CmInv).to_au()));
@@ -94,10 +93,9 @@ fn get_particle_uncoupled() -> Particle {
     caf
 }
 
-fn get_problem_uncoupled(projection: HalfI32, particle: &Particle) -> UncoupledAlkaliRotorProblem {
+fn get_problem_uncoupled(particle: &Particle) -> UncoupledAlkaliRotorProblem {
     let hifi_ybf = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(1/2))
-        .with_hyperfine_coupling(Energy(5.6794e-3, CmInv).to_au())
-        .with_total_projection(projection);
+        .with_hyperfine_coupling(Energy(5.6794e-3, CmInv).to_au());
 
     AlkaliRotorProblemBuilder::new(hifi_ybf)
         .build_uncoupled(particle)

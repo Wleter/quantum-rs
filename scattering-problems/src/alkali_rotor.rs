@@ -20,7 +20,6 @@ pub enum SpinRotor {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum UncoupledSpinRotor {
-    SystemL(HalfU32),
     RotorN(HalfU32),
     RotorS(HalfU32),
     RotorI(HalfU32),
@@ -119,18 +118,8 @@ impl AlkaliRotorProblemBuilder {
         let gamma_spin_rot = particle.get::<GammaSpinRot>().unwrap_or(&GammaSpinRot(0.)).0;
         let aniso_hifi = particle.get::<AnisoHifi>().unwrap_or(&AnisoHifi(0.)).0;
 
-        let l_max = particle.get::<RotorLMax>()
-            .expect("Did not find SystemLMax parameter in particles").0;
         let j_max = particle.get::<RotorJMax>()
             .expect("Did not find RotorJMax parameter in particles").0;
-
-        let l_states = (0..=l_max)
-            .map(|l| {
-                let l = HalfU32::from_doubled(2 * l);
-                let projections = spin_projections(l);
-                State::new(UncoupledSpinRotor::SystemL(l), projections)
-            })
-            .collect();
 
         let n_states = (0..=j_max)
             .map(|j| {
@@ -150,8 +139,7 @@ impl AlkaliRotorProblemBuilder {
         );
 
         let mut states = States::default();
-        states.push_state(StateType::Sum(l_states))
-            .push_state(StateType::Sum(n_states))
+        states.push_state(StateType::Sum(n_states))
             .push_state(StateType::Irreducible(s_rotor))
             .push_state(StateType::Irreducible(i_rotor));
 
@@ -206,7 +194,8 @@ impl AlkaliRotorProblemBuilder {
                 let factor = aniso_hifi / f64::sqrt(30.) * p3_factor(&s_braket.0) * p3_factor(&i_braket.0) 
                     * ((2. * n_braket.0.s.value() + 1.) * (2. * n_braket.1.s.value() + 1.)).sqrt();
 
-                let sign = (-1.0f64).powf(s_braket.0.s.value() - s_braket.0.ms.value() + i_braket.0.s.value() - i_braket.0.ms.value());
+                let sign = (-1.0f64).powi(((s_braket.0.s.double_value() + i_braket.0.s.double_value()) as i32 
+                        - (n_braket.0.ms.double_value() + i_braket.0.ms.double_value() + s_braket.0.ms.double_value())) / 2);
 
                 let wigners = wigner_3j(n_braket.0.s, half_u32!(2), n_braket.1.s, -n_braket.0.ms, n_braket.0.ms - n_braket.1.ms, n_braket.1.ms)
                     * wigner_3j(n_braket.0.s, half_u32!(2), n_braket.1.s, half_i32!(0), half_i32!(0), half_i32!(0))
