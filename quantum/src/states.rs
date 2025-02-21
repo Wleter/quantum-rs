@@ -75,6 +75,16 @@ impl<T, V> StatesElement<T, V> {
     }
 }
 
+impl<T: Debug, V: Debug> Display for StatesElement<T, V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (s, v) in self.pairwise_iter() {
+            write!(f, "|{s:?}, {v:?} ⟩ ")?
+        }
+
+        Ok(())
+    }
+}
+
 pub struct StatesIter<'a, T, V> {
     states: &'a [StateType<T, V>],
     states_iter: Vec<StateTypeIter<'a, T, V>>,
@@ -171,10 +181,7 @@ impl<T, V> DerefMut for StatesBasis<T, V> {
 impl<T: Debug, V: Debug> Display for StatesBasis<T, V> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for state in &self.0 {
-            for (s, v) in state.pairwise_iter() {
-                write!(f, "|{s:?}, {v:?} ⟩  ")?
-            }
-            writeln!(f, "")?
+            writeln!(f, "{state}")?
         }
 
         Ok(())

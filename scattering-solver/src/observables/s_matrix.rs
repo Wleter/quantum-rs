@@ -1,6 +1,6 @@
 use std::f64::consts::PI;
 
-use faer::{prelude::c64, Mat};
+use faer::{prelude::c64, Mat, MatRef};
 use num::complex::Complex64;
 use serde::{Deserialize, Serialize};
 
@@ -52,6 +52,10 @@ impl SMatrix {
             momentum,
             entrance,
         }
+    }
+
+    pub fn s_matrix(&self) -> MatRef<c64> {
+        self.s_matrix.as_ref()
     }
 
     pub fn get_scattering_length(&self) -> Complex64 {

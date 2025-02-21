@@ -33,5 +33,5 @@ impl<U: Unit> Distance<U> {
 pub struct Angstrom;
 
 impl Unit for Angstrom {
-    const TO_AU_MUL: f64 = 1.88973;
+    const TO_AU_MUL: f64 = 1. / 0.529177210544;
 }

@@ -77,7 +77,7 @@ where
         let mut asymptotic = Mat::zeros(size, size);
         self.potential.value_inplace(r_last, &mut asymptotic);
 
-        // todo! assume diagonality of the asymptotic potential
+        // todo! we assume diagonality of the asymptotic potential
 
         let is_open_channel = asymptotic
             .diagonal()
@@ -99,11 +99,12 @@ where
 
         for i in 0..size {
             let momentum = momenta[i];
+            let l = self.asymptotic.centrifugal[i].0;
             if is_open_channel[i] {
-                j_last[(i, i)] = asymptotic_bessel_j(momentum * r_last, self.asymptotic.centrifugal[i].0);
-                j_prev_last[(i, i)] = asymptotic_bessel_j(momentum * r_prev_last, self.asymptotic.centrifugal[i].0);
-                n_last[(i, i)] = asymptotic_bessel_n(momentum * r_last, self.asymptotic.centrifugal[i].0);
-                n_prev_last[(i, i)] = asymptotic_bessel_n(momentum * r_prev_last, self.asymptotic.centrifugal[i].0);
+                j_last[(i, i)] = asymptotic_bessel_j(momentum * r_last, l) / momentum.sqrt();
+                j_prev_last[(i, i)] = asymptotic_bessel_j(momentum * r_prev_last, l) / momentum.sqrt();
+                n_last[(i, i)] = asymptotic_bessel_n(momentum * r_last, l) / momentum.sqrt();
+                n_prev_last[(i, i)] = asymptotic_bessel_n(momentum * r_prev_last, l) / momentum.sqrt();
             } else {
                 j_last[(i, i)] = bessel_j_ratio(momentum * r_last, momentum * r_prev_last);
                 j_prev_last[(i, i)] = 1.0;

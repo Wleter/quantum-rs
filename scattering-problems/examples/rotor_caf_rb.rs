@@ -8,7 +8,7 @@ use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
 use num::complex::Complex64;
 use quantum::{params::{particle::Particle, particle_factory::{self, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{energy_units::{Energy, GHz, Kelvin, MHz}, mass_units::{Dalton, Mass}, Au, Unit}, utility::linspace};
-use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder}, uncoupled_alkali_rotor_atom::UncoupledAlkaliRotorAtomProblem, utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorJTotMax, RotorLMax}, IndexBasisDescription, ScatteringProblem};
+use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder, ParityBlock, PARITY_BLOCK}, uncoupled_alkali_rotor_atom::UncoupledAlkaliRotorAtomProblem, utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorJTotMax, RotorLMax}, IndexBasisDescription, ScatteringProblem};
 use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule, single_numerov::SingleRatioNumerov}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{MatPotential, Potential, SimplePotential}}, utility::save_data};
 
 use rayon::prelude::*;
@@ -439,10 +439,12 @@ fn get_particles(energy: Energy<impl Unit>) -> Particles {
     let caf = Particle::new("CaF", Mass(39.962590850 + 18.998403162, Dalton));
     let rb = particle_factory::create_atom("Rb87").unwrap();
 
+    *PARITY_BLOCK.lock().unwrap() = ParityBlock::All; // todo! very temporary
+
     let mut particles = Particles::new_pair(caf, rb, energy);
     particles.insert(RotorLMax(5));
     particles.insert(RotorJMax(5));
-    particles.insert(RotorJTotMax(0));
+    particles.insert(RotorJTotMax(5));
     particles.insert(RotConst(Energy(10.3, GHz).to_au()));
     particles.insert(GammaSpinRot(Energy(40., MHz).to_au()));
     particles.insert(AnisoHifi(Energy(3. * 14., MHz).to_au()));
@@ -475,11 +477,11 @@ fn get_particles_uncoupled(energy: Energy<impl Unit>) -> Particles {
     let rb = particle_factory::create_atom("Rb87").unwrap();
 
     let mut particles = Particles::new_pair(caf, rb, energy);
-    particles.insert(RotorLMax(2));
-    particles.insert(RotorJMax(2));
+    particles.insert(RotorLMax(6));
+    particles.insert(RotorJMax(6));
     particles.insert(RotConst(Energy(10.3, GHz).to_au()));
     particles.insert(GammaSpinRot(Energy(40., MHz).to_au()));
-    particles.insert(AnisoHifi(Energy(3. * 14., MHz).to_au()));
+    particles.insert(AnisoHifi(Energy(3. * 14. * 10., MHz).to_au()));
     
     particles
 }

@@ -92,8 +92,8 @@ where
                         let n_braket = cast_spin_braket!(n, UncoupledSpinRotorAtom::RotorN);
                         let s_braket = cast_spin_braket!(s, UncoupledSpinRotorAtom::RotorS);
                         let i_braket = cast_spin_braket!(i, UncoupledSpinRotorAtom::RotorI);
-        
-                        let factor = aniso_hifi / f64::sqrt(30.) * p3_factor(&s_braket.0) * p3_factor(&i_braket.0) 
+
+                        let factor = aniso_hifi / f64::sqrt(0.3) * p3_factor(&s_braket.0) * p3_factor(&i_braket.0) 
                             * ((2. * n_braket.0.s.value() + 1.) * (2. * n_braket.1.s.value() + 1.)).sqrt();
 
                         let sign = (-1.0f64).powf(s_braket.0.s.value() - s_braket.0.ms.value() + i_braket.0.s.value() - i_braket.0.ms.value());

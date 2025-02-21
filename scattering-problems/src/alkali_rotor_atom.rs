@@ -1,3 +1,5 @@
+use std::sync::Mutex;
+
 use abm::{get_hifi, get_zeeman_prop, utility::diagonalize, DoubleHifiProblemBuilder, Symmetry};
 use clebsch_gordan::{half_i32, half_integer::{HalfI32, HalfU32}, half_u32};
 use faer::Mat;
@@ -26,6 +28,14 @@ pub enum SpinRotorAtom {
     AtomS(HalfU32),
     AtomI(HalfU32)
 }
+
+pub enum ParityBlock {
+    Positive,
+    Negative,
+    All
+}
+
+pub static PARITY_BLOCK: Mutex<ParityBlock> = Mutex::new(ParityBlock::Positive); // todo! very temporary, change to actual parameter
 
 impl<P, V> AlkaliRotorAtomProblemBuilder<P, V> 
 where 
@@ -155,10 +165,24 @@ where
         let mut angular_states = vec![];
         for j_tot in 0..=j_tot_max {
             for &l in &ls {
-                let j_lower = (l as i32 - j_tot as i32).unsigned_abs().min(j_max);
+                let j_lower = (l as i32 - j_tot as i32).unsigned_abs();
+                if j_lower > j_max {
+                    continue; // todo! change
+                }
+
                 let j_upper = (l + j_tot).min(j_max);
                 
                 for j in j_lower..=j_upper {
+                    match *PARITY_BLOCK.lock().unwrap() { // todo! very temporary, change to actual parameter
+                        ParityBlock::Positive => if (j + l) & 1 == 1 {
+                            continue;
+                        },
+                        ParityBlock::Negative => if (j + l) & 1 == 0 {
+                            continue;
+                        },
+                        ParityBlock::All => (),
+                    }
+
                     let projections = spin_projections(HalfU32::from_doubled(2 * j_tot));
                     let state = State::new(SpinRotorAtom::Angular((l, j, j_tot)), projections);
                     angular_states.push(state);
@@ -185,10 +209,10 @@ where
 
         let mut states = States::default();
         states.push_state(StateType::Sum(angular_states))
-            .push_state(StateType::Irreducible(s_rotor))
             .push_state(StateType::Irreducible(i_rotor))
-            .push_state(StateType::Irreducible(s_atom))
-            .push_state(StateType::Irreducible(i_atom));
+            .push_state(StateType::Irreducible(s_rotor))
+            .push_state(StateType::Irreducible(i_atom))
+            .push_state(StateType::Irreducible(s_atom));
 
         let mut basis = match self.hifi_problem.total_projection {
             Some(m_tot) => {

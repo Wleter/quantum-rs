@@ -2,6 +2,8 @@ use std::{cmp::Ordering, f64::consts::FRAC_PI_2};
 
 use crate::units::{energy_units::Energy, Au, Unit};
 
+// todo! calculate bessel functions explicitly
+
 pub fn asymptotic_bessel_j(x: f64, l: u32) -> f64 {
     (x - FRAC_PI_2 * (l as f64)).sin()
 }
@@ -47,8 +49,6 @@ pub fn logspace(start: f64, end: f64, n: usize) -> Vec<f64> {
 
     result
 }
-
-
 
 pub fn unit_linspace<U: Unit>(start: Energy<U>, end: Energy<U>, n: usize) -> Vec<Energy<U>> {
     let start_au = start.to_au();
@@ -299,5 +299,10 @@ mod test {
         assert!(durations[0] >= 0.5);
         assert!(durations[1] < 0.5);
         assert!(durations[2] >= 0.5);
+    }
+
+    #[test]
+    fn test_bessel() {
+        
     }
 }

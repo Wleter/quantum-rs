@@ -29,7 +29,7 @@ impl HifiProblemBuilder {
         Self {
             s: double_s,
             i: double_i,
-            gamma_e: -2.0 * Consts::BOHR_MAG,
+            gamma_e: -2.00231930436256 * Consts::BOHR_MAG,
             gamma_i: None,
             a_hifi: None,
             total_projection: None,
