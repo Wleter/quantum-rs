@@ -1,7 +1,9 @@
 from dataclasses import dataclass
+from enum import Enum, auto
 import json
 import numpy as np
 import numpy.typing as npt
+from .units import ANGS
 
 @dataclass
 class ScatteringObserwables:
@@ -43,3 +45,26 @@ class ScatteringDependence:
     
     def inelastic_cross_sections(self, channel: int) -> npt.NDArray[np.float64]:
         return np.array(list(map(lambda x: x.inelastic_cross_sections[channel], self.cross_sections)))
+    
+
+class ParameterType(Enum):
+    Energy = 4
+    Scaling = 5
+    Field = 5
+    FieldWithScaling = 6
+
+def read_molscat_field_dependence(filename: str, parameter: ParameterType = ParameterType.Field) -> npt.NDArray[np.float64]:
+    with open(filename, "r") as file:
+        data = file.readlines()
+
+    start = next(filter(lambda x: x[1].find("SCATTERING LENGTH") != -1, enumerate(data)))
+    data = data[start[0] + 2:-2]
+    
+    data = list(map(lambda x: [float(x[parameter.value]), float(x[-2]) * ANGS, float(x[-1]) * ANGS], \
+                    map(lambda x: x.split(), data)))
+    data = np.array(data)
+    
+    return data
+
+if __name__ == "__main__":
+    read_molscat_field_dependence("data/srf_rb_n_0_molscat.3")
