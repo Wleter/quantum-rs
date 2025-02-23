@@ -4,7 +4,7 @@ use faer::{unzipped, zipped, Mat, MatRef};
 use quantum::{
     cast_variant,
     states::{operator::Operator, spins::{spin_projections, sum_spin_projections}, state::State, state_type::StateType, States, StatesBasis},
-    units::{energy_units::Energy, Au, Unit},
+    units::{energy_units::{Energy, EnergyUnit}, Au},
 };
 use utility::diagonalize;
 use clebsch_gordan::{half_integer::{HalfI32, HalfU32}, half_u32};
@@ -538,7 +538,7 @@ impl ABMVibrational {
     ///
     /// Franck-Condon factors are expected to be matrix of elements
     /// <S = 0, v_S | S' = 1, v_S'>
-    pub fn new<U: Unit>(
+    pub fn new<U: EnergyUnit>(
         singlet_states: Vec<Energy<U>>,
         triplet_states: Vec<Energy<U>>,
         fc_factors: Mat<f64>,

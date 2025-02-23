@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, f64::consts::FRAC_PI_2};
 
-use crate::units::{energy_units::Energy, Au, Unit};
+use crate::units::{energy_units::{Energy, EnergyUnit}, Au};
 
 // todo! calculate bessel functions explicitly
 
@@ -50,7 +50,7 @@ pub fn logspace(start: f64, end: f64, n: usize) -> Vec<f64> {
     result
 }
 
-pub fn unit_linspace<U: Unit>(start: Energy<U>, end: Energy<U>, n: usize) -> Vec<Energy<U>> {
+pub fn unit_linspace<U: EnergyUnit>(start: Energy<U>, end: Energy<U>, n: usize) -> Vec<Energy<U>> {
     let start_au = start.to_au();
     let end_au = end.to_au();
 

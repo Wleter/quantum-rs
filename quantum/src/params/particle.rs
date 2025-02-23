@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use crate::{
     params::Params,
-    units::{mass_units::Mass, Au, Unit},
+    units::{mass_units::Mass, mass_units::MassUnit, Au},
 };
 
 /// Struct to hold information about a particle.
@@ -10,12 +10,12 @@ use crate::{
 #[derive(Default, Clone)]
 pub struct Particle {
     name: String,
-    pub params: Params,
+    params: Params,
 }
 
 impl Particle {
     /// Creates new particle with given name and mass
-    pub fn new<U: Unit>(name: &str, mass: Mass<U>) -> Self {
+    pub fn new(name: &str, mass: Mass<impl MassUnit>) -> Self {
         let mut params = Params::default();
         params.insert(mass.to(Au));
 

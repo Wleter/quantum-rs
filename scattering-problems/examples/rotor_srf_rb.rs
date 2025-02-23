@@ -5,7 +5,7 @@ use clebsch_gordan::{half_i32, half_integer::HalfI32, half_u32};
 use faer::{prelude::SpSolver, Col, Mat, Side};
 use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
-use quantum::{params::{particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::{Angstrom, Distance}, energy_units::{CmInv, Energy, GHz, Kelvin}, mass_units::{Dalton, Mass}, Au, Unit}, utility::{legendre_polynomials, linspace}};
+use quantum::{params::{particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::{Angstrom, Distance}, energy_units::{CmInv, Energy, EnergyUnit, GHz, Kelvin}, mass_units::{Dalton, Mass}, Au, Unit}, utility::{legendre_polynomials, linspace}};
 use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder}, potential_interpolation::{interpolate_potentials, PotentialArray, TransitionedPotential}, rotor_atom::RotorAtomProblemBuilder, utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorJTotMax, RotorLMax}};
 use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, numerov_modifier::NumerovLogging, propagator::MultiStepRule}, observables::s_matrix::{ScatteringDependence, ScatteringObservables}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, ScaledPotential, SimplePotential}}, utility::{save_data, save_serialize}};
 
@@ -455,7 +455,7 @@ impl Problems {
     }
 }
 
-fn get_particles(energy: Energy<impl Unit>) -> Particles {
+fn get_particles(energy: Energy<impl EnergyUnit>) -> Particles {
     let rb = create_atom("Rb87").unwrap();
     let srf = Particle::new("SrF", Mass(88. + 19., Dalton));
 

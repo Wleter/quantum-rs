@@ -33,7 +33,7 @@ pub fn create_molecule(name: &str) -> Option<Particle> {
     };
 
     let mut particle = Particle::new(name, mass);
-    particle.params.insert(RotConst(rot_const));
+    particle.insert(RotConst(rot_const));
 
     Some(particle)
 }

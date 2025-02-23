@@ -2,7 +2,11 @@ use std::ops::{Deref, DerefMut};
 
 use crate::{
     params::Params,
-    units::{energy_units::Energy, mass_units::Mass, Au, Unit},
+    units::{
+        energy_units::{Energy, EnergyUnit},
+        mass_units::Mass,
+        Au,
+    },
 };
 
 use super::particle::Particle;
@@ -16,13 +20,13 @@ pub struct Particles {
 
 impl Particles {
     /// Creates two particle composition with given collision energy inserted inside `internals` as "energy".
-    pub fn new_pair<U: Unit>(
+    pub fn new_pair(
         first_particle: Particle,
         second_particle: Particle,
-        energy: Energy<U>,
+        energy: Energy<impl EnergyUnit>,
     ) -> Self {
-        let mass1 = first_particle.params.get::<Mass<Au>>().unwrap().value();
-        let mass2 = second_particle.params.get::<Mass<Au>>().unwrap().value();
+        let mass1 = first_particle.get::<Mass<Au>>().unwrap().value();
+        let mass2 = second_particle.get::<Mass<Au>>().unwrap().value();
 
         let inverse_reduced_mass: f64 = 1.0 / mass1 + 1.0 / mass2;
 
@@ -48,7 +52,7 @@ impl Particles {
     /// Creates a particle composition given a vector of particles.
     pub fn new_custom(particles: Vec<Particle>) -> Self {
         let inverse_reduced_mass = particles.iter().fold(0.0, |acc, particle| {
-            acc + 1.0 / particle.params.get::<Mass<Au>>().unwrap().value()
+            acc + 1.0 / particle.get::<Mass<Au>>().unwrap().value()
         });
 
         let mut params = Params::default();

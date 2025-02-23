@@ -7,7 +7,7 @@ use faer::Mat;
 use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
 use num::complex::Complex64;
-use quantum::{params::{particle::Particle, particle_factory::{self, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{energy_units::{Energy, GHz, Kelvin, MHz}, mass_units::{Dalton, Mass}, Au, Unit}, utility::linspace};
+use quantum::{params::{particle::Particle, particle_factory::{self, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{energy_units::{Energy, EnergyUnit, GHz, Kelvin, MHz}, mass_units::{Dalton, Mass}, Au}, utility::linspace};
 use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder, ParityBlock, PARITY_BLOCK}, uncoupled_alkali_rotor_atom::UncoupledAlkaliRotorAtomProblem, utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorJTotMax, RotorLMax}, IndexBasisDescription, ScatteringProblem};
 use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule, single_numerov::SingleRatioNumerov}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{MatPotential, Potential, SimplePotential}}, utility::save_data};
 
@@ -435,7 +435,7 @@ fn get_potential_iso(config_triplet: usize, config_singlet: usize, projection: H
         .build(mag_field)
 }
 
-fn get_particles(energy: Energy<impl Unit>) -> Particles {
+fn get_particles(energy: Energy<impl EnergyUnit>) -> Particles {
     let caf = Particle::new("CaF", Mass(39.962590850 + 18.998403162, Dalton));
     let rb = particle_factory::create_atom("Rb87").unwrap();
 
@@ -472,7 +472,7 @@ fn get_problem(config_triplet: usize, config_singlet: usize, projection: HalfI32
         .build(particles)
 }
 
-fn get_particles_uncoupled(energy: Energy<impl Unit>) -> Particles {
+fn get_particles_uncoupled(energy: Energy<impl EnergyUnit>) -> Particles {
     let caf = Particle::new("CaF", Mass(39.962590850 + 18.998403162, Dalton));
     let rb = particle_factory::create_atom("Rb87").unwrap();
 
