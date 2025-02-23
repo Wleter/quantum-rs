@@ -3,9 +3,7 @@ use clebsch_gordan::half_integer::{HalfI32, HalfU32};
 pub fn spin_projections(s: HalfU32) -> Vec<HalfI32> {
     let ds = s.double_value() as i32;
 
-    (-ds..=ds).step_by(2)
-        .map(HalfI32::from_doubled)
-        .collect()
+    (-ds..=ds).step_by(2).map(HalfI32::from_doubled).collect()
 }
 
 pub fn sum_spin_projections(dspin1: HalfU32, dspin2: HalfU32) -> Vec<(HalfU32, Vec<HalfI32>)> {
@@ -24,15 +22,12 @@ pub fn sum_spin_projections(dspin1: HalfU32, dspin2: HalfU32) -> Vec<(HalfU32, V
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Spin {
     pub s: HalfU32,
-    pub ms: HalfI32
+    pub ms: HalfI32,
 }
 
 impl Spin {
     pub fn new(s: HalfU32, ms: HalfI32) -> Self {
-        Self {
-            s,
-            ms,
-        }
+        Self { s, ms }
     }
 
     pub fn spin_type(&self) -> SpinType {
@@ -47,7 +42,7 @@ impl Spin {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SpinType {
     Fermionic,
-    Bosonic
+    Bosonic,
 }
 
 pub struct SpinOperators;
@@ -62,30 +57,35 @@ impl SpinOperators {
     }
 
     pub fn ladder_plus(spin_bra: Spin, spin_ket: Spin) -> f64 {
-        if spin_bra.s == spin_ket.s && spin_bra.ms.double_value() == spin_ket.ms.double_value() + 2 {
-            (spin_ket.s.value() * (spin_ket.s.value() + 1.) - spin_bra.ms.value() * spin_ket.ms.value()).sqrt()
+        if spin_bra.s == spin_ket.s && spin_bra.ms.double_value() == spin_ket.ms.double_value() + 2
+        {
+            (spin_ket.s.value() * (spin_ket.s.value() + 1.)
+                - spin_bra.ms.value() * spin_ket.ms.value())
+            .sqrt()
         } else {
             0.0
         }
     }
 
     pub fn ladder_minus(spin_bra: Spin, spin_ket: Spin) -> f64 {
-        if spin_bra.s == spin_ket.s && spin_bra.ms.double_value() + 2 == spin_ket.ms.double_value() {
-            (spin_ket.s.value() * (spin_ket.s.value() + 1.) - spin_bra.ms.value() * spin_ket.ms.value()).sqrt()
+        if spin_bra.s == spin_ket.s && spin_bra.ms.double_value() + 2 == spin_ket.ms.double_value()
+        {
+            (spin_ket.s.value() * (spin_ket.s.value() + 1.)
+                - spin_bra.ms.value() * spin_ket.ms.value())
+            .sqrt()
         } else {
             0.0
         }
     }
 
-    pub fn dot(
-        dspin1_braket: (Spin, Spin),
-        dspin2_braket: (Spin, Spin),
-    ) -> f64 {
+    pub fn dot(dspin1_braket: (Spin, Spin), dspin2_braket: (Spin, Spin)) -> f64 {
         let val1 = Self::proj_z(dspin1_braket.0, dspin1_braket.1)
             * Self::proj_z(dspin2_braket.0, dspin2_braket.1);
-        let val2 = 0.5 * Self::ladder_plus(dspin1_braket.0, dspin1_braket.1)
+        let val2 = 0.5
+            * Self::ladder_plus(dspin1_braket.0, dspin1_braket.1)
             * Self::ladder_minus(dspin2_braket.0, dspin2_braket.1);
-        let val3 = 0.5 * Self::ladder_minus(dspin1_braket.0, dspin1_braket.1)
+        let val3 = 0.5
+            * Self::ladder_minus(dspin1_braket.0, dspin1_braket.1)
             * Self::ladder_plus(dspin2_braket.0, dspin2_braket.1);
 
         val1 + val2 + val3
@@ -93,7 +93,9 @@ impl SpinOperators {
 
     /// Compute the Clebsch-Gordan coefficient <dspin1; dspin2 | dspin3>.
     pub fn clebsch_gordan(dspin1: Spin, dspin2: Spin, dspin3: Spin) -> f64 {
-        clebsch_gordan::clebsch_gordan(dspin1.s, dspin1.ms, dspin2.s, dspin2.ms, dspin3.s, dspin3.ms)
+        clebsch_gordan::clebsch_gordan(
+            dspin1.s, dspin1.ms, dspin2.s, dspin2.ms, dspin3.s, dspin3.ms,
+        )
     }
 }
 
@@ -105,7 +107,10 @@ mod test {
 
     use crate::{
         cast_variant,
-        states::{operator::Operator, spins::spin_projections, state::State, state_type::StateType, States},
+        states::{
+            operator::Operator, spins::spin_projections, state::State, state_type::StateType,
+            States,
+        },
     };
 
     use super::{Spin, SpinOperators};
@@ -121,12 +126,12 @@ mod test {
         let mut state = States::default();
         state
             .push_state(StateType::Irreducible(State::new(
-                StateSep::Spin1(half_u32!(1/2)),
-                spin_projections(half_u32!(1/2)),
+                StateSep::Spin1(half_u32!(1 / 2)),
+                spin_projections(half_u32!(1 / 2)),
             )))
             .push_state(StateType::Irreducible(State::new(
-                StateSep::Spin2(half_u32!(1/2)),
-                spin_projections(half_u32!(1/2)),
+                StateSep::Spin2(half_u32!(1 / 2)),
+                spin_projections(half_u32!(1 / 2)),
             )));
 
         let basis = state.get_basis();

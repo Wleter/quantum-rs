@@ -2,7 +2,10 @@ pub mod braket;
 pub mod state;
 pub mod state_type;
 
-use std::{fmt::{Debug, Display}, ops::{Deref, DerefMut}};
+use std::{
+    fmt::{Debug, Display},
+    ops::{Deref, DerefMut},
+};
 
 use state_type::{StateType, StateTypeIter};
 
@@ -70,8 +73,7 @@ pub struct StatesElement<T, V> {
 
 impl<T, V> StatesElement<T, V> {
     pub fn pairwise_iter(&self) -> impl Iterator<Item = (&T, &V)> {
-        self.variants.iter()
-            .zip(self.values.iter())
+        self.variants.iter().zip(self.values.iter())
     }
 }
 

@@ -10,9 +10,7 @@ pub struct Operator<M> {
 
 impl<M> Operator<M> {
     pub fn new(mat: M) -> Self {
-        Self {
-            backed: mat
-        }
+        Self { backed: mat }
     }
 
     pub fn into_backed(self) -> M {
@@ -62,37 +60,33 @@ where
         .filter(|x| !indices.contains(x))
         .collect();
 
-    move |i, j| {
-        unsafe {
-            let elements_i = elements.get_unchecked(i);
-            let elements_j = elements.get_unchecked(j);
+    move |i, j| unsafe {
+        let elements_i = elements.get_unchecked(i);
+        let elements_j = elements.get_unchecked(j);
 
-            for &index in &diagonal_indices {
-                if elements_i.variants.get_unchecked(index)
-                    != elements_j.variants.get_unchecked(index)
-                    || elements_i.values.get_unchecked(index)
-                        != elements_j.values.get_unchecked(index)
-                {
-                    return E::zero();
-                }
+        for &index in &diagonal_indices {
+            if elements_i.variants.get_unchecked(index) != elements_j.variants.get_unchecked(index)
+                || elements_i.values.get_unchecked(index) != elements_j.values.get_unchecked(index)
+            {
+                return E::zero();
             }
-
-            let brakets = indices.map(|index| {
-                let bra = (
-                    *elements_i.variants.get_unchecked(index),
-                    *elements_i.values.get_unchecked(index),
-                );
-
-                let ket = (
-                    *elements_j.variants.get_unchecked(index),
-                    *elements_j.values.get_unchecked(index),
-                );
-
-                StateBraket { ket, bra }
-            });
-
-            mat_element(brakets)
         }
+
+        let brakets = indices.map(|index| {
+            let bra = (
+                *elements_i.variants.get_unchecked(index),
+                *elements_i.values.get_unchecked(index),
+            );
+
+            let ket = (
+                *elements_j.variants.get_unchecked(index),
+                *elements_j.values.get_unchecked(index),
+            );
+
+            StateBraket { ket, bra }
+        });
+
+        mat_element(brakets)
     }
 }
 
@@ -124,7 +118,7 @@ where
         if i != j {
             return E::zero();
         }
-        
+
         unsafe {
             let elements_i = elements.get_unchecked(i);
 
@@ -155,13 +149,11 @@ where
     V2: Copy + PartialEq,
     E: Zero,
 {
-    move |i, j| {
-        unsafe {
-            let elements_i = elements_transformed.get_unchecked(i);
-            let elements_j = elements.get_unchecked(j);
+    move |i, j| unsafe {
+        let elements_i = elements_transformed.get_unchecked(i);
+        let elements_j = elements.get_unchecked(j);
 
-            mat_element(elements_j, elements_i)
-        }
+        mat_element(elements_j, elements_i)
     }
 }
 
@@ -363,7 +355,7 @@ impl<E: Zero> Operator<Array2<E>> {
 
         Self { backed: mat }
     }
-    
+
     pub fn from_diagonal_mel<const N: usize, T: Copy + PartialEq, V: Copy + PartialEq, F>(
         elements: &StatesBasis<T, V>,
         action_states: [T; N],
@@ -478,7 +470,7 @@ mod test {
         ];
         assert_eq!(expected, operator.backed);
 
-        let operator = 
+        let operator =
             Operator::<Mat<f64>>::from_mel(&elements, [StateIds::ElectronSpin(0)], |[el_state]| {
                 let bra = el_state.bra;
 
@@ -516,7 +508,8 @@ mod test {
                 } else {
                     0.0
                 }
-            });
+            },
+        );
 
         let expected = mat![
             [0.0, 0.0, 0.0, 0.0, 2178.0, 2198.0, 2218.0, 198.0],
@@ -560,27 +553,30 @@ mod test {
     #[test]
     #[cfg(feature = "faer")]
     fn test_faer_operators_cached() {
-        use faer::{Mat, mat};
         use crate::{cached_mel, make_cache};
+        use faer::{mat, Mat};
 
         let elements = prepare_states().get_basis();
 
-        let operator = make_cache!(cache, Operator::<Mat<f64>>::from_mel(
-            &elements,
-            [StateIds::ElectronSpin(0), StateIds::Vibrational],
-            cached_mel!(cache, |[el_state, vib]| {
-                let ket_spin = cast_variant!(el_state.ket.0, StateIds::ElectronSpin);
-                let bra_spin = cast_variant!(el_state.bra.0, StateIds::ElectronSpin);
+        let operator = make_cache!(
+            cache,
+            Operator::<Mat<f64>>::from_mel(
+                &elements,
+                [StateIds::ElectronSpin(0), StateIds::Vibrational],
+                cached_mel!(cache, |[el_state, vib]| {
+                    let ket_spin = cast_variant!(el_state.ket.0, StateIds::ElectronSpin);
+                    let bra_spin = cast_variant!(el_state.bra.0, StateIds::ElectronSpin);
 
-                let ket_spin_z = cast_variant!(el_state.ket.1, ElementValues::Spin);
-                let bra_spin_z = cast_variant!(el_state.bra.1, ElementValues::Spin);
-                if vib.ket != vib.bra {
-                    ((ket_spin * 1000 + bra_spin * 100) as i32 + ket_spin_z * 10 + bra_spin_z)
-                        as f64
-                } else {
-                    0.0
-                }
-            }))
+                    let ket_spin_z = cast_variant!(el_state.ket.1, ElementValues::Spin);
+                    let bra_spin_z = cast_variant!(el_state.bra.1, ElementValues::Spin);
+                    if vib.ket != vib.bra {
+                        ((ket_spin * 1000 + bra_spin * 100) as i32 + ket_spin_z * 10 + bra_spin_z)
+                            as f64
+                    } else {
+                        0.0
+                    }
+                })
+            )
         );
 
         let expected = mat![
@@ -733,6 +729,11 @@ mod test {
             [0.000, 0.000, 0.000, 1.000],
         ];
 
-        assert_matrix_eq!(expected, transformation_faer.into_backed(), comp = abs, tol = 1e-3);
+        assert_matrix_eq!(
+            expected,
+            transformation_faer.into_backed(),
+            comp = abs,
+            tol = 1e-3
+        );
     }
 }

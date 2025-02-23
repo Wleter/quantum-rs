@@ -41,8 +41,8 @@ pub fn legendre_polynomials(j: u32, x: f64) -> Vec<f64> {
     p[1] = x;
 
     for i in 2..=j {
-        p[i] = ((2 * i - 1) as f64 / i as f64) * x * p[i - 1] 
-            - ((i - 1) as f64 / i as f64) * p[i - 2];
+        p[i] =
+            ((2 * i - 1) as f64 / i as f64) * x * p[i - 1] - ((i - 1) as f64 / i as f64) * p[i - 2];
     }
 
     p
@@ -74,8 +74,8 @@ pub fn associated_legendre_polynomials(j: u32, m: i32, x: f64) -> Vec<f64> {
     for i in m_u + 2..=j {
         let l = i - 1;
 
-        p[i] = (((2 * l + 1) as f64) * x * p[i - 1] 
-            - (l as f64 + m as f64) * p[i - 2]) / (l as f64 - m as f64 + 1.);
+        p[i] = (((2 * l + 1) as f64) * x * p[i - 1] - (l as f64 + m as f64) * p[i - 2])
+            / (l as f64 - m as f64 + 1.);
     }
 
     p
@@ -161,14 +161,14 @@ pub fn normalization(l: u32, m: i32) -> f64 {
 }
 
 /// Calculates riccati bessel function of the first kind j_n(x)
-/// 
+///
 /// "Handbook of Mathematical Functions" - eq. 10.3.2 (written as z j_n(z))
 pub fn riccati_j(n: u32, x: f64) -> f64 {
     bessel_recurrence(n, x, f64::sin(x), f64::sin(x) / x - f64::cos(x))
 }
 
 /// Calculates riccati bessel function of the third kind n_n(x) = -y_n(x)
-/// 
+///
 /// "Handbook of Mathematical Functions" - eq. 10.3.2 (written as -z y_n(z))
 pub fn riccati_n(n: u32, x: f64) -> f64 {
     bessel_recurrence(n, x, f64::cos(x), f64::cos(x) / x + f64::sin(x))
@@ -176,7 +176,7 @@ pub fn riccati_n(n: u32, x: f64) -> f64 {
 
 /// Calculates ratio of the riccati modified spherical bessel function of the first kind
 /// (that is $sqrt(x) I_{n+1/2}(x)) at points `x_1`, `x_2`
-/// 
+///
 /// "Handbook of Mathematical Functions" - eq. 10.2.2 (written as z * sqrt(pi/2z) I_{n+1/2}(z))
 pub fn ratio_riccati_i(n: u32, x_1: f64, x_2: f64) -> f64 {
     let red_i_0 = |x| (1. - f64::exp(-2.0 * x)) / 2.0;
@@ -191,7 +191,7 @@ pub fn ratio_riccati_i(n: u32, x_1: f64, x_2: f64) -> f64 {
 
 /// Calculates ratio of the riccati modified spherical bessel function of the third kind
 /// (that is $sqrt(x) K_{n+1/2}(x)) at points `x_1`, `x_2`
-/// 
+///
 /// "Handbook of Mathematical Functions" - eq. 10.2.4 (written as z * sqrt(pi/2z) K_{n+1/2}(z))
 pub fn ratio_riccati_k(n: u32, x_1: f64, x_2: f64) -> f64 {
     let red_k_0 = |_| 1.0;
@@ -208,10 +208,10 @@ pub fn ratio_riccati_k(n: u32, x_1: f64, x_2: f64) -> f64 {
 /// "Handbook of Mathematical Functions" - eq. 10.1.19
 fn bessel_recurrence(n: u32, x: f64, f_0: f64, f_1: f64) -> f64 {
     if n == 0 {
-        return f_0
+        return f_0;
     }
     if n == 1 {
-        return f_1
+        return f_1;
     }
 
     let mut f_k_1 = f_0;
@@ -230,10 +230,10 @@ fn bessel_recurrence(n: u32, x: f64, f_0: f64, f_1: f64) -> f64 {
 /// "Handbook of Mathematical Functions" - eq. 10.2.18
 fn modified_bessel_recurrence(n: u32, x: f64, f_0: f64, f_1: f64) -> f64 {
     if n == 0 {
-        return f_0
+        return f_0;
     }
     if n == 1 {
-        return f_1
+        return f_1;
     }
 
     let mut f_k_1 = f_0;
@@ -323,9 +323,9 @@ macro_rules! cached_mel {
 
 #[macro_export]
 /// Asserts relative error |x - y| < x * err
-/// 
+///
 /// # Syntax
-/// 
+///
 /// - `assert_approx_eq!(x, y, err)`
 macro_rules! assert_approx_eq {
     ($x:expr, $y:expr, $err:expr) => {
@@ -392,13 +392,13 @@ mod test {
     fn test_bessel() {
         assert_approx_eq!(riccati_j(5, 10.0), -0.555345, 1e-5);
         assert_approx_eq!(riccati_j(10, 10.0), 0.646052, 1e-5);
-        
+
         assert_approx_eq!(riccati_n(5, 10.0), -0.938335, 1e-5);
         assert_approx_eq!(riccati_n(10, 10.0), 1.72454, 1e-5);
 
         assert_approx_eq!(ratio_riccati_i(5, 5.0, 10.0), 0.00157309, 1e-5);
         assert_approx_eq!(ratio_riccati_i(10, 5.0, 10.0), 0.00011066, 1e-5);
-        
+
         assert_approx_eq!(ratio_riccati_k(5, 5.0, 10.0), 487.227, 1e-5);
         assert_approx_eq!(ratio_riccati_k(10, 5.0, 10.0), 5633.13, 1e-5);
     }

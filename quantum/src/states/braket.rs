@@ -18,7 +18,9 @@ impl<T: PartialEq, V: PartialEq> StateBraket<T, V> {
     }
 }
 
-pub fn kron_delta<T: PartialEq, V: PartialEq, const N: usize>(brakets: [StateBraket<T, V>; N]) -> f64 {
+pub fn kron_delta<T: PartialEq, V: PartialEq, const N: usize>(
+    brakets: [StateBraket<T, V>; N],
+) -> f64 {
     if brakets.iter().all(|x| x.is_diagonal()) {
         1.0
     } else {
