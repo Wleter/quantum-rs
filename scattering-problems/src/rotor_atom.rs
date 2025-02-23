@@ -29,7 +29,7 @@ where
         }
     }
 
-    pub fn build(self, particles: &Particles) -> ScatteringProblem<impl MatPotential, RotorAtomBasisDescription> {
+    pub fn build(self, particles: &Particles) -> ScatteringProblem<impl MatPotential + use<P>, RotorAtomBasisDescription> {
         // todo! possibly change to rotor particle having RotConst
         let rot_const = particles.get::<RotConst>()
             .expect("Did not find RotConst parameter in the particles").0;

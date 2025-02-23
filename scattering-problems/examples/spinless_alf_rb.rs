@@ -276,7 +276,7 @@ impl Problems {
     }
 }
 
-fn get_potentials(pot_array: &PotentialArray, particles: &Particles) -> ScatteringProblem<impl MatPotential, RotorAtomBasisDescription> {
+fn get_potentials(pot_array: &PotentialArray, particles: &Particles) -> ScatteringProblem<impl MatPotential + use<>, RotorAtomBasisDescription> {
     let interp_potentials = interpolate_potentials(pot_array, 3);
     
     let mut potentials_far = Vec::new();

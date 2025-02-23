@@ -54,7 +54,7 @@ where
             .variants
             .iter()
             .enumerate()
-            .find(|(_, &x)| discriminant(&x) == discriminant(&s)) // variants are distinct by creation in States
+            .find(|&(_, &x)| discriminant(&x) == discriminant(&s)) // variants are distinct by creation in States
             .map_or_else(|| panic!("action state not found in elements"), |x| x.0)
     });
 
@@ -116,7 +116,7 @@ where
             .variants
             .iter()
             .enumerate()
-            .find(|(_, &x)| discriminant(&x) == discriminant(&s)) // variants are distinct by creation in States
+            .find(|&(_, &x)| discriminant(&x) == discriminant(&s)) // variants are distinct by creation in States
             .map_or_else(|| panic!("action state not found in elements"), |x| x.0)
     });
 

@@ -452,7 +452,7 @@ fn get_particles(energy: Energy<impl Unit>) -> Particles {
     particles
 }
 
-fn get_problem(config_triplet: usize, config_singlet: usize, projection: HalfI32, particles: &Particles) -> AlkaliRotorAtomProblem<impl SimplePotential + Clone, impl SimplePotential + Clone> {
+fn get_problem(config_triplet: usize, config_singlet: usize, projection: HalfI32, particles: &Particles) -> AlkaliRotorAtomProblem<impl SimplePotential + Clone + use<>, impl SimplePotential + Clone + use<>> {
     let hifi_caf = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(1/2))
         .with_hyperfine_coupling(Energy(120., MHz).to_au());
 
@@ -486,7 +486,7 @@ fn get_particles_uncoupled(energy: Energy<impl Unit>) -> Particles {
     particles
 }
 
-fn get_problem_uncoupled(config_triplet: usize, config_singlet: usize, projection: HalfI32, particles: &Particles) -> UncoupledAlkaliRotorAtomProblem<impl SimplePotential + Clone, impl SimplePotential + Clone> {
+fn get_problem_uncoupled(config_triplet: usize, config_singlet: usize, projection: HalfI32, particles: &Particles) -> UncoupledAlkaliRotorAtomProblem<impl SimplePotential + Clone + use<>, impl SimplePotential + Clone + use<>> {
     let hifi_caf = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(1/2))
         .with_hyperfine_coupling(Energy(120., MHz).to_au());
 

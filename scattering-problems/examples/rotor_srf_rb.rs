@@ -812,7 +812,7 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
     [singlets, triplets]
 }
 
-fn get_interpolated(pot_array: &PotentialArray) -> Vec<(u32, impl SimplePotential + Clone)> {
+fn get_interpolated(pot_array: &PotentialArray) -> Vec<(u32, impl SimplePotential + Clone + use<>)> {
     let interp_potentials = interpolate_potentials(pot_array, 3);
     
     let mut potentials_far = Vec::new();
