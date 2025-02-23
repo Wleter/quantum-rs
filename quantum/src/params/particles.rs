@@ -8,6 +8,7 @@ use crate::{
 use super::particle::Particle;
 
 /// Struct to hold information about a particle composition.
+#[derive(Clone)]
 pub struct Particles {
     particles: Vec<Particle>,
     pub params: Params,

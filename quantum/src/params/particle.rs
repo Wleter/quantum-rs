@@ -7,7 +7,7 @@ use crate::{
 
 /// Struct to hold information about a particle.
 /// To create a predefined particle use [`crate::particle_factory`].
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Particle {
     name: String,
     pub params: Params,
@@ -54,7 +54,7 @@ mod tests {
         },
     };
 
-    #[derive(Clone,Copy)]
+    #[derive(Clone, Copy)]
     struct Parameter(u32);
 
     #[test]

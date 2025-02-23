@@ -224,7 +224,7 @@ macro_rules! make_cache {
 /// ## General Arguments
 /// - `$cache_name`: Name of the used cache.
 /// - `$func(arg)`: Function outputs to be cached with `arg` keys.
-/// or - `|[$($arg:ident),*]| $body:block`: Closure to be cached 
+///     or - `|[$($arg:ident),*]| $body:block`: Closure to be cached 
 ///
 /// # Matched Arms
 ///

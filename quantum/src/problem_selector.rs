@@ -17,8 +17,8 @@ pub trait ProblemSelector {
     /// Vector of all available problems to choose
     fn list() -> Vec<&'static str>;
 
-    /// Given a problem number, run the problem using switch statement.
-    /// Problem can be the [`select(args)`] function of other [ProblemSelector]
+    /// Given a problem number, run the problem from the list of problems.
+    /// Problem can be [`select(args)`] function of other [ProblemSelector]
     fn methods(number: &str, args: &mut VecDeque<String>);
 
     /// Select a problem to run preselected or from user input
@@ -85,12 +85,15 @@ macro_rules! problems_impl {
                 vec![$($problem_type),*]
             }
 
+            // todo! can be done better
             #[allow(unused_assignments)]
-            fn methods(number: &str, args: &mut std::collections::VecDeque<String>) {   // todo! can be done better
+            fn methods(number: &str, args: &mut std::collections::VecDeque<String>) {
+                let name_list = Self::list();
+
                 let mut i: i32 = 0;
                 $(
                     if &i.to_string() == number {
-                        println!("Chose problem: {}", Self::list()[i as usize]);
+                        println!("Chose problem: {}", name_list[i as usize]);
                         $method(args);
                         return;
                     }
