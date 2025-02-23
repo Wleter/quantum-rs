@@ -371,11 +371,11 @@ impl Problems {
 
     fn scattering_scaled() {
         let n_max = 5;
-        // let singlet_scaling = 1.0174797334102;  // #1 a_0 = -50 Angstrom,
+        let singlet_scaling = 1.0174797334102;  // #1 a_0 = -50 Angstrom,
         let triplet_scaling = 0.9587806804328;  // #1 a_0 = 0,
 
         // let n_max = 5;
-        let singlet_scaling = 1.0349451752971;   // #2 a_0 = -50 Angstrom,
+        // let singlet_scaling = 1.0349451752971;   // #2 a_0 = -50 Angstrom,
         // let triplet_scaling = 1.0657638160382;   // #2 a_0 = 0,
 
         // let n_max = 0;
@@ -464,8 +464,8 @@ fn get_particles(energy: Energy<impl EnergyUnit>) -> Particles {
     let mass = 47.9376046914861;
     particles.insert(Mass(mass, Dalton).to(Au));
 
-    particles.insert(RotorLMax(40));
-    particles.insert(RotorJMax(40));
+    particles.insert(RotorLMax(10));
+    particles.insert(RotorJMax(10));
     particles.insert(RotorJTotMax(0));
     particles.insert(RotConst(Energy(0.24975935, CmInv).to_au()));
     particles.insert(GammaSpinRot(Energy(2.4974e-3, CmInv).to_au()));

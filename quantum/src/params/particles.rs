@@ -15,7 +15,7 @@ use super::particle::Particle;
 #[derive(Clone)]
 pub struct Particles {
     particles: Vec<Particle>,
-    pub params: Params,
+    params: Params,
 }
 
 impl Particles {

@@ -1,5 +1,5 @@
 use faer::{linalg::matmul::matmul, prelude::{c64, SolverCore}, unzipped, zipped, Mat, MatMut};
-use quantum::{params::particles::Particles, units::{energy_units::Energy, mass_units::Mass, Au}, utility::{asymptotic_bessel_j, asymptotic_bessel_n, bessel_j_ratio, bessel_n_ratio}};
+use quantum::{params::particles::Particles, units::{energy_units::Energy, mass_units::Mass, Au}, utility::{ratio_riccati_i, ratio_riccati_k, riccati_j, riccati_n}};
 use crate::{boundary::{Asymptotic, Boundary}, numerovs::{numerov_modifier::{PropagatorModifier, SampleConfig, WaveStorage}, propagator::{MultiStep, MultiStepRule, Numerov, NumerovResult, PropagatorData, StepAction, StepRule}}, observables::s_matrix::SMatrix, potentials::{dispersion_potential::Dispersion, potential::{MatPotential, SimplePotential}}, utility::inverse_inplace};
 
 use core::f64;
@@ -35,6 +35,7 @@ where
     pub(super) mass: f64,
     pub(super) energy: f64,
 
+    // todo! we assume diagonality of the asymptotic potential
     pub(super) asymptotic: &'a Asymptotic,
     pub(super) centrifugal_prop: Dispersion,
 
@@ -74,20 +75,14 @@ where
         let r_prev_last = self.r - self.dr;
         let wave_ratio = self.psi1.as_ref();
 
-        let mut asymptotic = Mat::zeros(size, size);
-        self.potential.value_inplace(r_last, &mut asymptotic);
-
-        // todo! we assume diagonality of the asymptotic potential
+        // todo! check if it is better to include centrifugal barrier or not
+        let asymptotic = &self.asymptotic.channel_energies;
 
         let is_open_channel = asymptotic
-            .diagonal()
-            .column_vector()
             .iter()
             .map(|&val| val < self.energy)
             .collect::<Vec<bool>>();
         let momenta: Vec<f64> = asymptotic
-            .diagonal()
-            .column_vector()
             .iter()
             .map(|&val| (2.0 * self.mass * (self.energy - val).abs()).sqrt())
             .collect();
@@ -101,14 +96,14 @@ where
             let momentum = momenta[i];
             let l = self.asymptotic.centrifugal[i].0;
             if is_open_channel[i] {
-                j_last[(i, i)] = asymptotic_bessel_j(momentum * r_last, l) / momentum.sqrt();
-                j_prev_last[(i, i)] = asymptotic_bessel_j(momentum * r_prev_last, l) / momentum.sqrt();
-                n_last[(i, i)] = asymptotic_bessel_n(momentum * r_last, l) / momentum.sqrt();
-                n_prev_last[(i, i)] = asymptotic_bessel_n(momentum * r_prev_last, l) / momentum.sqrt();
+                j_last[(i, i)] = riccati_j(l, momentum * r_last) / momentum.sqrt();
+                j_prev_last[(i, i)] = riccati_j(l, momentum * r_prev_last) / momentum.sqrt();
+                n_last[(i, i)] = riccati_n(l, momentum * r_last) / momentum.sqrt();
+                n_prev_last[(i, i)] = riccati_n(l, momentum * r_prev_last) / momentum.sqrt();
             } else {
-                j_last[(i, i)] = bessel_j_ratio(momentum * r_last, momentum * r_prev_last);
+                j_last[(i, i)] = ratio_riccati_i(l, momentum * r_last, momentum * r_prev_last);
                 j_prev_last[(i, i)] = 1.0;
-                n_last[(i, i)] = bessel_n_ratio(momentum * r_last, momentum * r_prev_last);
+                n_last[(i, i)] = ratio_riccati_k(l, momentum * r_last, momentum * r_prev_last);
                 n_prev_last[(i, i)] = 1.0;
             }
         }

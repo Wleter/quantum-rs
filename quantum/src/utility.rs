@@ -1,25 +1,6 @@
-use std::{cmp::Ordering, f64::consts::FRAC_PI_2};
+use std::cmp::Ordering;
 
-use crate::units::{energy_units::{Energy, EnergyUnit}, Au};
-
-// todo! calculate bessel functions explicitly
-
-pub fn asymptotic_bessel_j(x: f64, l: u32) -> f64 {
-    (x - FRAC_PI_2 * (l as f64)).sin()
-}
-
-pub fn asymptotic_bessel_n(x: f64, l: u32) -> f64 {
-    (x - FRAC_PI_2 * (l as f64)).cos()
-}
-
-pub fn bessel_j_ratio(x1: f64, x2: f64) -> f64 {
-    (x1 - x2).exp() * (1.0 - (-2.0 * x1).exp()) / (1.0 - (-2.0 * x2).exp())
-}
-
-pub fn bessel_n_ratio(x1: f64, x2: f64) -> f64 {
-    (x2 - x1).exp()
-}
-
+/// Creates evenly spaced grid of points [start, end] (including) with n points.
 pub fn linspace(start: f64, end: f64, n: usize) -> Vec<f64> {
     if n == 1 {
         return vec![start];
@@ -35,6 +16,7 @@ pub fn linspace(start: f64, end: f64, n: usize) -> Vec<f64> {
     result
 }
 
+/// Creates logarithmically spaced grid of points [start, end] (including) with n points.
 pub fn logspace(start: f64, end: f64, n: usize) -> Vec<f64> {
     if n == 1 {
         return vec![start];
@@ -50,16 +32,6 @@ pub fn logspace(start: f64, end: f64, n: usize) -> Vec<f64> {
     result
 }
 
-pub fn unit_linspace<U: EnergyUnit>(start: Energy<U>, end: Energy<U>, n: usize) -> Vec<Energy<U>> {
-    let start_au = start.to_au();
-    let end_au = end.to_au();
-
-    linspace(start_au, end_au, n)
-        .into_iter()
-        .map(|x| Energy(x, Au).to(start.unit()))
-        .collect()
-}
-
 /// Returns the legendre polynomials up to order `j` at `x`.
 pub fn legendre_polynomials(j: u32, x: f64) -> Vec<f64> {
     let j = j as usize;
@@ -69,17 +41,18 @@ pub fn legendre_polynomials(j: u32, x: f64) -> Vec<f64> {
     p[1] = x;
 
     for i in 2..=j {
-        p[i] = ((2 * i - 1) as f64 / i as f64) * x * p[i - 1] - ((i - 1) as f64 / i as f64) * p[i - 2];
+        p[i] = ((2 * i - 1) as f64 / i as f64) * x * p[i - 1] 
+            - ((i - 1) as f64 / i as f64) * p[i - 2];
     }
 
     p
 }
 
-/// Returns the associated legendre polynomials up to `j` at `x`.
+/// Returns the associated legendre polynomials up to order `j` at `x`.
 pub fn associated_legendre_polynomials(j: u32, m: i32, x: f64) -> Vec<f64> {
     let m_u = m.unsigned_abs();
     if m == 0 {
-        return legendre_polynomials(j, x)
+        return legendre_polynomials(j, x);
     }
 
     let j = j as usize;
@@ -87,19 +60,22 @@ pub fn associated_legendre_polynomials(j: u32, m: i32, x: f64) -> Vec<f64> {
 
     let mut p = vec![0.0; j + 1];
 
-    p[m_u] = (-1.0f64).powi(m) * double_factorial(2 * m_u as u32 - 1) * (1. - x * x).powf(m_u as f64 / 2.0);
+    p[m_u] = (-1.0f64).powi(m)
+        * double_factorial(2 * m_u as u32 - 1)
+        * (1. - x * x).powf(m_u as f64 / 2.0);
 
     if m < 0 {
         p[m_u] *= negate_m(m_u as u32, m_u as i32);
-        p[m_u+1] = x * p[m_u]
+        p[m_u + 1] = x * p[m_u]
     } else {
-        p[m_u+1] = x * (2. * m_u as f64 + 1.) * p[m_u]
+        p[m_u + 1] = x * (2. * m_u as f64 + 1.) * p[m_u]
     }
 
-    for i in m_u+2..=j {
+    for i in m_u + 2..=j {
         let l = i - 1;
-        
-        p[i] = (((2 * l + 1) as f64) * x * p[i - 1] - (l as f64 + m as f64) * p[i - 2]) / (l as f64 - m as f64 + 1.);
+
+        p[i] = (((2 * l + 1) as f64) * x * p[i - 1] 
+            - (l as f64 + m as f64) * p[i - 2]) / (l as f64 - m as f64 + 1.);
     }
 
     p
@@ -112,7 +88,7 @@ pub fn double_factorial(n: u32) -> f64 {
     }
 
     let mut value = n as f64;
-    for k in (2..n-1).rev().step_by(2) {
+    for k in (2..n - 1).rev().step_by(2) {
         value *= k as f64
     }
 
@@ -127,25 +103,25 @@ fn negate_m(l: u32, m: i32) -> f64 {
             let mut value = (-1.0f64).powi(m);
             let min = l as i32 - m;
             let max = l as i32 + m;
-    
+
             for k in min..max {
                 value /= k as f64 + 1.
             }
-    
+
             value
-        },
+        }
         Ordering::Less => {
             let mut value = (-1.0f64).powi(m);
             let min = l as i32 + m;
             let max = l as i32 - m;
-    
+
             for k in min..max {
                 value *= k as f64 + 1.
             }
-    
+
             value
-        },
-        Ordering::Equal => 1.0
+        }
+        Ordering::Equal => 1.0,
     }
 }
 
@@ -157,36 +133,124 @@ pub fn normalization(l: u32, m: i32) -> f64 {
             let mut value = 1.0;
             let min = l as i32 - m;
             let max = l as i32 + m;
-    
+
             for k in min..max {
                 value /= k as f64 + 1.;
-                if value.is_nan() || value < 0.{
+                if value.is_nan() || value < 0. {
                     println!("{} {} {}", l, m, k)
                 }
             }
-    
+
             value
-        },
+        }
         Ordering::Less => {
             let mut value = 1.0;
             let min = l as i32 + m;
             let max = l as i32 - m;
-    
+
             for k in min..max {
                 value *= k as f64 + 1.
             }
-    
+
             value
-        },
-        Ordering::Equal => 1.0
+        }
+        Ordering::Equal => 1.0,
     };
 
     (norm2 * (l as f64 + 0.5)).sqrt()
 }
 
+/// Calculates riccati bessel function of the first kind j_n(x)
+/// 
+/// "Handbook of Mathematical Functions" - eq. 10.3.2 (written as z j_n(z))
+pub fn riccati_j(n: u32, x: f64) -> f64 {
+    bessel_recurrence(n, x, f64::sin(x), f64::sin(x) / x - f64::cos(x))
+}
+
+/// Calculates riccati bessel function of the third kind n_n(x) = -y_n(x)
+/// 
+/// "Handbook of Mathematical Functions" - eq. 10.3.2 (written as -z y_n(z))
+pub fn riccati_n(n: u32, x: f64) -> f64 {
+    bessel_recurrence(n, x, f64::cos(x), f64::cos(x) / x + f64::sin(x))
+}
+
+/// Calculates ratio of the riccati modified spherical bessel function of the first kind
+/// (that is $sqrt(x) I_{n+1/2}(x)) at points `x_1`, `x_2`
+/// 
+/// "Handbook of Mathematical Functions" - eq. 10.2.2 (written as z * sqrt(pi/2z) I_{n+1/2}(z))
+pub fn ratio_riccati_i(n: u32, x_1: f64, x_2: f64) -> f64 {
+    let red_i_0 = |x| (1. - f64::exp(-2.0 * x)) / 2.0;
+    let red_i_1 = |x| -(1. - f64::exp(-2.0 * x)) / (2.0 * x) + (1. + f64::exp(-2.0 * x)) / 2.0;
+
+    // Calculates riccati I bessel without leading exponent
+    let i_1 = modified_bessel_recurrence(n, x_1, red_i_0(x_1), red_i_1(x_1));
+    let i_2 = modified_bessel_recurrence(n, x_2, red_i_0(x_2), red_i_1(x_2));
+
+    f64::exp(x_1 - x_2) * i_1 / i_2
+}
+
+/// Calculates ratio of the riccati modified spherical bessel function of the third kind
+/// (that is $sqrt(x) K_{n+1/2}(x)) at points `x_1`, `x_2`
+/// 
+/// "Handbook of Mathematical Functions" - eq. 10.2.4 (written as z * sqrt(pi/2z) K_{n+1/2}(z))
+pub fn ratio_riccati_k(n: u32, x_1: f64, x_2: f64) -> f64 {
+    let red_k_0 = |_| 1.0;
+    let red_k_1 = |x| (1.0 + 1.0 / x);
+
+    // Calculates riccati $(-1)^(n+1) * K$ bessel without leading exponent
+    let k_1 = modified_bessel_recurrence(n, x_1, -red_k_0(x_1), red_k_1(x_1));
+    let k_2 = modified_bessel_recurrence(n, x_2, -red_k_0(x_2), red_k_1(x_2));
+
+    f64::exp(x_2 - x_1) * k_1 / k_2
+}
+
+/// Calculated f_{n+1}(x) given n, x, f_n(x), f_{n-1}(x)
+/// "Handbook of Mathematical Functions" - eq. 10.1.19
+fn bessel_recurrence(n: u32, x: f64, f_0: f64, f_1: f64) -> f64 {
+    if n == 0 {
+        return f_0
+    }
+    if n == 1 {
+        return f_1
+    }
+
+    let mut f_k_1 = f_0;
+    let mut f_k = f_1;
+    let mut f_new;
+    for k in 1..n {
+        f_new = (2 * k + 1) as f64 / x * f_k - f_k_1;
+        f_k_1 = f_k;
+        f_k = f_new;
+    }
+
+    f_k
+}
+
+/// Calculated f_{n+1}(x) given n, x, f_n(x), f_{n-1}(x).
+/// "Handbook of Mathematical Functions" - eq. 10.2.18
+fn modified_bessel_recurrence(n: u32, x: f64, f_0: f64, f_1: f64) -> f64 {
+    if n == 0 {
+        return f_0
+    }
+    if n == 1 {
+        return f_1
+    }
+
+    let mut f_k_1 = f_0;
+    let mut f_k = f_1;
+    let mut f_new;
+    for k in 1..n {
+        f_new = f_k_1 - (2 * k + 1) as f64 / x * f_k;
+        f_k_1 = f_k;
+        f_k = f_new;
+    }
+
+    f_k
+}
+
 /// Macro for crating cache with given name `$cache_name:ident` around the expression
 /// It is used together with `cached_mel!` macro to cache subsequent calculations of the operator creation.
-/// 
+///
 /// # Syntax
 ///
 /// - `make_cache!($cache_name:ident, $body:expr)`
@@ -213,7 +277,7 @@ macro_rules! make_cache {
 }
 
 /// Macro for caching and retrieving matrix elements.
-/// 
+///
 /// # Syntax
 ///
 /// - `cached_mel!($cache_name:ident, $func:ident($($arg:expr),*))`
@@ -224,7 +288,7 @@ macro_rules! make_cache {
 /// ## General Arguments
 /// - `$cache_name`: Name of the used cache.
 /// - `$func(arg)`: Function outputs to be cached with `arg` keys.
-///     or - `|[$($arg:ident),*]| $body:block`: Closure to be cached 
+///     or - `|[$($arg:ident),*]| $body:block`: Closure to be cached
 ///
 /// # Matched Arms
 ///
@@ -249,7 +313,7 @@ macro_rules! cached_mel {
             if let Some(result) = $cache_name.get(&($($arg),*)) {
                 return *result;
             }
-    
+
             let result = $body;
             $cache_name.insert(($($arg),*), result);
             result
@@ -257,23 +321,47 @@ macro_rules! cached_mel {
     };
 }
 
+#[macro_export]
+/// Asserts relative error |x - y| < x * err
+/// 
+/// # Syntax
+/// 
+/// - `assert_approx_eq!(x, y, err)`
+macro_rules! assert_approx_eq {
+    ($x:expr, $y:expr, $err:expr) => {
+        if ($x - $y).abs() >= $x.abs() * $err {
+            panic!("assertion failed\nleft side: {}\nright side: {}", $x, $y)
+        }
+    };
+}
+
 #[cfg(test)]
 mod test {
-    use std::{thread::sleep, time::{Duration, Instant}};
+    use std::{
+        thread::sleep,
+        time::{Duration, Instant},
+    };
+
+    use crate::utility::{ratio_riccati_i, ratio_riccati_k, riccati_n};
+
+    use super::riccati_j;
 
     fn long_computation<const N: usize>(a: [usize; N]) -> [usize; N] {
         sleep(Duration::from_millis(500));
         a
     }
 
-    fn print_computations<const N: usize>(a: Vec<[usize; N]>, mut f: impl FnMut([usize; N]) -> [usize; N]) -> Vec<f64> {
+    fn print_computations<const N: usize>(
+        a: Vec<[usize; N]>,
+        mut f: impl FnMut([usize; N]) -> [usize; N],
+    ) -> Vec<f64> {
         a.iter()
             .map(|&a| {
                 let start = Instant::now();
                 let a = f(a);
                 let end = start.elapsed();
                 println!("result {:?} time: {}", a, end.as_secs_f64());
-                
+
                 end.as_secs_f64()
             })
             .collect()
@@ -282,19 +370,18 @@ mod test {
     #[test]
     fn test_caching() {
         let values = vec![[3], [3], [4]];
-        let durations = make_cache!(cache, print_computations(values, |a| {
-            cached_mel!(cache, long_computation(a))
-        }));
+        let durations = make_cache!(
+            cache,
+            print_computations(values, |a| { cached_mel!(cache, long_computation(a)) })
+        );
         assert!(durations[0] >= 0.5);
         assert!(durations[1] < 0.5);
         assert!(durations[2] >= 0.5);
 
         let values = vec![[3], [3], [4]];
         let durations = make_cache!(
-            cache, 
-            print_computations(values, cached_mel!(cache, |[a]| {
-                long_computation([a])
-            }))
+            cache,
+            print_computations(values, cached_mel!(cache, |[a]| { long_computation([a]) }))
         );
         assert!(durations[0] >= 0.5);
         assert!(durations[1] < 0.5);
@@ -303,6 +390,16 @@ mod test {
 
     #[test]
     fn test_bessel() {
+        assert_approx_eq!(riccati_j(5, 10.0), -0.555345, 1e-5);
+        assert_approx_eq!(riccati_j(10, 10.0), 0.646052, 1e-5);
         
+        assert_approx_eq!(riccati_n(5, 10.0), -0.938335, 1e-5);
+        assert_approx_eq!(riccati_n(10, 10.0), 1.72454, 1e-5);
+
+        assert_approx_eq!(ratio_riccati_i(5, 5.0, 10.0), 0.00157309, 1e-5);
+        assert_approx_eq!(ratio_riccati_i(10, 5.0, 10.0), 0.00011066, 1e-5);
+        
+        assert_approx_eq!(ratio_riccati_k(5, 5.0, 10.0), 487.227, 1e-5);
+        assert_approx_eq!(ratio_riccati_k(10, 5.0, 10.0), 5633.13, 1e-5);
     }
 }

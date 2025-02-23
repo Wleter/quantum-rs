@@ -1,7 +1,7 @@
 use std::f64::consts::PI;
 
 use num::complex::Complex64;
-use quantum::{params::particles::Particles, units::{energy_units::Energy, mass_units::Mass, Au}, utility::{asymptotic_bessel_j, asymptotic_bessel_n}};
+use quantum::{params::particles::Particles, units::{energy_units::Energy, mass_units::Mass, Au}, utility::{riccati_j, riccati_n}};
 
 use crate::{boundary::Boundary, observables::s_matrix::SingleSMatrix, potentials::{dispersion_potential::Dispersion, potential::SimplePotential, potential_factory::create_centrifugal}, utility::AngMomentum};
 
@@ -129,10 +129,10 @@ where
             return Err("closed channel".to_string())
         }
 
-        let j_last = asymptotic_bessel_j(momentum * r_last, self.l.0);
-        let j_prev_last = asymptotic_bessel_j(momentum * r_prev_last, self.l.0);
-        let n_last = asymptotic_bessel_n(momentum * r_last, self.l.0);
-        let n_prev_last = asymptotic_bessel_n(momentum * r_prev_last, self.l.0);
+        let j_last = riccati_j(self.l.0, momentum * r_last) / momentum.sqrt();
+        let j_prev_last = riccati_j(self.l.0, momentum * r_prev_last) / momentum.sqrt();
+        let n_last = riccati_n(self.l.0, momentum * r_last) / momentum.sqrt();
+        let n_prev_last = riccati_n(self.l.0, momentum * r_prev_last) / momentum.sqrt();
 
         let k_matrix = -(wave_ratio * j_prev_last - j_last) / (wave_ratio * n_prev_last - n_last);
 

@@ -309,8 +309,8 @@ mod test {
             SpinRotor::RotorS, SpinRotor::RotorI, 1.).into_backed();
         println!("{aniso_hifi_op:.2?}");
 
-        assert_ulps_eq!(aniso_hifi_op[(0, 0)], -1. / 30.);
-        assert_ulps_eq!(aniso_hifi_op[(0, 3)], -1. / 30.);
-        assert_ulps_eq!(aniso_hifi_op[(2, basis.len() - 1)], -1. / f64::sqrt(800.));
+        assert_ulps_eq!(aniso_hifi_op[(0, 0)], 1. / 30.);
+        assert_ulps_eq!(aniso_hifi_op[(0, 3)], 1. / 30.);
+        assert_ulps_eq!(aniso_hifi_op[(2, basis.len() - 1)], 1. / f64::sqrt(800.));
     }
 }
