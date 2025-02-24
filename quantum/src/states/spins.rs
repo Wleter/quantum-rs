@@ -102,7 +102,7 @@ impl SpinOperators {
 #[cfg(test)]
 #[cfg(feature = "faer")]
 mod test {
-    use clebsch_gordan::{half_integer::HalfU32, half_u32};
+    use clebsch_gordan::{half_integer::HalfU32, hu32};
     use faer::{assert_matrix_eq, mat, Mat};
 
     use crate::{
@@ -126,19 +126,19 @@ mod test {
         let mut state = States::default();
         state
             .push_state(StateType::Irreducible(State::new(
-                StateSep::Spin1(half_u32!(1 / 2)),
-                spin_projections(half_u32!(1 / 2)),
+                StateSep::Spin1(hu32!(1 / 2)),
+                spin_projections(hu32!(1 / 2)),
             )))
             .push_state(StateType::Irreducible(State::new(
-                StateSep::Spin2(half_u32!(1 / 2)),
-                spin_projections(half_u32!(1 / 2)),
+                StateSep::Spin2(hu32!(1 / 2)),
+                spin_projections(hu32!(1 / 2)),
             )));
 
         let basis = state.get_basis();
 
         let op = Operator::<Mat<f64>>::from_mel(
             &basis,
-            [StateSep::Spin1(half_u32!(0)), StateSep::Spin2(half_u32!(0))],
+            [StateSep::Spin1(hu32!(0)), StateSep::Spin2(hu32!(0))],
             |[s1_braket, s2_braket]| {
                 let s1_bra = cast_variant!(s1_braket.bra.0, StateSep::Spin1);
                 let s1_bra = Spin::new(s1_bra, s1_braket.bra.1);
@@ -165,8 +165,8 @@ mod test {
         assert_matrix_eq!(*op, expected);
 
         let mut combined = States::default();
-        let singlet = State::new(half_u32!(0), spin_projections(half_u32!(0)));
-        let triplet = State::new(half_u32!(1), spin_projections(half_u32!(1)));
+        let singlet = State::new(hu32!(0), spin_projections(hu32!(0)));
+        let triplet = State::new(hu32!(1), spin_projections(hu32!(1)));
         combined.push_state(StateType::Sum(vec![singlet, triplet]));
         let basis_comb = combined.get_basis();
 

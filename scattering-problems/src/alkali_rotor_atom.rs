@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
 use abm::{get_hifi, get_zeeman_prop, utility::diagonalize, DoubleHifiProblemBuilder, Symmetry};
-use clebsch_gordan::{half_i32, half_integer::{HalfI32, HalfU32}, half_u32};
+use clebsch_gordan::{hi32, half_integer::{HalfI32, HalfU32}, hu32};
 use faer::Mat;
 use quantum::{cast_variant, params::{particle_factory::RotConst, particles::Particles}, states::{operator::Operator, spins::spin_projections, state::State, state_type::StateType, States, StatesBasis}};
 use scattering_solver::{boundary::Asymptotic, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, masked_potential::MaskedPotential, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{MatPotential, SimplePotential}}, utility::AngMomentum};
@@ -43,9 +43,9 @@ where
     V: SimplePotential
 {
     pub fn new(hifi_problem: DoubleHifiProblemBuilder, triplet: Vec<(u32, P)>, singlet: Vec<(u32, V)>) -> Self {
-        assert!(hifi_problem.first.s == half_u32!(1/2));
-        assert!(hifi_problem.second.s == half_u32!(1/2)
-            || hifi_problem.second.s == half_u32!(0));
+        assert!(hifi_problem.first.s == hu32!(1/2));
+        assert!(hifi_problem.second.s == hu32!(1/2)
+            || hifi_problem.second.s == hu32!(0));
         assert!(matches!(hifi_problem.symmetry, Symmetry::None));
 
         Self {

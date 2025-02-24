@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use abm::{DoubleHifiProblemBuilder, HifiProblemBuilder, Symmetry};
-use clebsch_gordan::{half_i32, half_integer::HalfI32, half_u32};
+use clebsch_gordan::{hi32, half_integer::HalfI32, hu32};
 use faer::Mat;
 use hhmmss::Hhmmss;
 use indicatif::{ParallelProgressIterator, ProgressIterator};
@@ -25,7 +25,7 @@ problems_impl!(Problems, "Li2 Feshbach",
 
 impl Problems {
     fn get_potential(projection: HalfI32, mag_field: f64) -> ScatteringProblem<impl MatPotential, IndexBasisDescription> {
-        let first = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(1))
+        let first = HifiProblemBuilder::new(hu32!(1/2), hu32!(1))
             .with_hyperfine_coupling(Energy(228.2 / 1.5, MHz).to_au());
 
         let hifi_problem = DoubleHifiProblemBuilder::new_homo(first, Symmetry::Fermionic)
@@ -49,7 +49,7 @@ impl Problems {
     }
 
     fn potential_values() {
-        let alkali_problem = Self::get_potential(half_i32!(-2), 100.);
+        let alkali_problem = Self::get_potential(hi32!(-2), 100.);
         let potential = &alkali_problem.potential;
 
         let mut potential_mat = Mat::<f64>::identity(potential.size(), potential.size());
@@ -79,7 +79,7 @@ impl Problems {
     fn feshbach() {
         ///////////////////////////////////
 
-        let projection = half_i32!(0);
+        let projection = hi32!(0);
 
         let mut mag_fields = linspace(0., 620., 620);
         mag_fields.append(&mut linspace(620., 625., 500));

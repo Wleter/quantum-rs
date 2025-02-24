@@ -1,5 +1,5 @@
 use abm::{utility::save_spectrum, HifiProblemBuilder};
-use clebsch_gordan::{half_i32, half_integer::HalfI32, half_u32};
+use clebsch_gordan::{hi32, half_integer::HalfI32, hu32};
 use quantum::{params::{particle::Particle, particle_factory::RotConst}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{energy_units::{CmInv, Energy}, mass_units::{Dalton, Mass}, Au}, utility::linspace};
 use scattering_problems::{alkali_rotor::{AlkaliRotorProblem, AlkaliRotorProblemBuilder, UncoupledAlkaliRotorProblem}, utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorJTotMax, RotorLMax}};
 
@@ -18,7 +18,7 @@ problems_impl!(Problems, "YbF levels",
 
 impl Problems {
     fn levels() {
-        let projection = half_i32!(1);
+        let projection = hi32!(1);
         let yb_f = get_particle();
         let alkali_problem = get_problem(projection, &yb_f);
         println!("{}", alkali_problem.basis.len());
@@ -73,7 +73,7 @@ fn get_particle() -> Particle {
 }
 
 fn get_problem(projection: HalfI32, particle: &Particle) -> AlkaliRotorProblem {
-    let hifi_ybf = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(1/2))
+    let hifi_ybf = HifiProblemBuilder::new(hu32!(1/2), hu32!(1/2))
         .with_hyperfine_coupling(Energy(5.6794e-3, CmInv).to_au())
         .with_total_projection(projection);
 
@@ -94,7 +94,7 @@ fn get_particle_uncoupled() -> Particle {
 }
 
 fn get_problem_uncoupled(particle: &Particle) -> UncoupledAlkaliRotorProblem {
-    let hifi_ybf = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(1/2))
+    let hifi_ybf = HifiProblemBuilder::new(hu32!(1/2), hu32!(1/2))
         .with_hyperfine_coupling(Energy(5.6794e-3, CmInv).to_au());
 
     AlkaliRotorProblemBuilder::new(hifi_ybf)

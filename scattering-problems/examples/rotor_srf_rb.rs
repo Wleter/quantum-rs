@@ -1,7 +1,7 @@
 use std::{f64::consts::PI, fs::File, io::{BufRead, BufReader}, time::Instant};
 
 use abm::{DoubleHifiProblemBuilder, HifiProblemBuilder};
-use clebsch_gordan::{half_i32, half_integer::HalfI32, half_u32};
+use clebsch_gordan::{hi32, half_integer::HalfI32, hu32};
 use faer::{prelude::SpSolver, Col, Mat, Side};
 use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
@@ -79,7 +79,7 @@ impl Problems {
         let entrance = 0;
         let mag_field = 100.0;
 
-        let projection = half_i32!(1);
+        let projection = hi32!(1);
         let energy_relative = Energy(1e-7, Kelvin);
 
         ///////////////////////////////////
@@ -117,15 +117,15 @@ impl Problems {
         let entrance = 0;
         let mag_fields = linspace(0., 2000., 1000);
 
-        let projection = half_i32!(1);
+        let projection = hi32!(1);
         let energy_relative = Energy(1e-7, Kelvin);
 
         ////////////////////////////////////
 
-        let hifi_srf = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(1/2))
+        let hifi_srf = HifiProblemBuilder::new(hu32!(1/2), hu32!(1/2))
             .with_hyperfine_coupling(Energy(3.2383e-3 + 1.0096e-3 / 3., CmInv).to_au());
 
-        let hifi_rb = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(3/2))
+        let hifi_rb = HifiProblemBuilder::new(hu32!(1/2), hu32!(3/2))
             .with_hyperfine_coupling(Energy(0.113990, CmInv).to_au());
 
         let hifi_problem = DoubleHifiProblemBuilder::new(hifi_srf, hifi_rb)
@@ -177,7 +177,7 @@ impl Problems {
     fn cross_sections() {
         let entrance = 0;
 
-        let projection = half_i32!(1);
+        let projection = hi32!(1);
         let energy_relative = Energy(1e-7, Kelvin);
         let mag_fields = linspace(0., 2000., 1000);
         let atoms = get_particles(energy_relative);
@@ -382,7 +382,7 @@ impl Problems {
         // let singlet_scaling = 1.0056292421443;
         // let triplet_scaling = 1.0234326602081;
 
-        let projection = half_i32!(1);
+        let projection = hi32!(1);
         let energy_relative = Energy(1e-7, Kelvin);
         let mag_fields = linspace(0., 2000., 1000);
 
@@ -410,10 +410,10 @@ impl Problems {
         })
         .collect();
 
-        let hifi_srf = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(1/2))
+        let hifi_srf = HifiProblemBuilder::new(hu32!(1/2), hu32!(1/2))
             .with_hyperfine_coupling(Energy(3.2383e-3 + 1.0096e-3 / 3., CmInv).to_au());
 
-        let hifi_rb = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(3/2))
+        let hifi_rb = HifiProblemBuilder::new(hu32!(1/2), hu32!(3/2))
             .with_hyperfine_coupling(Energy(6.834682610904290 / 2., GHz).to_au());
 
         let hifi_problem = DoubleHifiProblemBuilder::new(hifi_srf, hifi_rb)
@@ -475,10 +475,10 @@ fn get_particles(energy: Energy<impl EnergyUnit>) -> Particles {
 }
 
 fn get_problem(projection: HalfI32, particles: &Particles) -> AlkaliRotorAtomProblem<impl SimplePotential + Clone, impl SimplePotential + Clone> {
-    let hifi_srf = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(1/2))
+    let hifi_srf = HifiProblemBuilder::new(hu32!(1/2), hu32!(1/2))
         .with_hyperfine_coupling(Energy(3.2383e-3 + 1.0096e-3 / 3., CmInv).to_au());
 
-    let hifi_rb = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(3/2))
+    let hifi_rb = HifiProblemBuilder::new(hu32!(1/2), hu32!(3/2))
         .with_hyperfine_coupling(Energy(6.834682610904290 / 2., GHz).to_au());
 
     let hifi_problem = DoubleHifiProblemBuilder::new(hifi_srf, hifi_rb)

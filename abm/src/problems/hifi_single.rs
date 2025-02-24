@@ -1,12 +1,12 @@
 use abm::{utility::save_spectrum, HifiProblemBuilder};
-use clebsch_gordan::half_u32;
+use clebsch_gordan::hu32;
 use quantum::utility::linspace;
 
 pub struct HifiSingle;
 
 impl HifiSingle {
     pub fn run() {
-        let hifi = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(1))
+        let hifi = HifiProblemBuilder::new(hu32!(1/2), hu32!(1))
             .with_custom_bohr_magneton(1e-2)
             .with_nuclear_magneton(-2e-4)
             .with_hyperfine_coupling(2.0)

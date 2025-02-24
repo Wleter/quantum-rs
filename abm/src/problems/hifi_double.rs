@@ -1,23 +1,23 @@
 use abm::{utility::save_spectrum, DoubleHifiProblemBuilder, HifiProblemBuilder};
-use clebsch_gordan::{half_i32, half_u32};
+use clebsch_gordan::{hi32, hu32};
 use quantum::utility::linspace;
 
 pub struct HifiDouble;
 
 impl HifiDouble {
     pub fn run() {
-        let first = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(1/2))
+        let first = HifiProblemBuilder::new(hu32!(1/2), hu32!(1/2))
             .with_custom_bohr_magneton(1e-2)
             .with_nuclear_magneton(-2.2e-4)
             .with_hyperfine_coupling(2.0);
 
-        let second = HifiProblemBuilder::new(half_u32!(1/2), half_u32!(3/2))
+        let second = HifiProblemBuilder::new(hu32!(1/2), hu32!(3/2))
             .with_custom_bohr_magneton(1e-2)
             .with_nuclear_magneton(-1.8e-4)
             .with_hyperfine_coupling(2.2);
 
         let hifi = DoubleHifiProblemBuilder::new(first, second)
-            .with_projection(half_i32!(0))
+            .with_projection(hi32!(0))
             .build();
 
         let mag_fields = linspace(0.0, 1000.0, 1000);

@@ -1,4 +1,4 @@
-use clebsch_gordan::{half_i32, half_integer::HalfU32, wigner_3j, wigner_6j};
+use clebsch_gordan::{hi32, half_integer::HalfU32, wigner_3j, wigner_6j};
 
 pub fn percival_coef(lambda: u32, lj_left: (HalfU32, HalfU32), lj_right: (HalfU32, HalfU32), j_tot: HalfU32) -> f64 {
     let lambda = HalfU32::from_doubled(2 * lambda);
@@ -8,10 +8,10 @@ pub fn percival_coef(lambda: u32, lj_left: (HalfU32, HalfU32), lj_right: (HalfU3
     let l_right = lj_right.0;
     let j_right = lj_right.1;
 
-    let mut wigners = wigner_3j(l_left, lambda, l_right, half_i32!(0), half_i32!(0), half_i32!(0));
+    let mut wigners = wigner_3j(l_left, lambda, l_right, hi32!(0), hi32!(0), hi32!(0));
     if wigners == 0. { return 0. }
 
-    wigners *= wigner_3j(j_left, lambda, j_right, half_i32!(0), half_i32!(0), half_i32!(0));
+    wigners *= wigner_3j(j_left, lambda, j_right, hi32!(0), hi32!(0), hi32!(0));
     if wigners == 0. { return 0. }
 
     wigners *= wigner_6j(l_left, lambda, l_right, j_right, j_tot, j_left);

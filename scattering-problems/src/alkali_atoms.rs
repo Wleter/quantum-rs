@@ -1,5 +1,5 @@
 use abm::{abm_states::HifiStates, DoubleHifiProblemBuilder};
-use clebsch_gordan::half_u32;
+use clebsch_gordan::hu32;
 use quantum::{cast_variant, states::operator::Operator};
 use scattering_solver::{boundary::Asymptotic, potentials::{dispersion_potential::Dispersion, masked_potential::MaskedPotential, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{MatPotential, Potential, SimplePotential}}, utility::AngMomentum};
 
@@ -22,8 +22,8 @@ where
     V: SimplePotential
 {
     pub fn new(hifi_problem: DoubleHifiProblemBuilder, triplet_potential: P, singlet_potential: V) -> Self {
-        assert!(hifi_problem.first.s == half_u32!(1/2));
-        assert!(hifi_problem.second.s == half_u32!(1/2));
+        assert!(hifi_problem.first.s == hu32!(1/2));
+        assert!(hifi_problem.second.s == hu32!(1/2));
 
         Self {
             hifi_problem,
@@ -38,18 +38,18 @@ where
         
         let hifi_states = hifi.states_at(magnetic_field);
 
-        let triplet_masking = Operator::from_diagonal_mel(basis, [HifiStates::ElectronSpin(half_u32!(0))], |[e]| {
+        let triplet_masking = Operator::from_diagonal_mel(basis, [HifiStates::ElectronSpin(hu32!(0))], |[e]| {
             let spin_e = cast_variant!(e.0, HifiStates::ElectronSpin);
 
-            if spin_e == half_u32!(1) { 1. } else { 0. }
+            if spin_e == hu32!(1) { 1. } else { 0. }
         });
         let triplet_masking = hifi_states.1.transpose() * triplet_masking.as_ref() * &hifi_states.1;
         let triplet_potential = MaskedPotential::new(self.triplet_potential, triplet_masking);
 
-        let singlet_masking = Operator::from_diagonal_mel(basis, [HifiStates::ElectronSpin(half_u32!(0))], |[e]| {
+        let singlet_masking = Operator::from_diagonal_mel(basis, [HifiStates::ElectronSpin(hu32!(0))], |[e]| {
             let spin_e = cast_variant!(e.0, HifiStates::ElectronSpin);
 
-            if spin_e == half_u32!(0) { 1. } else { 0. }
+            if spin_e == hu32!(0) { 1. } else { 0. }
         });
         let singlet_masking = hifi_states.1.transpose() * singlet_masking.as_ref() * &hifi_states.1;
         let singlet_potential = MaskedPotential::new(self.singlet_potential, singlet_masking);

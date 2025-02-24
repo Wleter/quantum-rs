@@ -7,7 +7,7 @@ use quantum::{
     units::{energy_units::{Energy, EnergyUnit}, Au},
 };
 use utility::diagonalize;
-use clebsch_gordan::{half_integer::{HalfI32, HalfU32}, half_u32};
+use clebsch_gordan::{half_integer::{HalfI32, HalfU32}, hu32};
 
 pub mod abm_states;
 pub mod consts;
@@ -307,7 +307,7 @@ impl ABMProblemBuilder {
 
     pub fn build(self) -> ABMHifiProblem<ABMStates, ABMStatesValues> {
         assert!(
-            self.first.s == half_u32!(1/2) && self.second.s == half_u32!(1/2),
+            self.first.s == hu32!(1/2) && self.second.s == hu32!(1/2),
             "ABM problem is done under the assumption of s = 1/2"
         );
 
@@ -461,12 +461,12 @@ impl ABMProblemBuilder {
 
         let bound_states = Operator::from_diagonal_mel(
             &basis,
-            [ABMStates::ElectronSpin(half_u32!(0)), ABMStates::Vibrational],
+            [ABMStates::ElectronSpin(hu32!(0)), ABMStates::Vibrational],
             |[s_ket, vib_ket]| {
                 let s = cast_variant!(s_ket.0, ABMStates::ElectronSpin);
                 let vib = cast_variant!(vib_ket.1, ABMStatesValues::Vib);
 
-                if s == half_u32!(1) {
+                if s == hu32!(1) {
                     abm_vibrational.triplet_state(vib)
                 } else {
                     abm_vibrational.singlet_state(vib)
@@ -477,8 +477,8 @@ impl ABMProblemBuilder {
         let fc_factors = Operator::from_mel(
             &basis,
             [
-                ABMStates::ElectronSpin(half_u32!(0)),
-                ABMStates::NuclearSpin(half_u32!(0)),
+                ABMStates::ElectronSpin(hu32!(0)),
+                ABMStates::NuclearSpin(hu32!(0)),
                 ABMStates::Vibrational,
             ],
             |[s_braket, _, vib_braket]| {
@@ -493,12 +493,12 @@ impl ABMProblemBuilder {
                     } else {
                         0.
                     }
-                } else if s_bra == half_u32!(1) {
-                    assert!(s_ket == half_u32!(0));
+                } else if s_bra == hu32!(1) {
+                    assert!(s_ket == hu32!(0));
                     abm_vibrational.fc_factor(vib_ket, vib_bra)
                 } else {
-                    assert!(s_bra == half_u32!(0));
-                    assert!(s_ket == half_u32!(1));
+                    assert!(s_bra == hu32!(0));
+                    assert!(s_ket == hu32!(1));
                     abm_vibrational.fc_factor(vib_bra, vib_ket)
                 }
             },

@@ -1,5 +1,5 @@
 use abm::{get_hifi, get_zeeman_prop, utility::diagonalize};
-use clebsch_gordan::{clebsch_gordan, half_i32, half_integer::{HalfI32, HalfU32}, half_u32, wigner_3j};
+use clebsch_gordan::{clebsch_gordan, hi32, half_integer::{HalfI32, HalfU32}, hu32, wigner_3j};
 use faer::Mat;
 use quantum::{cast_variant, params::{particle_factory::RotConst, particles::Particles}, states::{operator::Operator, spins::{spin_projections, Spin, SpinOperators}, state::State, state_type::StateType, States, StatesBasis}};
 use scattering_solver::{boundary::Asymptotic, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, masked_potential::MaskedPotential, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{MatPotential, SimplePotential}}, utility::AngMomentum};
@@ -49,7 +49,7 @@ where
 
         let angular_blocks = angular_block_basis.iter()
             .map(|(l, basis)| {
-                let j_centrifugal = Operator::from_diagonal_mel(&basis, [UncoupledSpinRotorAtom::RotorN(half_u32!(0))], |[ang]| {
+                let j_centrifugal = Operator::from_diagonal_mel(&basis, [UncoupledSpinRotorAtom::RotorN(hu32!(0))], |[ang]| {
                     let j = cast_variant!(ang.0, UncoupledSpinRotorAtom::RotorN).value();
         
                     rot_const * (j * (j + 1.))
@@ -73,7 +73,7 @@ where
                 }
 
                 let spin_rot = Operator::from_mel(&basis, 
-                    [UncoupledSpinRotorAtom::RotorN(half_u32!(0)), UncoupledSpinRotorAtom::RotorS(half_u32!(0))], 
+                    [UncoupledSpinRotorAtom::RotorN(hu32!(0)), UncoupledSpinRotorAtom::RotorS(hu32!(0))], 
                     |[n, s]| {
                         let n_braket = cast_spin_braket!(n, UncoupledSpinRotorAtom::RotorN);
                         let s_braket = cast_spin_braket!(s, UncoupledSpinRotorAtom::RotorS);
@@ -84,9 +84,9 @@ where
 
                 let aniso_hifi = Operator::from_mel(&basis, 
                     [
-                        UncoupledSpinRotorAtom::RotorN(half_u32!(0)), 
-                        UncoupledSpinRotorAtom::RotorS(half_u32!(0)), 
-                        UncoupledSpinRotorAtom::RotorI(half_u32!(0))
+                        UncoupledSpinRotorAtom::RotorN(hu32!(0)), 
+                        UncoupledSpinRotorAtom::RotorS(hu32!(0)), 
+                        UncoupledSpinRotorAtom::RotorI(hu32!(0))
                     ], 
                     |[n, s, i]| {
                         let n_braket = cast_spin_braket!(n, UncoupledSpinRotorAtom::RotorN);
@@ -98,11 +98,11 @@ where
 
                         let sign = (-1.0f64).powf(s_braket.0.s.value() - s_braket.0.ms.value() + i_braket.0.s.value() - i_braket.0.ms.value());
 
-                        let wigners = wigner_3j(n_braket.0.s, half_u32!(2), n_braket.1.s, -n_braket.0.ms, n_braket.0.ms - n_braket.1.ms, n_braket.1.ms)
-                            * wigner_3j(n_braket.0.s, half_u32!(2), n_braket.1.s, half_i32!(0), half_i32!(0), half_i32!(0))
-                            * wigner_3j(half_u32!(1), half_u32!(1), half_u32!(2), s_braket.0.ms - s_braket.1.ms, i_braket.0.ms - i_braket.1.ms, n_braket.0.ms - n_braket.1.ms)
-                            * wigner_3j(s_braket.0.s, half_u32!(1), s_braket.1.s, -s_braket.0.ms, s_braket.0.ms - s_braket.1.ms, s_braket.1.ms)
-                            * wigner_3j(i_braket.0.s, half_u32!(1), i_braket.1.s, -i_braket.0.ms, i_braket.0.ms - i_braket.1.ms, i_braket.1.ms);
+                        let wigners = wigner_3j(n_braket.0.s, hu32!(2), n_braket.1.s, -n_braket.0.ms, n_braket.0.ms - n_braket.1.ms, n_braket.1.ms)
+                            * wigner_3j(n_braket.0.s, hu32!(2), n_braket.1.s, hi32!(0), hi32!(0), hi32!(0))
+                            * wigner_3j(hu32!(1), hu32!(1), hu32!(2), s_braket.0.ms - s_braket.1.ms, i_braket.0.ms - i_braket.1.ms, n_braket.0.ms - n_braket.1.ms)
+                            * wigner_3j(s_braket.0.s, hu32!(1), s_braket.1.s, -s_braket.0.ms, s_braket.0.ms - s_braket.1.ms, s_braket.1.ms)
+                            * wigner_3j(i_braket.0.s, hu32!(1), i_braket.1.s, -i_braket.0.ms, i_braket.0.ms - i_braket.1.ms, i_braket.1.ms);
 
                         factor * sign * wigners
                     }
@@ -127,10 +127,10 @@ where
 
                 let masking_singlet = Operator::from_mel(&ordered_basis, 
                     [
-                        UncoupledSpinRotorAtom::SystemL(half_u32!(0)),
-                        UncoupledSpinRotorAtom::RotorN(half_u32!(0)),
-                        UncoupledSpinRotorAtom::RotorS(half_u32!(0)),
-                        UncoupledSpinRotorAtom::AtomS(half_u32!(0))
+                        UncoupledSpinRotorAtom::SystemL(hu32!(0)),
+                        UncoupledSpinRotorAtom::RotorN(hu32!(0)),
+                        UncoupledSpinRotorAtom::RotorS(hu32!(0)),
+                        UncoupledSpinRotorAtom::AtomS(hu32!(0))
                     ],
                     |[l, n, s, s_a]| {
                         if s.bra.0 == s.ket.0 && s_a.bra.0 == s_a.ket.0 {
@@ -142,10 +142,10 @@ where
                             let factor = ((2. * l_braket.0.s.value() + 1.) * (2. * l_braket.1.s.value() + 1.)
                                 * (2. * n_braket.0.s.value() + 1.) * (2. * n_braket.1.s.value() + 1.)).sqrt();
     
-                            let wigners = wigner_3j(l_braket.0.s, lambda_h32, l_braket.1.s, half_i32!(0), half_i32!(0), half_i32!(0))
-                                * wigner_3j(n_braket.0.s, lambda_h32, n_braket.1.s, half_i32!(0), half_i32!(0), half_i32!(0))
-                                * clebsch_gordan(s_braket.0.s, s_braket.0.ms, s_a_braket.0.s, s_a_braket.0.ms, half_u32!(0), half_i32!(0))
-                                * clebsch_gordan(s_braket.1.s, s_braket.1.ms, s_a_braket.1.s, s_a_braket.1.ms, half_u32!(0), half_i32!(0));
+                            let wigners = wigner_3j(l_braket.0.s, lambda_h32, l_braket.1.s, hi32!(0), hi32!(0), hi32!(0))
+                                * wigner_3j(n_braket.0.s, lambda_h32, n_braket.1.s, hi32!(0), hi32!(0), hi32!(0))
+                                * clebsch_gordan(s_braket.0.s, s_braket.0.ms, s_a_braket.0.s, s_a_braket.0.ms, hu32!(0), hi32!(0))
+                                * clebsch_gordan(s_braket.1.s, s_braket.1.ms, s_a_braket.1.s, s_a_braket.1.ms, hu32!(0), hi32!(0));
 
                             let summed = (0..=lambda)
                                 .map(|m_lambda| {
@@ -174,10 +174,10 @@ where
 
                 let masking_triplet = Operator::from_mel(&ordered_basis, 
                     [
-                        UncoupledSpinRotorAtom::SystemL(half_u32!(0)),
-                        UncoupledSpinRotorAtom::RotorN(half_u32!(0)),
-                        UncoupledSpinRotorAtom::RotorS(half_u32!(0)),
-                        UncoupledSpinRotorAtom::AtomS(half_u32!(0))
+                        UncoupledSpinRotorAtom::SystemL(hu32!(0)),
+                        UncoupledSpinRotorAtom::RotorN(hu32!(0)),
+                        UncoupledSpinRotorAtom::RotorS(hu32!(0)),
+                        UncoupledSpinRotorAtom::AtomS(hu32!(0))
                     ],
                     |[l, n, s, s_a]| {
                         if s.bra.0 == s.ket.0 && s_a.bra.0 == s_a.ket.0 {
@@ -189,15 +189,15 @@ where
                             let factor = ((2. * l_braket.0.s.value() + 1.) * (2. * l_braket.1.s.value() + 1.)
                                 * (2. * n_braket.0.s.value() + 1.) * (2. * n_braket.1.s.value() + 1.)).sqrt();
     
-                            let wigners = wigner_3j(l_braket.0.s, lambda_h32, l_braket.1.s, half_i32!(0), half_i32!(0), half_i32!(0))
-                                * wigner_3j(n_braket.0.s, lambda_h32, n_braket.1.s, half_i32!(0), half_i32!(0), half_i32!(0));
+                            let wigners = wigner_3j(l_braket.0.s, lambda_h32, l_braket.1.s, hi32!(0), hi32!(0), hi32!(0))
+                                * wigner_3j(n_braket.0.s, lambda_h32, n_braket.1.s, hi32!(0), hi32!(0), hi32!(0));
                             
                             let triplet_factor = (-1..=1)
                                 .map(|ms_tot| {
                                     let ms_tot = HalfI32::from_doubled(2 * ms_tot);
 
-                                    clebsch_gordan(s_braket.0.s, s_braket.0.ms, s_a_braket.0.s, s_a_braket.0.ms, half_u32!(1), ms_tot)
-                                        * clebsch_gordan(s_braket.1.s, s_braket.1.ms, s_a_braket.1.s, s_a_braket.1.ms, half_u32!(1), ms_tot)
+                                    clebsch_gordan(s_braket.0.s, s_braket.0.ms, s_a_braket.0.s, s_a_braket.0.ms, hu32!(1), ms_tot)
+                                        * clebsch_gordan(s_braket.1.s, s_braket.1.ms, s_a_braket.1.s, s_a_braket.1.ms, hu32!(1), ms_tot)
                                 })
                                 .sum::<f64>();
 

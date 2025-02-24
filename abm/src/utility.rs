@@ -85,7 +85,7 @@ pub fn save_spectrum(
 #[macro_export]
 macro_rules! get_zeeman_prop {
     ($basis:expr, $state:path, $gamma:expr) => {{
-        quantum::states::operator::Operator::from_mel(&($basis), [$state(clebsch_gordan::half_u32!(0))], |[s]| {
+        quantum::states::operator::Operator::from_mel(&($basis), [$state(clebsch_gordan::hu32!(0))], |[s]| {
             let s_bra = quantum::cast_variant!(s.bra.0, $state);
             let s_bra = quantum::states::spins::Spin::new(s_bra, s.bra.1);
 
@@ -96,7 +96,7 @@ macro_rules! get_zeeman_prop {
         })
     }};
     ($basis:expr, $state:path, $gamma:expr; $proj:path) => {{
-        quantum::states::operator::Operator::from_mel(&($basis), [$state(clebsch_gordan::half_u32!(0))], |[s]| {
+        quantum::states::operator::Operator::from_mel(&($basis), [$state(clebsch_gordan::hu32!(0))], |[s]| {
             let s_bra = quantum::cast_variant!(s.bra.0, $state);
             let ms_bra = quantum::cast_variant!(s.bra.1, $proj);
             let s_bra = quantum::states::spins::Spin::new(s_bra, ms_bra);
@@ -146,7 +146,7 @@ macro_rules! get_hifi {
     ($basis:expr, $state1:path, $state2:path, $a_hifi:expr) => {{
         quantum::states::operator::Operator::from_mel(
             &($basis),
-            [$state1(clebsch_gordan::half_u32!(0)), $state2(clebsch_gordan::half_u32!(0))],
+            [$state1(clebsch_gordan::hu32!(0)), $state2(clebsch_gordan::hu32!(0))],
             |[s, i]| {
                 let s_bra = quantum::cast_variant!(s.bra.0, $state1);
                 let s_bra = quantum::states::spins::Spin::new(s_bra, s.bra.1);
@@ -167,7 +167,7 @@ macro_rules! get_hifi {
     ($basis:expr, $state1:path, $state2:path, $a_hifi:expr, with $fc:path) => {{
         quantum::states::operator::Operator::from_mel(
             &($basis),
-            [$state1(clebsch_gordan::half_u32!(0)), $state2(clebsch_gordan::half_u32!(0)), $fc],
+            [$state1(clebsch_gordan::hu32!(0)), $state2(clebsch_gordan::hu32!(0)), $fc],
             |[s, i, _]| {
                 let s_bra = quantum::cast_variant!(s.bra.0, $state1);
                 let s_bra = quantum::states::spins::Spin::new(s_bra, s.bra.1);
@@ -188,7 +188,7 @@ macro_rules! get_hifi {
     ($basis:expr, $state1:path, $state2:path, $a_hifi:expr; $proj:path) => {{
         quantum::states::operator::Operator::from_mel(
             &($basis),
-            [$state1(clebsch_gordan::half_u32!(0)), $state2(clebsch_gordan::half_u32!(0))],
+            [$state1(clebsch_gordan::hu32!(0)), $state2(clebsch_gordan::hu32!(0))],
             |[s, i, _]| {
                 let s_bra = quantum::cast_variant!(s.bra.0, $state1);
                 let ms_bra = quantum::cast_variant!(s.bra.1, $proj);
@@ -213,7 +213,7 @@ macro_rules! get_hifi {
     ($basis:expr, $state1:path, $state2:path, $a_hifi:expr, with $fc:path; $proj:path) => {{
         quantum::states::operator::Operator::from_mel(
             &($basis),
-            [$state1(clebsch_gordan::half_u32!(0)), $state2(clebsch_gordan::half_u32!(0)), $fc],
+            [$state1(clebsch_gordan::hu32!(0)), $state2(clebsch_gordan::hu32!(0)), $fc],
             |[s, i, _]| {
                 let s_bra = quantum::cast_variant!(s.bra.0, $state1);
                 let ms_bra = quantum::cast_variant!(s.bra.1, $proj);

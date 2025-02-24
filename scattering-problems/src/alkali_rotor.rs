@@ -1,5 +1,5 @@
 use abm::{get_hifi, get_zeeman_prop, utility::diagonalize, HifiProblemBuilder};
-use clebsch_gordan::{half_i32, half_integer::{HalfI32, HalfU32}, half_u32, wigner_3j};
+use clebsch_gordan::{hi32, half_integer::{HalfI32, HalfU32}, hu32, wigner_3j};
 use faer::Mat;
 use quantum::{cast_variant, params::{particle::Particle, particle_factory::RotConst}, states::{operator::Operator, spins::{spin_projections, SpinOperators}, state::State, state_type::StateType, States, StatesBasis}};
 
@@ -27,7 +27,7 @@ pub enum UncoupledSpinRotor {
 
 impl AlkaliRotorProblemBuilder {
     pub fn new(hifi_problem: HifiProblemBuilder) -> Self {
-        assert!(hifi_problem.s == half_u32!(1/2));
+        assert!(hifi_problem.s == hu32!(1/2));
 
         Self {
             hifi_problem,
@@ -157,7 +157,7 @@ impl AlkaliRotorProblemBuilder {
             None => states.get_basis(),
         };
 
-        let j_centrifugal = Operator::from_diagonal_mel(&basis, [UncoupledSpinRotor::RotorN(half_u32!(0))], |[ang]| {
+        let j_centrifugal = Operator::from_diagonal_mel(&basis, [UncoupledSpinRotor::RotorN(hu32!(0))], |[ang]| {
             let j = cast_variant!(ang.0, UncoupledSpinRotor::RotorN).value();
 
             rot_const * (j * (j + 1.))
@@ -174,7 +174,7 @@ impl AlkaliRotorProblemBuilder {
         }
 
         let spin_rot = Operator::from_mel(&basis, 
-            [UncoupledSpinRotor::RotorN(half_u32!(0)), UncoupledSpinRotor::RotorS(half_u32!(0))], 
+            [UncoupledSpinRotor::RotorN(hu32!(0)), UncoupledSpinRotor::RotorS(hu32!(0))], 
             |[n, s]| {
                 let n_braket = cast_spin_braket!(n, UncoupledSpinRotor::RotorN);
                 let s_braket = cast_spin_braket!(s, UncoupledSpinRotor::RotorS);
@@ -185,9 +185,9 @@ impl AlkaliRotorProblemBuilder {
 
         let aniso_hifi = Operator::from_mel(&basis, 
             [
-                UncoupledSpinRotor::RotorN(half_u32!(0)), 
-                UncoupledSpinRotor::RotorS(half_u32!(0)), 
-                UncoupledSpinRotor::RotorI(half_u32!(0))
+                UncoupledSpinRotor::RotorN(hu32!(0)), 
+                UncoupledSpinRotor::RotorS(hu32!(0)), 
+                UncoupledSpinRotor::RotorI(hu32!(0))
             ], 
             |[n, s, i]| {
                 let n_braket = cast_spin_braket!(n, UncoupledSpinRotor::RotorN);
@@ -200,11 +200,11 @@ impl AlkaliRotorProblemBuilder {
                 let sign = (-1.0f64).powi(((s_braket.0.s.double_value() + i_braket.0.s.double_value()) as i32 
                         - (n_braket.0.ms.double_value() + i_braket.0.ms.double_value() + s_braket.0.ms.double_value())) / 2);
 
-                let wigners = wigner_3j(n_braket.0.s, half_u32!(2), n_braket.1.s, -n_braket.0.ms, n_braket.0.ms - n_braket.1.ms, n_braket.1.ms)
-                    * wigner_3j(n_braket.0.s, half_u32!(2), n_braket.1.s, half_i32!(0), half_i32!(0), half_i32!(0))
-                    * wigner_3j(half_u32!(1), half_u32!(1), half_u32!(2), s_braket.0.ms - s_braket.1.ms, i_braket.0.ms - i_braket.1.ms, n_braket.0.ms - n_braket.1.ms)
-                    * wigner_3j(s_braket.0.s, half_u32!(1), s_braket.1.s, -s_braket.0.ms, s_braket.0.ms - s_braket.1.ms, s_braket.1.ms)
-                    * wigner_3j(i_braket.0.s, half_u32!(1), i_braket.1.s, -i_braket.0.ms, i_braket.0.ms - i_braket.1.ms, i_braket.1.ms);
+                let wigners = wigner_3j(n_braket.0.s, hu32!(2), n_braket.1.s, -n_braket.0.ms, n_braket.0.ms - n_braket.1.ms, n_braket.1.ms)
+                    * wigner_3j(n_braket.0.s, hu32!(2), n_braket.1.s, hi32!(0), hi32!(0), hi32!(0))
+                    * wigner_3j(hu32!(1), hu32!(1), hu32!(2), s_braket.0.ms - s_braket.1.ms, i_braket.0.ms - i_braket.1.ms, n_braket.0.ms - n_braket.1.ms)
+                    * wigner_3j(s_braket.0.s, hu32!(1), s_braket.1.s, -s_braket.0.ms, s_braket.0.ms - s_braket.1.ms, s_braket.1.ms)
+                    * wigner_3j(i_braket.0.s, hu32!(1), i_braket.1.s, -i_braket.0.ms, i_braket.0.ms - i_braket.1.ms, i_braket.1.ms);
 
                 factor * sign * wigners
             }
