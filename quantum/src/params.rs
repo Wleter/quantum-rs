@@ -2,7 +2,7 @@ pub mod particle;
 pub mod particle_factory;
 pub mod particles;
 
-use downcast_rs::{impl_downcast, DowncastSync};
+use downcast_rs::{DowncastSync, impl_downcast};
 use dyn_clone::DynClone;
 use std::{any::TypeId, collections::HashMap};
 
@@ -67,9 +67,11 @@ mod test {
         params_cloned.insert(IntValue(2));
 
         assert!(params.get::<FloatValue>().is_some_and(|x| x.0 == 1.0));
-        assert!(params_cloned
-            .get::<FloatValue>()
-            .is_some_and(|x| x.0 == 1.0));
+        assert!(
+            params_cloned
+                .get::<FloatValue>()
+                .is_some_and(|x| x.0 == 1.0)
+        );
 
         assert!(params.get::<IntValue>().is_none());
         assert!(params_cloned.get::<IntValue>().is_some_and(|x| x.0 == 2));

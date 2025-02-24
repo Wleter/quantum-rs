@@ -25,7 +25,8 @@ impl Spin {
 pub fn get_spin_basis(s: HalfU32) -> Vec<Spin> {
     let ds = s.double_value() as i32;
 
-    (-ds..=ds).step_by(2)
+    (-ds..=ds)
+        .step_by(2)
         .map(|dms| Spin::new(s, HalfI32::from_doubled(dms)))
         .collect()
 }
@@ -64,8 +65,9 @@ impl SpinOperators {
     pub fn ladder_plus(spin: Braket<Spin>) -> f64 {
         if spin.bra.s == spin.ket.s && spin.bra.ms.double_value() == spin.ket.ms.double_value() + 2
         {
-            (spin.ket.s.value() * (spin.ket.s.value() + 1.) 
-                - spin.bra.ms.value() * spin.ket.ms.value()).sqrt()
+            (spin.ket.s.value() * (spin.ket.s.value() + 1.)
+                - spin.bra.ms.value() * spin.ket.ms.value())
+            .sqrt()
         } else {
             0.0
         }
@@ -75,7 +77,8 @@ impl SpinOperators {
         if spin.bra.s == spin.ket.s && spin.bra.ms.double_value() + 2 == spin.ket.ms.double_value()
         {
             (spin.ket.s.value() * (spin.ket.s.value() + 1.)
-                - spin.bra.ms.value() * spin.ket.ms.value()).sqrt()
+                - spin.bra.ms.value() * spin.ket.ms.value())
+            .sqrt()
         } else {
             0.0
         }
@@ -92,10 +95,7 @@ impl SpinOperators {
     /// Compute the Clebsch-Gordan coefficient <spin1; spin2 | spin3>.
     #[inline]
     pub fn clebsch_gordan(spin1: Spin, spin2: Spin, spin3: Spin) -> f64 {
-        clebsch_gordan::clebsch_gordan(
-            spin1.s, spin1.ms, 
-            spin2.s, spin2.ms, 
-            spin3.s, spin3.ms)
+        clebsch_gordan::clebsch_gordan(spin1.s, spin1.ms, spin2.s, spin2.ms, spin3.s, spin3.ms)
     }
 }
 
@@ -103,12 +103,16 @@ impl SpinOperators {
 #[cfg(feature = "faer")]
 mod test {
     use clebsch_gordan::hu32;
-    use faer::{assert_matrix_eq, mat, Mat};
+    use faer::{Mat, assert_matrix_eq, mat};
 
     use crate::{
         cast_variant,
         states::{
-            braket::Braket, operator::Operator, spins::{get_spin_basis, get_summed_spin_basis}, state::{into_variant, StateBasis}, States
+            States,
+            braket::Braket,
+            operator::Operator,
+            spins::{get_spin_basis, get_summed_spin_basis},
+            state::{StateBasis, into_variant},
         },
     };
 
@@ -129,26 +133,30 @@ mod test {
     fn test_spin_ops() {
         let mut state = States::default();
 
-        let spin1 = into_variant(get_spin_basis(hu32!(1/2)), StateSep::Spin1);
-        let spin2 = into_variant(get_spin_basis(hu32!(1/2)), StateSep::Spin2);
+        let spin1 = into_variant(get_spin_basis(hu32!(1 / 2)), StateSep::Spin1);
+        let spin2 = into_variant(get_spin_basis(hu32!(1 / 2)), StateSep::Spin2);
 
-        state.push_state(StateBasis::new(spin1))
+        state
+            .push_state(StateBasis::new(spin1))
             .push_state(StateBasis::new(spin2));
 
         let basis = state.get_basis();
 
         let op = Operator::<Mat<f64>>::from_mel(
             &basis,
-            [StateSep::Spin1(Default::default()), StateSep::Spin2(Default::default())],
+            [
+                StateSep::Spin1(Default::default()),
+                StateSep::Spin2(Default::default()),
+            ],
             |[s1_braket, s2_braket]| {
                 let s1 = Braket {
                     bra: cast_variant!(s1_braket.bra, StateSep::Spin1),
-                    ket: cast_variant!(s1_braket.ket, StateSep::Spin1)
+                    ket: cast_variant!(s1_braket.ket, StateSep::Spin1),
                 };
 
                 let s2 = Braket {
                     bra: cast_variant!(s2_braket.bra, StateSep::Spin2),
-                    ket: cast_variant!(s2_braket.ket, StateSep::Spin2)
+                    ket: cast_variant!(s2_braket.ket, StateSep::Spin2),
                 };
 
                 SpinOperators::dot(s1, s2)
@@ -164,7 +172,10 @@ mod test {
         assert_matrix_eq!(*op, expected);
 
         let mut combined = States::default();
-        let spins = StateBasis::new(into_variant(get_summed_spin_basis(hu32!(1/2), hu32!(1/2)), Combined::Spin));
+        let spins = StateBasis::new(into_variant(
+            get_summed_spin_basis(hu32!(1 / 2), hu32!(1 / 2)),
+            Combined::Spin,
+        ));
         combined.push_state(spins);
         let basis_comb = combined.get_basis();
         println!("{basis_comb}");

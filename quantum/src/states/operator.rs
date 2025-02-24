@@ -1,7 +1,7 @@
 use num::traits::Zero;
 use std::{mem::discriminant, ops::Deref};
 
-use super::{braket::Braket, StatesBasis, StatesElement};
+use super::{StatesBasis, StatesElement, braket::Braket};
 
 #[derive(Debug, Clone)]
 pub struct Operator<M> {
@@ -96,15 +96,14 @@ where
         .unwrap_or_else(|| panic!("0 size states basis")); // same variants for other elements
 
     let indices = action_states.map(|s| {
-        first.iter()
+        first
+            .iter()
             .enumerate()
             .find(|&(_, &x)| discriminant(&x) == discriminant(&s)) // variants are distinct by creation in States
             .map_or_else(|| panic!("action state not found in elements"), |x| x.0)
     });
 
-    let diagonal_indices: Vec<usize> = (0..first.len())
-        .filter(|x| !indices.contains(x))
-        .collect();
+    let diagonal_indices: Vec<usize> = (0..first.len()).filter(|x| !indices.contains(x)).collect();
 
     move |i, j| unsafe {
         let elements_i = elements.get_unchecked(i);
@@ -142,7 +141,8 @@ where
         .unwrap_or_else(|| panic!("0 size states basis")); // same variants for other elements
 
     let indices = action_states.map(|s| {
-        first.iter()
+        first
+            .iter()
             .enumerate()
             .find(|&(_, &x)| discriminant(&x) == discriminant(&s)) // variants are distinct by creation in States
             .map_or_else(|| panic!("action state not found in elements"), |x| x.0)
@@ -422,7 +422,7 @@ impl<E> Deref for Operator<Array2<E>> {
 #[cfg(test)]
 mod test {
     use super::Operator;
-    use crate::states::{state::StateBasis, States};
+    use crate::states::{States, state::StateBasis};
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     enum StateIds {
@@ -437,7 +437,7 @@ mod test {
             StateIds::ElectronSpin((2, -2)),
             StateIds::ElectronSpin((2, 0)),
             StateIds::ElectronSpin((2, 2)),
-            StateIds::ElectronSpin((0, 0))
+            StateIds::ElectronSpin((0, 0)),
         ]);
         states.push_state(e_state);
 
@@ -450,19 +450,22 @@ mod test {
     #[test]
     #[cfg(feature = "faer")]
     fn test_faer_operator() {
-        use faer::{mat, Mat};
+        use faer::{Mat, mat};
 
         let elements = prepare_states().get_basis();
 
-        let operator =
-            Operator::<Mat<f64>>::from_mel(&elements, [StateIds::ElectronSpin(Default::default())], |[el_state]| {
+        let operator = Operator::<Mat<f64>>::from_mel(
+            &elements,
+            [StateIds::ElectronSpin(Default::default())],
+            |[el_state]| {
                 let ket = el_state.ket;
 
                 match ket {
                     StateIds::ElectronSpin(val) => val.1 as f64,
                     StateIds::Vibrational(val) => val as f64,
                 }
-            });
+            },
+        );
 
         let expected = mat![
             [-2.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -476,15 +479,18 @@ mod test {
         ];
         assert_eq!(expected, operator.backed);
 
-        let operator =
-            Operator::<Mat<f64>>::from_mel(&elements, [StateIds::ElectronSpin(Default::default())], |[el_state]| {
+        let operator = Operator::<Mat<f64>>::from_mel(
+            &elements,
+            [StateIds::ElectronSpin(Default::default())],
+            |[el_state]| {
                 let bra = el_state.bra;
 
                 match bra {
                     StateIds::ElectronSpin(val) => val.1 as f64,
                     StateIds::Vibrational(val) => val as f64,
                 }
-            });
+            },
+        );
 
         let expected = mat![
             [-2.0, -2.0, -2.0, -2.0, 0.0, 0.0, 0.0, 0.0],
@@ -500,13 +506,16 @@ mod test {
 
         let operator = Operator::<Mat<f64>>::from_mel(
             &elements,
-            [StateIds::ElectronSpin(Default::default()), StateIds::Vibrational(Default::default())],
+            [
+                StateIds::ElectronSpin(Default::default()),
+                StateIds::Vibrational(Default::default()),
+            ],
             |[el_state, vib]| {
                 if vib.ket != vib.bra {
                     let ket_spin = cast_variant!(el_state.ket, StateIds::ElectronSpin);
                     let bra_spin = cast_variant!(el_state.bra, StateIds::ElectronSpin);
 
-                    ((ket_spin.0 * 1000 + bra_spin.0 * 100) as i32 + ket_spin.1 * 10 + bra_spin.1) 
+                    ((ket_spin.0 * 1000 + bra_spin.0 * 100) as i32 + ket_spin.1 * 10 + bra_spin.1)
                         as f64
                 } else {
                     0.0
@@ -529,7 +538,10 @@ mod test {
 
         let operator = Operator::<Mat<f64>>::from_diagonal_mel(
             &elements,
-            [StateIds::ElectronSpin(Default::default()), StateIds::Vibrational(Default::default())],
+            [
+                StateIds::ElectronSpin(Default::default()),
+                StateIds::Vibrational(Default::default()),
+            ],
             |[el_state, vib]| {
                 let spin = cast_variant!(el_state, StateIds::ElectronSpin);
                 let vib = cast_variant!(vib, StateIds::Vibrational);
@@ -556,7 +568,7 @@ mod test {
     #[cfg(feature = "faer")]
     fn test_faer_operators_cached() {
         use crate::{cached_mel, make_cache};
-        use faer::{mat, Mat};
+        use faer::{Mat, mat};
 
         let elements = prepare_states().get_basis();
 
@@ -564,14 +576,18 @@ mod test {
             cache,
             Operator::<Mat<f64>>::from_mel(
                 &elements,
-                [StateIds::ElectronSpin(Default::default()), StateIds::Vibrational(Default::default())],
+                [
+                    StateIds::ElectronSpin(Default::default()),
+                    StateIds::Vibrational(Default::default())
+                ],
                 cached_mel!(cache, |[el_state, vib]| {
                     let ket_spin = cast_variant!(el_state.ket, StateIds::ElectronSpin);
                     let bra_spin = cast_variant!(el_state.bra, StateIds::ElectronSpin);
 
                     if vib.ket != vib.bra {
-                        ((ket_spin.0 * 1000 + bra_spin.0 * 100) as i32 + ket_spin.1 * 10 + bra_spin.1)
-                            as f64
+                        ((ket_spin.0 * 1000 + bra_spin.0 * 100) as i32
+                            + ket_spin.1 * 10
+                            + bra_spin.1) as f64
                     } else {
                         0.0
                     }
@@ -609,7 +625,8 @@ mod test {
                 let ket_spin = cast_variant!(el_state.ket, StateIds::ElectronSpin);
                 let bra_spin = cast_variant!(el_state.bra, StateIds::ElectronSpin);
 
-                ((ket_spin.0 * 1000 + bra_spin.0 * 100) as i32 + ket_spin.1 * 10 + bra_spin.1) as f64
+                ((ket_spin.0 * 1000 + bra_spin.0 * 100) as i32 + ket_spin.1 * 10 + bra_spin.1)
+                    as f64
             } else {
                 0.0
             }
@@ -617,22 +634,34 @@ mod test {
 
         let operator_faer = Operator::<Mat<f64>>::from_mel(
             &elements,
-            [StateIds::ElectronSpin(Default::default()), StateIds::Vibrational(Default::default())],
+            [
+                StateIds::ElectronSpin(Default::default()),
+                StateIds::Vibrational(Default::default()),
+            ],
             matrix_elements,
         );
         let operator_d_matrix = Operator::<DMatrix<f64>>::from_mel(
             &elements,
-            [StateIds::ElectronSpin(Default::default()), StateIds::Vibrational(Default::default())],
+            [
+                StateIds::ElectronSpin(Default::default()),
+                StateIds::Vibrational(Default::default()),
+            ],
             matrix_elements,
         );
         let operator_s_matrix = Operator::<SMatrix<f64, 8, 8>>::from_mel(
             &elements,
-            [StateIds::ElectronSpin(Default::default()), StateIds::Vibrational(Default::default())],
+            [
+                StateIds::ElectronSpin(Default::default()),
+                StateIds::Vibrational(Default::default()),
+            ],
             matrix_elements,
         );
         let operator_ndarray = Operator::<Array2<f64>>::from_mel(
             &elements,
-            [StateIds::ElectronSpin(Default::default()), StateIds::Vibrational(Default::default())],
+            [
+                StateIds::ElectronSpin(Default::default()),
+                StateIds::Vibrational(Default::default()),
+            ],
             matrix_elements,
         );
 
@@ -656,7 +685,7 @@ mod test {
     #[test]
     #[cfg(feature = "faer")]
     fn test_transformations() {
-        use faer::{assert_matrix_eq, mat, Mat};
+        use faer::{Mat, assert_matrix_eq, mat};
 
         use crate::states::StatesElement;
 
@@ -690,33 +719,31 @@ mod test {
         let s1 = StateBasis::new(vec![Separated::Spin1((1, -1)), Separated::Spin1((1, 1))]);
         let s2 = StateBasis::new(vec![Separated::Spin2((1, -1)), Separated::Spin2((1, 1))]);
 
-        states_sep
-            .push_state(s1)
-            .push_state(s2);
+        states_sep.push_state(s1).push_state(s2);
         let elements_sep = states_sep.get_basis();
 
-        let transformation =
-            |sep: &StatesElement<Separated>, combined: &StatesElement<Combined>| {
-                let (_, m1) = cast_variant!(sep[0], Separated::Spin1);
-                let (_, m2) = cast_variant!(sep[1], Separated::Spin2);
+        let transformation = |sep: &StatesElement<Separated>,
+                              combined: &StatesElement<Combined>| {
+            let (_, m1) = cast_variant!(sep[0], Separated::Spin1);
+            let (_, m2) = cast_variant!(sep[1], Separated::Spin2);
 
-                let Combined::Spin((s_comb, m_comb)) = combined[0];
+            let Combined::Spin((s_comb, m_comb)) = combined[0];
 
-                if m_comb == m1 + m2 {
-                    if m_comb == 0 {
-                        let sign = if s_comb == 0 && m1 == -1 && m2 == 1 {
-                            -1.
-                        } else {
-                            1.
-                        };
-                        sign * 0.5f64.sqrt()
+            if m_comb == m1 + m2 {
+                if m_comb == 0 {
+                    let sign = if s_comb == 0 && m1 == -1 && m2 == 1 {
+                        -1.
                     } else {
                         1.
-                    }
+                    };
+                    sign * 0.5f64.sqrt()
                 } else {
-                    0.0
+                    1.
                 }
-            };
+            } else {
+                0.0
+            }
+        };
 
         let transformation_faer = Operator::<Mat<f64>>::get_transformation(
             &elements_sep,
@@ -741,7 +768,7 @@ mod test {
     #[test]
     #[cfg(feature = "faer")]
     fn test_operator_shorthand() {
-        use faer::{mat, Mat};
+        use faer::{Mat, mat};
 
         let elements = prepare_states().get_basis();
 
@@ -749,7 +776,7 @@ mod test {
             &elements,
             |[el: StateIds::ElectronSpin, vib: StateIds::Vibrational]| {
                 if vib.ket != vib.bra {
-                    ((el.ket.0 * 1000 + el.bra.0 * 100) as i32 + el.ket.1 * 10 + el.bra.1) 
+                    ((el.ket.0 * 1000 + el.bra.0 * 100) as i32 + el.ket.1 * 10 + el.bra.1)
                         as f64
                 } else {
                     0.0

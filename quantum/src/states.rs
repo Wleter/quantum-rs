@@ -3,7 +3,8 @@ pub mod state;
 
 use std::{
     fmt::{Debug, Display},
-    ops::{Deref, DerefMut}, slice::Iter,
+    ops::{Deref, DerefMut},
+    slice::Iter,
 };
 
 use state::StateBasis;
@@ -204,11 +205,14 @@ mod test {
             StateIds::ElectronSpin((2, -2)),
             StateIds::ElectronSpin((2, 0)),
             StateIds::ElectronSpin((2, 2)),
-            StateIds::ElectronSpin((0, 0))
+            StateIds::ElectronSpin((0, 0)),
         ]);
         states.push_state(e_state);
 
-        let nuclear = StateBasis::new(vec![StateIds::NuclearSpin((1, -1)), StateIds::NuclearSpin((1, 1))]);
+        let nuclear = StateBasis::new(vec![
+            StateIds::NuclearSpin((1, -1)),
+            StateIds::NuclearSpin((1, 1)),
+        ]);
         states.push_state(nuclear);
 
         let vib = StateBasis::new(vec![StateIds::Vibrational(-1), StateIds::Vibrational(-2)]);
@@ -229,11 +233,14 @@ mod test {
             StateIds::ElectronSpin((2, -2)),
             StateIds::ElectronSpin((2, 0)),
             StateIds::ElectronSpin((2, 2)),
-            StateIds::ElectronSpin((0, 0))
+            StateIds::ElectronSpin((0, 0)),
         ]);
         states.push_state(e_state);
 
-        let nuclear = StateBasis::new(vec![StateIds::NuclearSpin((1, -1)), StateIds::NuclearSpin((1, 1))]);
+        let nuclear = StateBasis::new(vec![
+            StateIds::NuclearSpin((1, -1)),
+            StateIds::NuclearSpin((1, 1)),
+        ]);
         states.push_state(nuclear);
 
         let vib = StateBasis::new(vec![StateIds::Vibrational(-1), StateIds::Vibrational(-2)]);
@@ -272,11 +279,14 @@ StatesElement([ElectronSpin((0, 0)), NuclearSpin((1, 1)), Vibrational(-2)])"
             StateIds::ElectronSpin((2, -2)),
             StateIds::ElectronSpin((2, 0)),
             StateIds::ElectronSpin((2, 2)),
-            StateIds::ElectronSpin((0, 0))
+            StateIds::ElectronSpin((0, 0)),
         ]);
         states.push_state(e_state);
 
-        let nuclear = StateBasis::new(vec![StateIds::NuclearSpin((1, -1)), StateIds::NuclearSpin((1, 1))]);
+        let nuclear = StateBasis::new(vec![
+            StateIds::NuclearSpin((1, -1)),
+            StateIds::NuclearSpin((1, 1)),
+        ]);
         states.push_state(nuclear);
 
         let vib = StateBasis::new(vec![StateIds::Vibrational(-1), StateIds::Vibrational(-2)]);
@@ -309,14 +319,20 @@ StatesElement([ElectronSpin((0, 0)), NuclearSpin((1, 1)), Vibrational(-2)])"
             StateIds::ElectronSpin((2, -2)),
             StateIds::ElectronSpin((2, 0)),
             StateIds::ElectronSpin((2, 2)),
-            StateIds::ElectronSpin((0, 0))
+            StateIds::ElectronSpin((0, 0)),
         ]);
         states.push_state(e_state);
 
-        let nuclear = StateBasis::new(vec![StateIds::NuclearSpin((1, -1)), StateIds::NuclearSpin((1, 1))]);
+        let nuclear = StateBasis::new(vec![
+            StateIds::NuclearSpin((1, -1)),
+            StateIds::NuclearSpin((1, 1)),
+        ]);
         states.push_state(nuclear);
 
-        let second_electron_spin = StateBasis::new(vec![StateIds::ElectronSpin((1, -1)), StateIds::ElectronSpin((1, 1))]);
+        let second_electron_spin = StateBasis::new(vec![
+            StateIds::ElectronSpin((1, -1)),
+            StateIds::ElectronSpin((1, 1)),
+        ]);
         states.push_state(second_electron_spin);
     }
 }

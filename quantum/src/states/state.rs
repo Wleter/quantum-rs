@@ -1,9 +1,9 @@
-use std::mem::{discriminant, Discriminant};
+use std::mem::{Discriminant, discriminant};
 
 #[derive(Clone, Debug)]
 pub struct StateBasis<T> {
     elements: Vec<T>,
-    variant: Discriminant<T>
+    variant: Discriminant<T>,
 }
 
 impl<T> StateBasis<T> {
@@ -12,14 +12,11 @@ impl<T> StateBasis<T> {
 
         let variant = discriminant(elements.first().unwrap());
         assert!(
-            elements.iter().all(|x| discriminant(x) == variant), 
+            elements.iter().all(|x| discriminant(x) == variant),
             "only same variant types in basis is permitted"
         );
 
-        Self { 
-            elements,
-            variant 
-        }
+        Self { elements, variant }
     }
 
     pub fn elements(&self) -> &[T] {

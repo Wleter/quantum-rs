@@ -3,9 +3,9 @@ use std::ops::{Deref, DerefMut};
 use crate::{
     params::Params,
     units::{
+        Au,
         energy_units::{Energy, EnergyUnit},
         mass_units::Mass,
-        Au,
     },
 };
 

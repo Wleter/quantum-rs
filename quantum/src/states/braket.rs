@@ -10,9 +10,7 @@ impl<T: PartialEq> Braket<T> {
     }
 }
 
-pub fn kron_delta<T: PartialEq, const N: usize>(
-    brakets: [Braket<T>; N],
-) -> f64 {
+pub fn kron_delta<T: PartialEq, const N: usize>(brakets: [Braket<T>; N]) -> f64 {
     if brakets.iter().all(|x| x.is_diagonal()) {
         1.0
     } else {

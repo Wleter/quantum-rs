@@ -109,7 +109,7 @@ macro_rules! problems_impl {
 
 #[cfg(test)]
 mod test {
-    use crate::problem_selector::{get_args, ProblemSelector};
+    use crate::problem_selector::{ProblemSelector, get_args};
 
     struct TestProblems;
 

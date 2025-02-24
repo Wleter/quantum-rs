@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use crate::{
     params::Params,
-    units::{mass_units::Mass, mass_units::MassUnit, Au},
+    units::{Au, mass_units::Mass, mass_units::MassUnit},
 };
 
 /// Struct to hold information about a particle.
@@ -49,8 +49,8 @@ mod tests {
     use crate::{
         params::particle_factory,
         units::{
-            mass_units::{Dalton, Mass},
             Au,
+            mass_units::{Dalton, Mass},
         },
     };
 
