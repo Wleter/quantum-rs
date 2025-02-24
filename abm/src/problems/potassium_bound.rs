@@ -67,11 +67,11 @@ impl PotassiumBound {
         let singlet_energies = vec![Energy(-32.1, MHz), Energy(-1698.1, MHz)];
         let fc_factors = mat![[0.9180, 0.0463], [0.0895, 0.9674]];
 
-        let first = HifiProblemBuilder::new(hu32!(1), hu32!(3))
+        let first = HifiProblemBuilder::new(hu32!(1/2), hu32!(3/2))
             .with_nuclear_magneton(gamma_i1)
             .with_hyperfine_coupling(a_hifi_1);
 
-        let second = HifiProblemBuilder::new(hu32!(1), hu32!(3))
+        let second = HifiProblemBuilder::new(hu32!(1/2), hu32!(3/2))
             .with_nuclear_magneton(gamma_i2)
             .with_hyperfine_coupling(a_hifi_2);
 

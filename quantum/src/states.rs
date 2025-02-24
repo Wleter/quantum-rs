@@ -1,13 +1,12 @@
 pub mod braket;
 pub mod state;
-pub mod state_type;
 
 use std::{
     fmt::{Debug, Display},
-    ops::{Deref, DerefMut},
+    ops::{Deref, DerefMut}, slice::Iter,
 };
 
-use state_type::{StateType, StateTypeIter};
+use state::StateBasis;
 
 #[cfg(any(feature = "faer", feature = "nalgebra", feature = "ndarray"))]
 pub mod operator;
@@ -16,87 +15,85 @@ pub mod operator;
 pub mod spins;
 
 #[derive(Clone, Debug)]
-pub struct States<T, V>(Vec<StateType<T, V>>);
+pub struct States<T>(Vec<StateBasis<T>>);
 
-impl<T, V> Default for States<T, V> {
+impl<T> Default for States<T> {
     fn default() -> Self {
         Self(vec![])
     }
 }
 
-impl<T, V> States<T, V> {
+impl<T> States<T> {
     pub fn size(&self) -> usize {
         self.0.iter().fold(1, |acc, s| acc * s.size())
     }
 
-    pub fn push_state(&mut self, state: StateType<T, V>) -> &mut Self {
-        let variant = state.discriminant();
-        if let Some(variant) = variant {
-            if self.0.iter().any(|x| x.discriminant() == Some(variant)) {
-                panic!("Each state has to have unique variant type");
-            }
-            assert!(state.size() != 0, "encountered zero sized state");
+    pub fn push_state(&mut self, state: StateBasis<T>) -> &mut Self {
+        let variant = state.variant();
 
-            self.0.push(state);
-        } else {
+        if self.0.iter().any(|x| x.variant() == variant) {
             panic!("Each state has to have unique variant type");
         }
+
+        self.0.push(state);
 
         self
     }
 }
 
-impl<T: Copy, V: Copy> States<T, V> {
-    pub fn iter_elements(&self) -> StatesIter<'_, T, V> {
+impl<T: Copy> States<T> {
+    pub fn iter_elements(&self) -> StatesIter<'_, T> {
         StatesIter {
             states: &self.0,
-            states_iter: self.0.iter().map(|s| s.iter()).collect(),
-            current: StatesElement {
-                variants: Vec::with_capacity(self.0.len()),
-                values: Vec::with_capacity(self.0.len()),
-            },
+            states_iter: self.0.iter().map(|s| s.elements().iter()).collect(),
+            current: StatesElement(Vec::with_capacity(self.0.len())),
             current_index: 0,
             size: self.size(),
         }
     }
 
-    pub fn get_basis(&self) -> StatesBasis<T, V> {
+    pub fn get_basis(&self) -> StatesBasis<T> {
         self.iter_elements().collect()
     }
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct StatesElement<T, V> {
-    pub variants: Vec<T>,
-    pub values: Vec<V>,
-}
+pub struct StatesElement<T>(pub Vec<T>);
 
-impl<T, V> StatesElement<T, V> {
-    pub fn pairwise_iter(&self) -> impl Iterator<Item = (&T, &V)> {
-        self.variants.iter().zip(self.values.iter())
+impl<T> Deref for StatesElement<T> {
+    type Target = [T];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
-impl<T: Debug, V: Debug> Display for StatesElement<T, V> {
+impl<T> DerefMut for StatesElement<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<T: Debug> Display for StatesElement<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (s, v) in self.pairwise_iter() {
-            write!(f, "|{s:?}, {v:?} ⟩ ")?
+        for s in self.iter() {
+            write!(f, "|{s:?} ⟩ ")?
         }
 
         Ok(())
     }
 }
 
-pub struct StatesIter<'a, T, V> {
-    states: &'a [StateType<T, V>],
-    states_iter: Vec<StateTypeIter<'a, T, V>>,
-    current: StatesElement<T, V>,
+pub struct StatesIter<'a, T> {
+    states: &'a [StateBasis<T>],
+    states_iter: Vec<Iter<'a, T>>,
+    current: StatesElement<T>,
     current_index: usize,
     size: usize,
 }
 
-impl<T: Copy, V: Copy> Iterator for StatesIter<'_, T, V> {
-    type Item = StatesElement<T, V>;
+impl<T: Copy> Iterator for StatesIter<'_, T> {
+    type Item = StatesElement<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current_index >= self.size {
@@ -104,35 +101,30 @@ impl<T: Copy, V: Copy> Iterator for StatesIter<'_, T, V> {
         }
         if self.current_index == 0 {
             for s in self.states_iter.iter_mut() {
-                let (s_curr, v_curr) = s.next().unwrap(); // at least 1 element exists
+                let s_curr = s.next().unwrap(); // at least 1 element exists
 
-                self.current.variants.push(*s_curr);
-                self.current.values.push(*v_curr);
+                self.current.0.push(*s_curr);
             }
             self.current_index += 1;
 
             return Some(self.current.clone());
         }
 
-        for (((s_spec, v), s), s_type) in self
+        for ((s_spec, s), s_type) in self
             .current
-            .variants
             .iter_mut()
-            .zip(self.current.values.iter_mut())
             .zip(self.states_iter.iter_mut())
             .zip(self.states.iter())
         {
             match s.next() {
-                Some((s_spec_new, v_new)) => {
+                Some(s_spec_new) => {
                     *s_spec = *s_spec_new;
-                    *v = *v_new;
                     break;
                 }
                 None => {
-                    *s = s_type.iter();
-                    let (s_curr, v_curr) = s.next().unwrap(); // at least 1 element exists
+                    *s = s_type.elements().iter();
+                    let s_curr = s.next().unwrap(); // at least 1 element exists
                     *s_spec = *s_curr;
-                    *v = *v_curr;
                 }
             }
         }
@@ -143,10 +135,10 @@ impl<T: Copy, V: Copy> Iterator for StatesIter<'_, T, V> {
 }
 
 #[derive(Debug, Clone)]
-pub struct StatesBasis<T, V>(Vec<StatesElement<T, V>>);
+pub struct StatesBasis<T>(Vec<StatesElement<T>>);
 
-impl<T, V> FromIterator<StatesElement<T, V>> for StatesBasis<T, V> {
-    fn from_iter<I: IntoIterator<Item = StatesElement<T, V>>>(iter: I) -> Self {
+impl<T> FromIterator<StatesElement<T>> for StatesBasis<T> {
+    fn from_iter<I: IntoIterator<Item = StatesElement<T>>>(iter: I) -> Self {
         let mut elements = StatesBasis(vec![]);
 
         for val in iter {
@@ -157,8 +149,8 @@ impl<T, V> FromIterator<StatesElement<T, V>> for StatesBasis<T, V> {
     }
 }
 
-impl<T, V> IntoIterator for StatesBasis<T, V> {
-    type Item = StatesElement<T, V>;
+impl<T> IntoIterator for StatesBasis<T> {
+    type Item = StatesElement<T>;
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -166,21 +158,21 @@ impl<T, V> IntoIterator for StatesBasis<T, V> {
     }
 }
 
-impl<T, V> Deref for StatesBasis<T, V> {
-    type Target = Vec<StatesElement<T, V>>;
+impl<T> Deref for StatesBasis<T> {
+    type Target = Vec<StatesElement<T>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<T, V> DerefMut for StatesBasis<T, V> {
+impl<T> DerefMut for StatesBasis<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl<T: Debug, V: Debug> Display for StatesBasis<T, V> {
+impl<T: Debug> Display for StatesBasis<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for state in &self.0 {
             writeln!(f, "{state}")?
@@ -192,138 +184,78 @@ impl<T: Debug, V: Debug> Display for StatesBasis<T, V> {
 
 #[cfg(test)]
 mod test {
-    use state::State;
+    use state::StateBasis;
 
     use super::*;
 
     #[allow(unused)]
     #[derive(Clone, Copy, Debug, PartialEq)]
     enum StateIds {
-        ElectronSpin(u32),
-        NuclearSpin(u32),
-        Vibrational,
-    }
-
-    #[allow(unused)]
-    #[derive(Clone, Copy, Debug, PartialEq)]
-    enum ElementValues {
-        Spin(i32),
+        ElectronSpin((u32, i32)),
+        NuclearSpin((u32, i32)),
         Vibrational(i32),
     }
 
     #[test]
-    fn states_creation_v1() {
+    fn states_creation() {
         let mut states = States::default();
 
-        let triplet_elements = vec![
-            ElementValues::Spin(-2),
-            ElementValues::Spin(0),
-            ElementValues::Spin(2),
-        ];
-        let triplet = State::new(StateIds::ElectronSpin(2), triplet_elements);
-        let singlet = State::new(StateIds::ElectronSpin(0), vec![ElementValues::Spin(0)]);
-
-        let e_state = StateType::Sum(vec![triplet, singlet]);
+        let e_state = StateBasis::new(vec![
+            StateIds::ElectronSpin((2, -2)),
+            StateIds::ElectronSpin((2, 0)),
+            StateIds::ElectronSpin((2, 2)),
+            StateIds::ElectronSpin((0, 0))
+        ]);
         states.push_state(e_state);
 
-        let nuclear_elements = vec![ElementValues::Spin(-1), ElementValues::Spin(1)];
-        let nuclear =
-            StateType::Irreducible(State::new(StateIds::NuclearSpin(1), nuclear_elements));
+        let nuclear = StateBasis::new(vec![StateIds::NuclearSpin((1, -1)), StateIds::NuclearSpin((1, 1))]);
         states.push_state(nuclear);
 
-        let vib_elements = vec![
-            ElementValues::Vibrational(-1),
-            ElementValues::Vibrational(-2),
-        ];
-        let vib = StateType::Irreducible(State::new(StateIds::Vibrational, vib_elements));
+        let vib = StateBasis::new(vec![StateIds::Vibrational(-1), StateIds::Vibrational(-2)]);
         states.push_state(vib);
 
-        let expected = "States([Sum([State { variant: ElectronSpin(2), basis: [Spin(-2), Spin(0), Spin(2)] }, \
-                                    State { variant: ElectronSpin(0), basis: [Spin(0)] }]), \
-                                Irreducible(State { variant: NuclearSpin(1), basis: [Spin(-1), Spin(1)] }), \
-                                Irreducible(State { variant: Vibrational, basis: [Vibrational(-1), Vibrational(-2)] })])";
+        let expected = "States([StateBasis { elements: [ElectronSpin((2, -2)), ElectronSpin((2, 0)), ElectronSpin((2, 2)), ElectronSpin((0, 0))], variant: Discriminant(0) }, \
+                        StateBasis { elements: [NuclearSpin((1, -1)), NuclearSpin((1, 1))], variant: Discriminant(1) }, \
+                        StateBasis { elements: [Vibrational(-1), Vibrational(-2)], variant: Discriminant(2) }])";
 
         assert_eq!(expected, format!("{:?}", states))
-    }
-
-    #[test]
-    fn states_creation_v2() {
-        let mut states = States::default();
-
-        let triplet = State::new(StateIds::ElectronSpin(2), vec![-2, 0, 2]);
-        let singlet = State::new(StateIds::ElectronSpin(0), vec![0]);
-
-        let e_state = StateType::Sum(vec![triplet, singlet]);
-        states.push_state(e_state);
-
-        let nuclear = StateType::Irreducible(State::new(StateIds::NuclearSpin(1), vec![-1, 1]));
-        states.push_state(nuclear);
-
-        let vib = StateType::Irreducible(State::new(StateIds::Vibrational, vec![-1, -2]));
-        states.push_state(vib);
-
-        let expected = "States([Sum([State { variant: ElectronSpin(2), basis: [-2, 0, 2] }, \
-                                    State { variant: ElectronSpin(0), basis: [0] }]), \
-                                Irreducible(State { variant: NuclearSpin(1), basis: [-1, 1] }), \
-                                Irreducible(State { variant: Vibrational, basis: [-1, -2] })])";
-
-        assert_eq!(expected, format!("{:?}", states))
-    }
-
-    #[test]
-    fn state_type_iteration() {
-        let triplet = State::new(StateIds::ElectronSpin(2), vec![-2, 0, 2]);
-        let singlet = State::new(StateIds::ElectronSpin(0), vec![0]);
-
-        let e_state = StateType::Sum(vec![triplet, singlet]);
-
-        let mut e_iter = e_state.iter();
-        assert_eq!(Some((&StateIds::ElectronSpin(2), &-2)), e_iter.next());
-        assert_eq!(Some((&StateIds::ElectronSpin(2), &0)), e_iter.next());
-        assert_eq!(Some((&StateIds::ElectronSpin(2), &2)), e_iter.next());
-        assert_eq!(Some((&StateIds::ElectronSpin(0), &0)), e_iter.next());
-        assert_eq!(None, e_iter.next());
-
-        let nuclear = StateType::Irreducible(State::new(StateIds::NuclearSpin(1), vec![-1, 1]));
-        let mut n_iter = nuclear.iter();
-        assert_eq!(Some((&StateIds::NuclearSpin(1), &-1)), n_iter.next());
-        assert_eq!(Some((&StateIds::NuclearSpin(1), &1)), n_iter.next());
-        assert_eq!(None, n_iter.next());
     }
 
     #[test]
     fn state_iteration() {
         let mut states = States::default();
 
-        let triplet = State::new(StateIds::ElectronSpin(2), vec![-2, 0, 2]);
-        let singlet = State::new(StateIds::ElectronSpin(0), vec![0]);
-
-        let e_state = StateType::Sum(vec![triplet, singlet]);
+        let e_state = StateBasis::new(vec![
+            StateIds::ElectronSpin((2, -2)),
+            StateIds::ElectronSpin((2, 0)),
+            StateIds::ElectronSpin((2, 2)),
+            StateIds::ElectronSpin((0, 0))
+        ]);
         states.push_state(e_state);
 
-        let nuclear = StateType::Irreducible(State::new(StateIds::NuclearSpin(1), vec![-1, 1]));
+        let nuclear = StateBasis::new(vec![StateIds::NuclearSpin((1, -1)), StateIds::NuclearSpin((1, 1))]);
         states.push_state(nuclear);
 
-        let vib = StateType::Irreducible(State::new(StateIds::Vibrational, vec![-1, -2]));
+        let vib = StateBasis::new(vec![StateIds::Vibrational(-1), StateIds::Vibrational(-2)]);
         states.push_state(vib);
 
         let expected: Vec<&str> = "\
-StatesElement { variants: [ElectronSpin(2), NuclearSpin(1), Vibrational], values: [-2, -1, -1] }
-StatesElement { variants: [ElectronSpin(2), NuclearSpin(1), Vibrational], values: [0, -1, -1] }
-StatesElement { variants: [ElectronSpin(2), NuclearSpin(1), Vibrational], values: [2, -1, -1] }
-StatesElement { variants: [ElectronSpin(0), NuclearSpin(1), Vibrational], values: [0, -1, -1] }
-StatesElement { variants: [ElectronSpin(2), NuclearSpin(1), Vibrational], values: [-2, 1, -1] }
-StatesElement { variants: [ElectronSpin(2), NuclearSpin(1), Vibrational], values: [0, 1, -1] }
-StatesElement { variants: [ElectronSpin(2), NuclearSpin(1), Vibrational], values: [2, 1, -1] }
-StatesElement { variants: [ElectronSpin(0), NuclearSpin(1), Vibrational], values: [0, 1, -1] }
-StatesElement { variants: [ElectronSpin(2), NuclearSpin(1), Vibrational], values: [-2, -1, -2] }
-StatesElement { variants: [ElectronSpin(2), NuclearSpin(1), Vibrational], values: [0, -1, -2] }
-StatesElement { variants: [ElectronSpin(2), NuclearSpin(1), Vibrational], values: [2, -1, -2] }
-StatesElement { variants: [ElectronSpin(0), NuclearSpin(1), Vibrational], values: [0, -1, -2] }
-StatesElement { variants: [ElectronSpin(2), NuclearSpin(1), Vibrational], values: [-2, 1, -2] }
-StatesElement { variants: [ElectronSpin(2), NuclearSpin(1), Vibrational], values: [0, 1, -2] }
-StatesElement { variants: [ElectronSpin(2), NuclearSpin(1), Vibrational], values: [2, 1, -2] }
-StatesElement { variants: [ElectronSpin(0), NuclearSpin(1), Vibrational], values: [0, 1, -2] }"
+StatesElement([ElectronSpin((2, -2)), NuclearSpin((1, -1)), Vibrational(-1)])
+StatesElement([ElectronSpin((2, 0)), NuclearSpin((1, -1)), Vibrational(-1)])
+StatesElement([ElectronSpin((2, 2)), NuclearSpin((1, -1)), Vibrational(-1)])
+StatesElement([ElectronSpin((0, 0)), NuclearSpin((1, -1)), Vibrational(-1)])
+StatesElement([ElectronSpin((2, -2)), NuclearSpin((1, 1)), Vibrational(-1)])
+StatesElement([ElectronSpin((2, 0)), NuclearSpin((1, 1)), Vibrational(-1)])
+StatesElement([ElectronSpin((2, 2)), NuclearSpin((1, 1)), Vibrational(-1)])
+StatesElement([ElectronSpin((0, 0)), NuclearSpin((1, 1)), Vibrational(-1)])
+StatesElement([ElectronSpin((2, -2)), NuclearSpin((1, -1)), Vibrational(-2)])
+StatesElement([ElectronSpin((2, 0)), NuclearSpin((1, -1)), Vibrational(-2)])
+StatesElement([ElectronSpin((2, 2)), NuclearSpin((1, -1)), Vibrational(-2)])
+StatesElement([ElectronSpin((0, 0)), NuclearSpin((1, -1)), Vibrational(-2)])
+StatesElement([ElectronSpin((2, -2)), NuclearSpin((1, 1)), Vibrational(-2)])
+StatesElement([ElectronSpin((2, 0)), NuclearSpin((1, 1)), Vibrational(-2)])
+StatesElement([ElectronSpin((2, 2)), NuclearSpin((1, 1)), Vibrational(-2)])
+StatesElement([ElectronSpin((0, 0)), NuclearSpin((1, 1)), Vibrational(-2)])"
             .split("\n")
             .collect();
 
@@ -336,28 +268,30 @@ StatesElement { variants: [ElectronSpin(0), NuclearSpin(1), Vibrational], values
     fn state_filtering() {
         let mut states = States::default();
 
-        let triplet = State::new(StateIds::ElectronSpin(2), vec![-2, 0, 2]);
-        let singlet = State::new(StateIds::ElectronSpin(0), vec![0]);
-
-        let e_state = StateType::Sum(vec![triplet, singlet]);
+        let e_state = StateBasis::new(vec![
+            StateIds::ElectronSpin((2, -2)),
+            StateIds::ElectronSpin((2, 0)),
+            StateIds::ElectronSpin((2, 2)),
+            StateIds::ElectronSpin((0, 0))
+        ]);
         states.push_state(e_state);
 
-        let nuclear = StateType::Irreducible(State::new(StateIds::NuclearSpin(1), vec![-1, 1]));
+        let nuclear = StateBasis::new(vec![StateIds::NuclearSpin((1, -1)), StateIds::NuclearSpin((1, 1))]);
         states.push_state(nuclear);
 
-        let vib = StateType::Irreducible(State::new(StateIds::Vibrational, vec![-1, -2]));
+        let vib = StateBasis::new(vec![StateIds::Vibrational(-1), StateIds::Vibrational(-2)]);
         states.push_state(vib);
 
-        let filtered: StatesBasis<StateIds, i32> = states
+        let filtered: StatesBasis<StateIds> = states
             .iter_elements()
-            .filter(|s| s.variants[0] == StateIds::ElectronSpin(0))
+            .filter(|s| matches!(s[0], StateIds::ElectronSpin((0, _))))
             .collect();
 
         let expected: Vec<&str> = "\
-StatesElement { variants: [ElectronSpin(0), NuclearSpin(1), Vibrational], values: [0, -1, -1] }
-StatesElement { variants: [ElectronSpin(0), NuclearSpin(1), Vibrational], values: [0, 1, -1] }
-StatesElement { variants: [ElectronSpin(0), NuclearSpin(1), Vibrational], values: [0, -1, -2] }
-StatesElement { variants: [ElectronSpin(0), NuclearSpin(1), Vibrational], values: [0, 1, -2] }"
+StatesElement([ElectronSpin((0, 0)), NuclearSpin((1, -1)), Vibrational(-1)])
+StatesElement([ElectronSpin((0, 0)), NuclearSpin((1, 1)), Vibrational(-1)])
+StatesElement([ElectronSpin((0, 0)), NuclearSpin((1, -1)), Vibrational(-2)])
+StatesElement([ElectronSpin((0, 0)), NuclearSpin((1, 1)), Vibrational(-2)])"
             .split("\n")
             .collect();
 
@@ -371,26 +305,18 @@ StatesElement { variants: [ElectronSpin(0), NuclearSpin(1), Vibrational], values
     fn test_wrong_state_initialization() {
         let mut states = States::default();
 
-        let triplet_elements = vec![
-            ElementValues::Spin(-2),
-            ElementValues::Spin(0),
-            ElementValues::Spin(2),
-        ];
-        let triplet = State::new(StateIds::ElectronSpin(2), triplet_elements);
-        let singlet = State::new(StateIds::ElectronSpin(0), vec![ElementValues::Spin(0)]);
-
-        let e_state = StateType::Sum(vec![triplet, singlet]);
+        let e_state = StateBasis::new(vec![
+            StateIds::ElectronSpin((2, -2)),
+            StateIds::ElectronSpin((2, 0)),
+            StateIds::ElectronSpin((2, 2)),
+            StateIds::ElectronSpin((0, 0))
+        ]);
         states.push_state(e_state);
 
-        let nuclear_elements = vec![ElementValues::Spin(-1), ElementValues::Spin(1)];
-        let nuclear =
-            StateType::Irreducible(State::new(StateIds::NuclearSpin(1), nuclear_elements));
+        let nuclear = StateBasis::new(vec![StateIds::NuclearSpin((1, -1)), StateIds::NuclearSpin((1, 1))]);
         states.push_state(nuclear);
 
-        let second_electron_spin = State::new(
-            StateIds::ElectronSpin(1),
-            vec![ElementValues::Spin(-1), ElementValues::Spin(1)],
-        );
-        states.push_state(StateType::Irreducible(second_electron_spin));
+        let second_electron_spin = StateBasis::new(vec![StateIds::ElectronSpin((1, -1)), StateIds::ElectronSpin((1, 1))]);
+        states.push_state(second_electron_spin);
     }
 }

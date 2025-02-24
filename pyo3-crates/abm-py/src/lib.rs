@@ -1,4 +1,4 @@
-use abm::{abm_states::{ABMStates, ABMStatesValues, HifiStates}, ABMHifiProblem, ABMProblemBuilder, ABMVibrational, DoubleHifiProblemBuilder, HifiProblemBuilder, Symmetry};
+use abm::{abm_states::{ABMStates, HifiStates}, ABMHifiProblem, ABMProblemBuilder, ABMVibrational, DoubleHifiProblemBuilder, HifiProblemBuilder, Symmetry};
 use clebsch_gordan::half_integer::{HalfI32, HalfU32};
 use faer::Mat;
 use pyo3::prelude::*;
@@ -130,7 +130,7 @@ impl ABMProblemBuilderPy {
 }
 
 #[pyclass(name = "HifiProblem")]
-pub struct HifiProblemPy(ABMHifiProblem<HifiStates, HalfI32>);
+pub struct HifiProblemPy(ABMHifiProblem<HifiStates>);
 
 
 #[pymethods]
@@ -152,7 +152,7 @@ impl HifiProblemPy {
 }
 
 #[pyclass(name = "ABMProblem")]
-pub struct ABMProblemPy(ABMHifiProblem<ABMStates, ABMStatesValues>);
+pub struct ABMProblemPy(ABMHifiProblem<ABMStates>);
 
 #[pymethods]
 impl ABMProblemPy {

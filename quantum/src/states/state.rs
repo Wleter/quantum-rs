@@ -1,19 +1,40 @@
+use std::mem::{discriminant, Discriminant};
+
 #[derive(Clone, Debug)]
-pub struct State<T, V> {
-    pub(crate) variant: T,
-    pub(crate) basis: Vec<V>,
+pub struct StateBasis<T> {
+    elements: Vec<T>,
+    variant: Discriminant<T>
 }
 
-impl<T: Copy, V: Copy> State<T, V> {
-    pub fn new(variant: T, basis: Vec<V>) -> Self {
-        assert!(!basis.is_empty(), "0 size basis is not allowed");
+impl<T> StateBasis<T> {
+    pub fn new(elements: Vec<T>) -> Self {
+        assert!(!elements.is_empty(), "0 size basis is not allowed");
 
-        Self { variant, basis }
+        let variant = discriminant(elements.first().unwrap());
+        assert!(
+            elements.iter().all(|x| discriminant(x) == variant), 
+            "only same variant types in basis is permitted"
+        );
+
+        Self { 
+            elements,
+            variant 
+        }
     }
-}
 
-impl<T, V> State<T, V> {
+    pub fn elements(&self) -> &[T] {
+        &self.elements
+    }
+
+    pub fn variant(&self) -> &Discriminant<T> {
+        &self.variant
+    }
+
     pub fn size(&self) -> usize {
-        self.basis.len()
+        self.elements.len()
     }
+}
+
+pub fn into_variant<V, T>(elements: Vec<V>, variant: fn(V) -> T) -> Vec<T> {
+    elements.into_iter().map(variant).collect()
 }
