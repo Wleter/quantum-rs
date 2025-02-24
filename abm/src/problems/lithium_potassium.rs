@@ -1,4 +1,4 @@
-use abm::{utility::save_spectrum, ABMProblemBuilder, ABMVibrational, HifiProblemBuilder};
+use abm::{ABMProblemBuilder, ABMVibrational, HifiProblemBuilder, utility::save_spectrum};
 use clebsch_gordan::{hi32, hu32};
 use faer::mat;
 use quantum::{
@@ -22,7 +22,7 @@ impl LithiumPotassium {
         // ---------- Li6 ----------
         let a_hifi = Energy(Self::HIFI_LI6_MHZ, MHz).to_au();
 
-        let hifi_problem = HifiProblemBuilder::new(hu32!(1/2), hu32!(1))
+        let hifi_problem = HifiProblemBuilder::new(hu32!(1 / 2), hu32!(1))
             .with_hyperfine_coupling(a_hifi)
             .build();
 
@@ -42,7 +42,7 @@ impl LithiumPotassium {
         // ---------- K40 ----------
         let a_hifi = Energy(Self::HIFI_K40_MHZ, MHz).to_au();
 
-        let hifi_problem = HifiProblemBuilder::new(hu32!(1/2), hu32!(4))
+        let hifi_problem = HifiProblemBuilder::new(hu32!(1 / 2), hu32!(4))
             .with_hyperfine_coupling(a_hifi)
             .build();
 
@@ -64,9 +64,11 @@ impl LithiumPotassium {
         let a_hifi_1 = Energy(Self::HIFI_LI6_MHZ, MHz).to_au();
         let a_hifi_2 = Energy(Self::HIFI_K40_MHZ, MHz).to_au();
 
-        let lithium = HifiProblemBuilder::new(hu32!(1/2), hu32!(1)).with_hyperfine_coupling(a_hifi_1);
+        let lithium =
+            HifiProblemBuilder::new(hu32!(1 / 2), hu32!(1)).with_hyperfine_coupling(a_hifi_1);
 
-        let potassium = HifiProblemBuilder::new(hu32!(1/2), hu32!(4)).with_hyperfine_coupling(a_hifi_2);
+        let potassium =
+            HifiProblemBuilder::new(hu32!(1 / 2), hu32!(4)).with_hyperfine_coupling(a_hifi_2);
 
         let triplet_state = vec![Energy(-427.44, MHz)];
         let singlet_state = vec![Energy(-720.76, MHz)];

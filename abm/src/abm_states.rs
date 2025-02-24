@@ -2,9 +2,9 @@ use faer::Mat;
 use quantum::{
     cast_variant,
     states::{
+        StatesBasis,
         operator::Operator,
         spins::{Spin, SpinOperators},
-        StatesBasis,
     },
 };
 
