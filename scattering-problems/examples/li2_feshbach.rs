@@ -24,20 +24,20 @@ problems_impl!(Problems, "Li2 Feshbach",
 );
 
 impl Problems {
-    fn get_potential(projection: HalfI32, mag_field: f64) -> ScatteringProblem<impl MatPotential, IndexBasisDescription> {
+    fn get_problem(projection: HalfI32, mag_field: f64) -> ScatteringProblem<impl MatPotential, IndexBasisDescription> {
         let first = HifiProblemBuilder::new(hu32!(1/2), hu32!(1))
             .with_hyperfine_coupling(Energy(228.2 / 1.5, MHz).to_au());
 
         let hifi_problem = DoubleHifiProblemBuilder::new_homo(first, Symmetry::Fermionic)
             .with_projection(projection);
+        
+        let mut li2_singlet = Composite::new(Dispersion::new(-1381., -6));
+        li2_singlet.add_potential(Dispersion::new(1.112e7, -12));
 
         let mut li2_triplet = Composite::new(Dispersion::new(-1381., -6));
         li2_triplet.add_potential(Dispersion::new(2.19348e8, -12));
 
-        let mut li2_singlet = Composite::new(Dispersion::new(-1381., -6));
-        li2_singlet.add_potential(Dispersion::new(1.112e7, -12));
-
-        AlkaliAtomsProblemBuilder::new(hifi_problem, li2_triplet, li2_singlet)
+        AlkaliAtomsProblemBuilder::new(hifi_problem, li2_singlet, li2_triplet)
             .build(mag_field)
     }
 
@@ -49,7 +49,7 @@ impl Problems {
     }
 
     fn potential_values() {
-        let alkali_problem = Self::get_potential(hi32!(-2), 100.);
+        let alkali_problem = Self::get_problem(hi32!(0), 100.);
         let potential = &alkali_problem.potential;
 
         let mut potential_mat = Mat::<f64>::identity(potential.size(), potential.size());
@@ -90,7 +90,7 @@ impl Problems {
         let start = Instant::now();
         
         let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
-            let alkali_problem = Self::get_potential(projection, mag_field);
+            let alkali_problem = Self::get_problem(projection, mag_field);
 
             let mut li2 = Self::get_particles();
             let potential = &alkali_problem.potential;

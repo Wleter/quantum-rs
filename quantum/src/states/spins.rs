@@ -2,15 +2,28 @@ use clebsch_gordan::half_integer::{HalfI32, HalfU32};
 
 use super::braket::Braket;
 
-#[derive(Clone, Copy, Debug, PartialEq, Default)]
+#[derive(Clone, Copy, PartialEq, Default)]
 pub struct Spin {
     pub s: HalfU32,
     pub ms: HalfI32,
 }
 
+impl std::fmt::Debug for Spin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}) {}", self.s, self.ms)
+    }
+}
+
 impl Spin {
     pub fn new(s: HalfU32, ms: HalfI32) -> Self {
         Self { s, ms }
+    }
+
+    pub fn zero() -> Self {
+        Self {
+            s: 0.into(),
+            ms: 0.into()
+        }
     }
 
     pub fn spin_type(&self) -> SpinType {

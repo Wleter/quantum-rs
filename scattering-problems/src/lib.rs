@@ -1,14 +1,15 @@
-use scattering_solver::{boundary::Asymptotic, potentials::potential::Potential};
+use faer::Mat;
+use scattering_solver::{boundary::Asymptotic, potentials::potential::{MatPotential, Potential}};
 
 pub mod alkali_atoms;
 pub mod alkali_rotor_atom;
 pub mod utility;
 pub mod rotor_atom;
 pub mod potential_interpolation;
-pub mod operators;
 pub mod alkali_rotor;
 pub mod angular_block;
 pub mod uncoupled_alkali_rotor_atom;
+pub mod rkhs_interpolation;
 
 pub struct ScatteringProblem<P: Potential, B: BasisDescription> {
     pub potential: P,
@@ -16,8 +17,10 @@ pub struct ScatteringProblem<P: Potential, B: BasisDescription> {
     pub basis_description: B
 }
 
-pub trait FieldDependentScatteringProblem<P: Potential, B: BasisDescription> {
-    fn scattering_for(&self, field: f64) -> ScatteringProblem<P, B>;
+pub trait FieldScatteringProblem<B: BasisDescription> {
+    fn levels(&self, field: f64, l: Option<u32>) -> (Vec<f64>, Mat<f64>);
+
+    fn scattering_for(&self, field: f64) -> ScatteringProblem<impl MatPotential, B>;
 }
 
 pub trait BasisDescription {

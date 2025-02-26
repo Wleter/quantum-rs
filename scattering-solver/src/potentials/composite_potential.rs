@@ -15,6 +15,19 @@ impl<P: SubPotential> Composite<P> {
         }
     }
 
+    pub fn from_vec(potentials: Vec<P>) -> Self {
+        let mut potentials = potentials.into_iter();
+
+        let mut potential = Composite::new(potentials.next()
+            .expect("passed 0 sized vector of potential")
+        );
+        for p in potentials {
+            potential.add_potential(p);
+        }
+
+        potential
+    }
+
     pub fn add_potential(&mut self, potential: P) -> &mut Self {
         assert!(self.main_potential.size() == potential.size());
 

@@ -1,9 +1,9 @@
-use abm::{get_hifi, get_zeeman_prop, utility::diagonalize, HifiProblemBuilder};
-use clebsch_gordan::{hi32, half_integer::{HalfI32, HalfU32}, hu32, wigner_3j};
+use abm::{utility::diagonalize, HifiProblemBuilder};
+use clebsch_gordan::hu32;
 use faer::Mat;
-use quantum::{cast_variant, params::{particle::Particle, particle_factory::RotConst}, states::{operator::Operator, spins::{spin_projections, SpinOperators}, state::State, state_type::StateType, States, StatesBasis}};
+use quantum::{cast_variant, operator_diagonal_mel, operator_mel, params::{particle_factory::RotConst, Params}, states::{operator::Operator, spins::{get_spin_basis, Spin, SpinOperators}, state::{into_variant, StateBasis}, States, StatesBasis}};
 
-use crate::{cast_spin_braket, get_aniso_hifi, get_spin_rot, uncoupled_alkali_rotor_atom::p3_factor, utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorJTotMax, RotorLMax}};
+use crate::{alkali_rotor_atom::TramBasisRecipe, utility::{aniso_hifi_tram_mel, aniso_hifi_uncoupled_mel, create_angular_pairs, spin_rot_tram_mel, AngularPair, AnisoHifi, GammaSpinRot}};
 
 #[derive(Clone)]
 pub struct AlkaliRotorProblemBuilder {
@@ -11,18 +11,19 @@ pub struct AlkaliRotorProblemBuilder {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum SpinRotor {
+pub enum AlkaliRotorStates {
     /// (l, j, j_tot)
-    Angular((u32, u32, u32)),
-    RotorS(HalfU32),
-    RotorI(HalfU32),
+    Angular(AngularPair),
+    NTot(Spin),
+    RotorS(Spin),
+    RotorI(Spin),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum UncoupledSpinRotor {
-    RotorN(HalfU32),
-    RotorS(HalfU32),
-    RotorI(HalfU32),
+pub enum UncoupledAlkaliRotorStates {
+    RotorN(Spin),
+    RotorS(Spin),
+    RotorI(Spin),
 }
 
 impl AlkaliRotorProblemBuilder {
@@ -34,185 +35,173 @@ impl AlkaliRotorProblemBuilder {
         }
     }
 
-    pub fn build(self, particle: &Particle) -> AlkaliRotorProblem {
-        let l_max = particle.get::<RotorLMax>().expect("Did not find SystemLMax parameter in particles").0;
-        let j_max = particle.get::<RotorJMax>().expect("Did not find RotorJMax parameter in particles").0;
-        let j_tot_max = particle.get::<RotorJTotMax>().map_or(0, |x| x.0);
-
-        let rot_const = particle.get::<RotConst>().expect("Did not find RotConst parameter in the particles").0;
-        let gamma_spin_rot = particle.get::<GammaSpinRot>().unwrap_or(&GammaSpinRot(0.)).0;
-        let aniso_hifi = particle.get::<AnisoHifi>().unwrap_or(&AnisoHifi(0.)).0;
+    pub fn build(self, params: &Params, basis_recipe: &TramBasisRecipe) -> AlkaliRotorProblem {
+        let rot_const = params.get::<RotConst>()
+            .expect("Did not find RotConst parameter in the params").0;
+        let gamma_spin_rot = params.get::<GammaSpinRot>().unwrap_or(&GammaSpinRot(0.)).0;
+        let aniso_hifi = params.get::<AnisoHifi>().unwrap_or(&AnisoHifi(0.)).0;
         
-        let ls: Vec<u32> = (0..=l_max).collect();
-        
-        let mut angular_states = vec![];
-        for j_tot in 0..=j_tot_max {
-            for &l in &ls {
-                let j_lower = (l as i32 - j_tot as i32).unsigned_abs();
-                if j_lower > j_max {
-                    continue; // todo! 
-                }
-                let j_upper = (l + j_tot).min(j_max);
-                
-                for j in j_lower..=j_upper {
-                    let projections = spin_projections(HalfU32::from_doubled(2 * j_tot));
-                    let state = State::new(SpinRotor::Angular((l, j, j_tot)), projections);
-                    angular_states.push(state);
-                }
-            }
-        }
+        let l_max = basis_recipe.l_max;
+        let n_max = basis_recipe.n_max;
+        let n_tot_max = basis_recipe.n_tot_max;
+        let parity = basis_recipe.parity;
+            
+        let angular_states = create_angular_pairs(l_max, n_max, n_tot_max, parity);
+        let angular_states = into_variant(angular_states, AlkaliRotorStates::Angular);
 
-        let s_rotor = State::new(
-            SpinRotor::RotorS(self.hifi_problem.s),
-            spin_projections(self.hifi_problem.s),
-        );
-        let i_rotor = State::new(
-            SpinRotor::RotorI(self.hifi_problem.i),
-            spin_projections(self.hifi_problem.i),
-        );
+        let total_angular = (0..=n_tot_max).map(|n_tot| {
+            into_variant(get_spin_basis(n_tot.into()), AlkaliRotorStates::NTot)
+        })
+        .flatten()
+        .collect();
+
+        let s_rotor = into_variant(get_spin_basis(self.hifi_problem.s), AlkaliRotorStates::RotorS);
+        let i_rotor = into_variant(get_spin_basis(self.hifi_problem.i), AlkaliRotorStates::RotorI);
 
         let mut states = States::default();
-        states.push_state(StateType::Sum(angular_states))
-            .push_state(StateType::Irreducible(s_rotor))
-            .push_state(StateType::Irreducible(i_rotor));
+        states.push_state(StateBasis::new(angular_states))
+            .push_state(StateBasis::new(total_angular))
+            .push_state(StateBasis::new(s_rotor))
+            .push_state(StateBasis::new(i_rotor));
 
         let basis = match self.hifi_problem.total_projection {
             Some(m_tot) => {
                 states.iter_elements()
-                    .filter(|els| {
-                        els.values.iter().copied().sum::<HalfI32>() == m_tot
+                    .filter(|b| {
+                        let ang = cast_variant!(b[0], AlkaliRotorStates::Angular);
+                        let m_n_tot = cast_variant!(b[1], AlkaliRotorStates::NTot);
+                        let s_rotor = cast_variant!(b[2], AlkaliRotorStates::RotorS);
+                        let i_rotor = cast_variant!(b[3], AlkaliRotorStates::RotorI);
+
+                        m_n_tot.ms + s_rotor.ms + i_rotor.ms == m_tot
+                            && (ang.l + ang.n) >= m_n_tot.s
+                            && (ang.l + m_n_tot.s) >= ang.n 
+                            && (ang.n + m_n_tot.s) >= ang.l
                     })
                     .collect()
             },
-            None => states.get_basis(),
+            None => states.iter_elements()
+            .filter(|b| {
+                let ang = cast_variant!(b[0], AlkaliRotorStates::Angular);
+                let m_n_tot = cast_variant!(b[1], AlkaliRotorStates::NTot);
+                
+                (ang.l + ang.n) >= m_n_tot.s
+                    && (ang.l + m_n_tot.s) >= ang.n 
+                    && (ang.n + m_n_tot.s) >= ang.l
+            })
+            .collect(),
         };
 
-        let j_centrifugal = Operator::from_diagonal_mel(&basis, [SpinRotor::Angular((0, 0, 0))], |[ang]| {
-            let (_, j, _) = cast_variant!(ang.0, SpinRotor::Angular);
-
-            rot_const * (j * (j + 1)) as f64
+        let n_centrifugal = operator_diagonal_mel!(&basis, |[ang: AlkaliRotorStates::Angular]| {
+            rot_const * ang.n.value() * (ang.n.value() + 1.0)
         });
 
         let mut hifi = Mat::zeros(basis.len(), basis.len());
         if let Some(a_hifi) = self.hifi_problem.a_hifi {
-            hifi += get_hifi!(basis, SpinRotor::RotorS, SpinRotor::RotorI, a_hifi).as_ref()
+            hifi += operator_mel!(&basis, |[s: AlkaliRotorStates::RotorS, i: AlkaliRotorStates::RotorI]| {
+                a_hifi * SpinOperators::dot(s, i)
+            }).as_ref();
         }
 
-        let mut zeeman_prop = get_zeeman_prop!(basis, SpinRotor::RotorS, self.hifi_problem.gamma_e).into_backed();
+        let mut zeeman_prop = operator_diagonal_mel!(&basis, |[s_rotor: AlkaliRotorStates::RotorS]| {
+            -self.hifi_problem.gamma_e * s_rotor.ms.value()
+        }).into_backed();
         if let Some(gamma_i) = self.hifi_problem.gamma_i {
-            zeeman_prop += get_zeeman_prop!(basis, SpinRotor::RotorI, gamma_i).as_ref()
+            zeeman_prop += operator_diagonal_mel!(&basis, |[i: AlkaliRotorStates::RotorI]| {
+                -gamma_i * i.ms.value()
+            }).as_ref()
         }
 
-        let spin_rot = get_spin_rot!(&basis, SpinRotor::Angular, SpinRotor::RotorS, gamma_spin_rot);
+        let spin_rot = operator_mel!(&basis, 
+            |[ang: AlkaliRotorStates::Angular, n_tot: AlkaliRotorStates::NTot, s: AlkaliRotorStates::RotorS]| {
+                gamma_spin_rot * spin_rot_tram_mel(ang, n_tot, s)
+            }
+        );
 
-        let aniso_hifi = get_aniso_hifi!(&basis, SpinRotor::Angular, 
-            SpinRotor::RotorS, SpinRotor::RotorI, aniso_hifi);
+        let aniso_hifi = operator_mel!(&basis, 
+            |[ang: AlkaliRotorStates::Angular, n_tot: AlkaliRotorStates::NTot, s: AlkaliRotorStates::RotorS, i: AlkaliRotorStates::RotorI]| {
+                aniso_hifi * aniso_hifi_tram_mel(ang, n_tot, s, i)
+            }
+        );
 
         AlkaliRotorProblem {
             basis,
-            mag_inv: hifi + aniso_hifi.as_ref() + j_centrifugal.as_ref() + spin_rot.as_ref(),
+            mag_inv: hifi + aniso_hifi.as_ref() + n_centrifugal.as_ref() + spin_rot.as_ref(),
             mag_prop: zeeman_prop,
         }
     }
 
-    pub fn build_uncoupled(self, particle: &Particle) -> UncoupledAlkaliRotorProblem {
-        let rot_const = particle.get::<RotConst>()
-            .expect("Did not find RotConst parameter in the particles").0;
-        let gamma_spin_rot = particle.get::<GammaSpinRot>().unwrap_or(&GammaSpinRot(0.)).0;
-        let aniso_hifi = particle.get::<AnisoHifi>().unwrap_or(&AnisoHifi(0.)).0;
+    pub fn build_uncoupled(self, params: &Params, n_max: u32) -> UncoupledAlkaliRotorProblem {
+        let rot_const = params.get::<RotConst>()
+            .expect("Did not find RotConst parameter in the params").0;
+        let gamma_spin_rot = params.get::<GammaSpinRot>().unwrap_or(&GammaSpinRot(0.)).0;
+        let aniso_hifi = params.get::<AnisoHifi>().unwrap_or(&AnisoHifi(0.)).0;
 
-        let j_max = particle.get::<RotorJMax>()
-            .expect("Did not find RotorJMax parameter in particles").0;
-
-        let n_states = (0..=j_max)
-            .map(|j| {
-                let j = HalfU32::from_doubled(2 * j);
-                let projections = spin_projections(j);
-                State::new(UncoupledSpinRotor::RotorN(j), projections)
-            })
-            .collect();
-
-        let s_rotor = State::new(
-            UncoupledSpinRotor::RotorS(self.hifi_problem.s),
-            spin_projections(self.hifi_problem.s),
-        );
-        let i_rotor = State::new(
-            UncoupledSpinRotor::RotorI(self.hifi_problem.i),
-            spin_projections(self.hifi_problem.i),
-        );
+        let n_rotor = (0..=n_max).map(|n_tot| {
+            into_variant(get_spin_basis(n_tot.into()), UncoupledAlkaliRotorStates::RotorN)
+        })
+        .flatten()
+        .collect();
+    
+        let s_rotor = into_variant(get_spin_basis(self.hifi_problem.s), UncoupledAlkaliRotorStates::RotorS);
+        let i_rotor = into_variant(get_spin_basis(self.hifi_problem.i), UncoupledAlkaliRotorStates::RotorI);
 
         let mut states = States::default();
-        states.push_state(StateType::Sum(n_states))
-            .push_state(StateType::Irreducible(s_rotor))
-            .push_state(StateType::Irreducible(i_rotor));
+        states.push_state(StateBasis::new(n_rotor))
+            .push_state(StateBasis::new(s_rotor))
+            .push_state(StateBasis::new(i_rotor));
 
+        // todo! check if parity is also possible in uncoupled basis
         let basis = match self.hifi_problem.total_projection {
             Some(m_tot) => {
                 states.iter_elements()
-                    .filter(|els| {
-                        els.values.iter().copied().sum::<HalfI32>() == m_tot
+                    .filter(|b| {
+                        let n_rotor = cast_variant!(b[0], UncoupledAlkaliRotorStates::RotorN);
+                        let s_rotor = cast_variant!(b[1], UncoupledAlkaliRotorStates::RotorS);
+                        let i_rotor = cast_variant!(b[2], UncoupledAlkaliRotorStates::RotorI);
+
+                        n_rotor.ms + s_rotor.ms + i_rotor.ms == m_tot
                     })
                     .collect()
             },
-            None => states.get_basis(),
+            None => states.iter_elements().collect(),
         };
 
-        let j_centrifugal = Operator::from_diagonal_mel(&basis, [UncoupledSpinRotor::RotorN(hu32!(0))], |[ang]| {
-            let j = cast_variant!(ang.0, UncoupledSpinRotor::RotorN).value();
-
-            rot_const * (j * (j + 1.))
+        let n_centrifugal = operator_diagonal_mel!(&basis, |[n: UncoupledAlkaliRotorStates::RotorN]| {
+            rot_const * n.s.value() * (n.s.value() + 1.)
         });
 
         let mut hifi = Mat::zeros(basis.len(), basis.len());
         if let Some(a_hifi) = self.hifi_problem.a_hifi {
-            hifi += get_hifi!(basis, UncoupledSpinRotor::RotorS, UncoupledSpinRotor::RotorI, a_hifi).as_ref()
+            hifi += operator_mel!(&basis, |[s: UncoupledAlkaliRotorStates::RotorS, i: UncoupledAlkaliRotorStates::RotorI]| {
+                a_hifi * SpinOperators::dot(s, i)
+            }).as_ref();
         }
 
-        let mut zeeman_prop = get_zeeman_prop!(basis, UncoupledSpinRotor::RotorS, self.hifi_problem.gamma_e).into_backed();
+        let mut zeeman_prop = operator_diagonal_mel!(&basis, |[s_rotor: UncoupledAlkaliRotorStates::RotorS]| {
+            -self.hifi_problem.gamma_e * s_rotor.ms.value()
+        }).into_backed();
         if let Some(gamma_i) = self.hifi_problem.gamma_i {
-            zeeman_prop += get_zeeman_prop!(basis, UncoupledSpinRotor::RotorI, gamma_i).as_ref()
+            zeeman_prop += operator_diagonal_mel!(&basis, |[i: UncoupledAlkaliRotorStates::RotorI]| {
+                -gamma_i * i.ms.value()
+            }).as_ref()
         }
 
-        let spin_rot = Operator::from_mel(&basis, 
-            [UncoupledSpinRotor::RotorN(hu32!(0)), UncoupledSpinRotor::RotorS(hu32!(0))], 
-            |[n, s]| {
-                let n_braket = cast_spin_braket!(n, UncoupledSpinRotor::RotorN);
-                let s_braket = cast_spin_braket!(s, UncoupledSpinRotor::RotorS);
-
-                gamma_spin_rot * SpinOperators::dot(n_braket, s_braket)
+        let spin_rot = operator_mel!(&basis, 
+            |[n: UncoupledAlkaliRotorStates::RotorN, s: UncoupledAlkaliRotorStates::RotorS]| {
+                gamma_spin_rot * SpinOperators::dot(n, s)
             }
         );
 
-        let aniso_hifi = Operator::from_mel(&basis, 
-            [
-                UncoupledSpinRotor::RotorN(hu32!(0)), 
-                UncoupledSpinRotor::RotorS(hu32!(0)), 
-                UncoupledSpinRotor::RotorI(hu32!(0))
-            ], 
-            |[n, s, i]| {
-                let n_braket = cast_spin_braket!(n, UncoupledSpinRotor::RotorN);
-                let s_braket = cast_spin_braket!(s, UncoupledSpinRotor::RotorS);
-                let i_braket = cast_spin_braket!(i, UncoupledSpinRotor::RotorI);
-
-                let factor = aniso_hifi / f64::sqrt(0.3) * p3_factor(&s_braket.0) * p3_factor(&i_braket.0) 
-                    * ((2. * n_braket.0.s.value() + 1.) * (2. * n_braket.1.s.value() + 1.)).sqrt();
-
-                let sign = (-1.0f64).powi(((s_braket.0.s.double_value() + i_braket.0.s.double_value()) as i32 
-                        - (n_braket.0.ms.double_value() + i_braket.0.ms.double_value() + s_braket.0.ms.double_value())) / 2);
-
-                let wigners = wigner_3j(n_braket.0.s, hu32!(2), n_braket.1.s, -n_braket.0.ms, n_braket.0.ms - n_braket.1.ms, n_braket.1.ms)
-                    * wigner_3j(n_braket.0.s, hu32!(2), n_braket.1.s, hi32!(0), hi32!(0), hi32!(0))
-                    * wigner_3j(hu32!(1), hu32!(1), hu32!(2), s_braket.0.ms - s_braket.1.ms, i_braket.0.ms - i_braket.1.ms, n_braket.0.ms - n_braket.1.ms)
-                    * wigner_3j(s_braket.0.s, hu32!(1), s_braket.1.s, -s_braket.0.ms, s_braket.0.ms - s_braket.1.ms, s_braket.1.ms)
-                    * wigner_3j(i_braket.0.s, hu32!(1), i_braket.1.s, -i_braket.0.ms, i_braket.0.ms - i_braket.1.ms, i_braket.1.ms);
-
-                factor * sign * wigners
+        let aniso_hifi = operator_mel!(&basis, 
+            |[n: UncoupledAlkaliRotorStates::RotorN, s: UncoupledAlkaliRotorStates::RotorS, i: UncoupledAlkaliRotorStates::RotorI]| {
+                aniso_hifi * aniso_hifi_uncoupled_mel(n, s, i)
             }
         );
 
         UncoupledAlkaliRotorProblem {
             basis,
-            mag_inv: hifi + aniso_hifi.as_ref() + j_centrifugal.as_ref() + spin_rot.as_ref(),
+            mag_inv: hifi + aniso_hifi.as_ref() + n_centrifugal.as_ref() + spin_rot.as_ref(),
             mag_prop: zeeman_prop,
         }
     }
@@ -220,28 +209,28 @@ impl AlkaliRotorProblemBuilder {
 
 
 pub struct AlkaliRotorProblem {
-    pub basis: StatesBasis<SpinRotor, HalfI32>,
+    pub basis: StatesBasis<AlkaliRotorStates>,
     mag_inv: Mat<f64>,
     mag_prop: Mat<f64>
 }
 
 impl AlkaliRotorProblem {
-    pub fn levels_at_field(&self, mag_field: f64) -> (Vec<f64>, Mat<f64>) {
-        let internal = &self.mag_inv + mag_field * &self.mag_prop;
+    pub fn levels(&self, field: f64) -> (Vec<f64>, Mat<f64>) {
+        let internal = &self.mag_inv + field * &self.mag_prop;
 
         diagonalize(internal.as_ref())
     }
 }
 
 pub struct UncoupledAlkaliRotorProblem {
-    pub basis: StatesBasis<UncoupledSpinRotor, HalfI32>,
+    pub basis: StatesBasis<UncoupledAlkaliRotorStates>,
     mag_inv: Mat<f64>,
     mag_prop: Mat<f64>
 }
 
 impl UncoupledAlkaliRotorProblem {
-    pub fn levels_at_field(&self, mag_field: f64) -> (Vec<f64>, Mat<f64>) {
-        let internal = &self.mag_inv + mag_field * &self.mag_prop;
+    pub fn levels(&self, field: f64) -> (Vec<f64>, Mat<f64>) {
+        let internal = &self.mag_inv + field * &self.mag_prop;
 
         diagonalize(internal.as_ref())
     }

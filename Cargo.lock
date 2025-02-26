@@ -149,7 +149,7 @@ dependencies = [
 [[package]]
 name = "clebsch-gordan"
 version = "0.3.0"
-source = "git+https://github.com/Wleter/clebsch-gordan#6718951db1113913114b816361ff13a4746493e7"
+source = "git+https://github.com/Wleter/clebsch-gordan?branch=master#48c7f626152442eba86279e9a597a8527d86bf71"
 dependencies = [
  "lazy_static",
  "lru",

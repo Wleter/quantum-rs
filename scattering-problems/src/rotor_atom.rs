@@ -1,14 +1,20 @@
-use clebsch_gordan::half_integer::HalfU32;
 use faer::Mat;
-use quantum::{params::{particle_factory::RotConst, particles::Particles}, states::{operator::Operator, state::State, state_type::StateType, States, StatesBasis}};
+use quantum::{cast_variant, operator_diagonal_mel, operator_mel, params::{particle_factory::RotConst, Params}, states::{braket::Braket, operator::Operator, state::{into_variant, StateBasis}, States, StatesBasis}};
 use scattering_solver::{boundary::Asymptotic, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, masked_potential::MaskedPotential, pair_potential::PairPotential, potential::{MatPotential, SimplePotential}}, utility::AngMomentum};
 
-use crate::{utility::{percival_coef, RotorJMax, RotorJTot, RotorLMax}, BasisDescription, ScatteringProblem};
+use crate::{utility::{percival_coef, AngularPair}, BasisDescription, ScatteringProblem};
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum RotorAtomStates {
-    SystemL,
-    RotorJ,
+    SystemL(u32),
+    RotorN(u32),
+}
+
+#[derive(Clone, Debug, Copy, Default)]
+pub struct RotorAtomBasisRecipe {
+    pub l_max: u32,
+    pub n_max: u32,
+    pub n_tot: u32
 }
 
 #[derive(Clone)]
@@ -29,46 +35,59 @@ where
         }
     }
 
-    pub fn build(self, particles: &Particles) -> ScatteringProblem<impl MatPotential + use<P>, RotorAtomBasisDescription> {
-        // todo! possibly change to rotor particle having RotConst
-        let rot_const = particles.get::<RotConst>()
-            .expect("Did not find RotConst parameter in the particles").0;
-        let j_tot = particles.get::<RotorJTot>().map_or(0, |x| x.0);
+    pub fn build(self, params: &Params, basis_recipe: &RotorAtomBasisRecipe) -> ScatteringProblem<impl MatPotential + use<P>, RotorAtomBasisDescription> {
+        let rot_const = params.get::<RotConst>()
+            .expect("Did not find RotConst parameter in the params").0;
+        let n_tot = basis_recipe.n_tot;
 
-        let rotor_basis = self.basis(particles);
+        let rotor_basis = self.basis(basis_recipe);
 
-        let j_centrifugal_mask = Operator::from_diagonal_mel(&rotor_basis, [RotorAtomStates::RotorJ], |[j]| {
-            (j.1 * (j.1 + 1)) as f64
+        let n_centrifugal_mask = operator_diagonal_mel!(&rotor_basis, |[n: RotorAtomStates::RotorN]| {
+            (n * (n + 1)) as f64
         }).into_backed();
-        let j_potential = Dispersion::new(rot_const, 0);
+        
+        let n_potential = Dispersion::new(rot_const, 0);
+        let rotor_centrifugal = MaskedPotential::new(n_potential, n_centrifugal_mask);
 
-        let rotor_centrifugal = MaskedPotential::new(j_potential, j_centrifugal_mask);
-
-        let mut potentials = self.potential.into_iter()
+        let potentials = self.potential.into_iter()
             .map(|(lambda, potential)| {
-                let rotor_masking = Operator::from_mel(&rotor_basis, [RotorAtomStates::SystemL, RotorAtomStates::RotorJ], |[l, j]| {
-                    let lj_left = (HalfU32::from_doubled(2 * l.bra.1), HalfU32::from_doubled(2 * j.bra.1));
-                    let lj_right = (HalfU32::from_doubled(2 * l.ket.1), HalfU32::from_doubled(2 * j.ket.1));
+                let rotor_masking = operator_mel!(&rotor_basis,
+                    |[l: RotorAtomStates::SystemL, n: RotorAtomStates::RotorN]| {
+                        let ang = Braket {
+                            bra: AngularPair { 
+                                l: l.bra.into(),
+                                n: n.bra.into()
+                            },
+                            ket: AngularPair {
+                                l: l.ket.into(),
+                                n: n.ket.into()
+                            }
+                        };
 
-                    percival_coef(lambda, lj_left, lj_right, HalfU32::from_doubled(2 * j_tot))
-                }).into_backed();
+                        percival_coef(lambda, ang, n_tot.into())
+                    }
+                ).into_backed();
 
                 MaskedPotential::new(potential, rotor_masking)
-            });
+            })
+            .collect();
 
-        let mut potential = Composite::new(potentials.next().expect("No singlet potentials found"));
-        for p in potentials {
-            potential.add_potential(p);
-        }
+        let potential = Composite::from_vec(potentials);
 
         let full_potential = PairPotential::new(rotor_centrifugal, potential);
 
         let angular_momenta = rotor_basis.iter()
-            .map(|x| AngMomentum(x.values[0]))
+            .map(|x| {
+                let l = cast_variant!(x[0], RotorAtomStates::SystemL);
+                AngMomentum(l)
+            })
             .collect();
         
         let channel_energies = rotor_basis.iter()
-            .map(|x| rot_const * (x.values[1] * (x.values[1] + 1)) as f64)
+            .map(|x| {
+                let n = cast_variant!(x[1], RotorAtomStates::RotorN);
+                rot_const * (n * (n + 1)) as f64
+            })
             .collect();
 
         let asymptotic = Asymptotic {
@@ -80,7 +99,7 @@ where
 
         let description = RotorAtomBasisDescription {
             basis: rotor_basis,
-            j_tot
+            n_tot
         };
 
         ScatteringProblem {
@@ -90,57 +109,55 @@ where
         }
     }
 
-    fn basis(&self, particles: &Particles) -> StatesBasis<RotorAtomStates, u32> {
-        let l_max = particles.get::<RotorLMax>()
-            .expect("Did not find SystemLMax parameter in particles").0;
-        let j_max = particles.get::<RotorJMax>()
-            .expect("Did not find RotorJMax parameter in particles").0;
-        let j_tot = particles.get::<RotorJTot>().map_or(0, |x| x.0);
+    fn basis(&self, basis_recipe: &RotorAtomBasisRecipe) -> StatesBasis<RotorAtomStates> {
+        let l_max = basis_recipe.l_max;
+        let n_max = basis_recipe.n_max;
+        let n_tot = basis_recipe.n_tot;
 
         let all_even = self.potential.iter().all(|(lambda, _)| lambda & 1 == 0);
 
-        let ls = (0..=l_max)
+        let ls: Vec<u32> = (0..=l_max)
             .step_by(if all_even { 2 } else { 1 } )
             .collect();
-        let system_l = State::new(RotorAtomStates::SystemL, ls);
+        let system_l = into_variant(ls, RotorAtomStates::SystemL);
 
-        let js = (0..=j_max)
+        let ns = (0..=n_max)
             .step_by(if all_even { 2 } else { 1 } )
             .collect();
-        let rotor_j = State::new(RotorAtomStates::RotorJ, js);
+        let rotor_n = into_variant(ns, RotorAtomStates::RotorN);
 
         let mut rotor_states = States::default();
-        rotor_states.push_state(StateType::Irreducible(system_l))
-            .push_state(StateType::Irreducible(rotor_j));
+        rotor_states.push_state(StateBasis::new(system_l))
+            .push_state(StateBasis::new(rotor_n));
         
         rotor_states.iter_elements()
-            .filter(|a| {
-                let j = a.values[0];
-                let l = a.values[1];
+            .filter(|b| {
+                let l = cast_variant!(b[0], RotorAtomStates::SystemL);
+                let n = cast_variant!(b[1], RotorAtomStates::RotorN);
 
-                l + j >= j_tot && (l as i32 - j as i32).unsigned_abs() <= j_tot
+                l + n >= n_tot && (l as i32 - n as i32).unsigned_abs() <= n_tot
             })
             .collect()
     }
 }
 
 pub struct RotorAtomBasisDescription {
-    pub basis: StatesBasis<RotorAtomStates, u32>,
-    pub j_tot: u32
-}
-
-pub struct RotorAtomBasisElement {
-    pub l: u32,
-    pub j: u32
+    pub basis: StatesBasis<RotorAtomStates>,
+    pub n_tot: u32
 }
 
 impl BasisDescription for RotorAtomBasisDescription {
-    type BasisElement = RotorAtomBasisElement;
+    type BasisElement = AngularPair;
     
     fn index_for(&self, channel: &Self::BasisElement) -> usize {
         self.basis.iter()
             .enumerate()
-            .find(|(_, s)| s.values[0] == channel.l && s.values[1] == channel.j)
+            .find(|(_, b)| {
+                let l = cast_variant!(b[0], RotorAtomStates::SystemL);
+                let n = cast_variant!(b[1], RotorAtomStates::RotorN);
+
+                channel.l == l && channel.n == n
+            })
             .expect("Did not found entrance channel")
             .0
     }

@@ -60,7 +60,7 @@ macro_rules! cast_braket {
 #[macro_export]
 macro_rules! operator_mel {
     ($basis:expr, |[$($args:ident: $states:path),*]| $body:block) => {
-        Operator::<Mat<f64>>::from_mel($basis, [$($states(Default::default())),*], |[$($args),*]| {
+        Operator::<faer::Mat<f64>>::from_mel($basis, [$($states(Default::default())),*], |[$($args),*]| {
             $(
                 let $args = $crate::cast_braket!($args, $states);
             )*
@@ -73,7 +73,7 @@ macro_rules! operator_mel {
 #[macro_export]
 macro_rules! operator_diagonal_mel {
     ($basis:expr, |[$($args:ident: $states:path),*]| $body:block) => {
-        Operator::<Mat<f64>>::from_diagonal_mel($basis, [$($states(Default::default())),*], |[$($args),*]| {
+        Operator::<faer::Mat<f64>>::from_diagonal_mel($basis, [$($states(Default::default())),*], |[$($args),*]| {
             $crate::cast_variants!($($args: $states),*);
 
             $body

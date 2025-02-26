@@ -214,7 +214,7 @@ impl DoubleHifiProblemBuilder {
 
         let mut zeeman_prop = operator_diagonal_mel!(&basis_sep,
             |[s1: HifiStatesSep::ElSpin1, s2: HifiStatesSep::ElSpin2]| {
-                -self.first.gamma_e * (s1.ms + s2.ms).value()
+                -self.first.gamma_e * s1.ms.value() - self.second.gamma_e * s2.ms.value()
             }
         )
         .into_backed();
@@ -430,7 +430,7 @@ impl ABMProblemBuilder {
 
         let mut zeeman_prop = operator_diagonal_mel!(&basis_sep,
             |[s1: ABMStatesSep::ElSpin1, s2: ABMStatesSep::ElSpin2]| {
-                -self.first.gamma_e * (s1.ms + s2.ms).value()
+                -self.first.gamma_e * s1.ms.value() - self.second.gamma_e * s2.ms.value()
             }
         )
         .into_backed();

@@ -16,7 +16,7 @@ pub fn linspace(start: f64, end: f64, n: usize) -> Vec<f64> {
     result
 }
 
-/// Creates logarithmically spaced grid of points [start, end] (including) with n points.
+/// Creates logarithmically spaced grid of points [10^start, 10^end] (including) with n points.
 pub fn logspace(start: f64, end: f64, n: usize) -> Vec<f64> {
     if n == 1 {
         return vec![start];

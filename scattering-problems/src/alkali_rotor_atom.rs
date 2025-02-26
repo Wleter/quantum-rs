@@ -1,12 +1,10 @@
-use std::sync::Mutex;
-
-use abm::{get_hifi, get_zeeman_prop, utility::diagonalize, DoubleHifiProblemBuilder, Symmetry};
-use clebsch_gordan::{hi32, half_integer::{HalfI32, HalfU32}, hu32};
+use abm::{utility::diagonalize, DoubleHifiProblemBuilder, Symmetry};
+use clebsch_gordan::hu32;
 use faer::Mat;
-use quantum::{cast_variant, params::{particle_factory::RotConst, particles::Particles}, states::{operator::Operator, spins::spin_projections, state::State, state_type::StateType, States, StatesBasis}};
+use quantum::{cast_variant, operator_diagonal_mel, operator_mel, params::{particle_factory::RotConst, Params}, states::{operator::Operator, spins::{get_spin_basis, Spin, SpinOperators}, state::{into_variant, StateBasis}, States, StatesBasis}};
 use scattering_solver::{boundary::Asymptotic, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, masked_potential::MaskedPotential, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{MatPotential, SimplePotential}}, utility::AngMomentum};
 
-use crate::{angular_block::{AngularBlock, AngularBlocks}, get_aniso_hifi, get_rotor_atom_potential_masking, get_spin_rot, utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorJTotMax, RotorLMax}, BasisDescription, IndexBasisDescription, ScatteringProblem};
+use crate::{angular_block::{AngularBlock, AngularBlocks}, utility::{aniso_hifi_tram_mel, create_angular_pairs, percival_coef_tram_mel, singlet_projection_uncoupled, spin_rot_tram_mel, triplet_projection_uncoupled, AngularPair, AnisoHifi, GammaSpinRot}, FieldScatteringProblem, IndexBasisDescription, ScatteringProblem};
 
 #[derive(Clone)]
 pub struct AlkaliRotorAtomProblemBuilder<P, V>
@@ -14,106 +12,133 @@ where
     P: SimplePotential,
     V: SimplePotential
 {
-    pub(super) hifi_problem: DoubleHifiProblemBuilder,
-    pub(super) triplet_potential: Vec<(u32, P)>,
-    pub(super) singlet_potential: Vec<(u32, V)>,
+    pub singlet_potential: Vec<(u32, V)>,
+    pub triplet_potential: Vec<(u32, P)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum SpinRotorAtom {
-    /// (l, j, j_tot)
-    Angular((u32, u32, u32)),
-    RotorS(HalfU32),
-    RotorI(HalfU32),
-    AtomS(HalfU32),
-    AtomI(HalfU32)
+pub enum TramStates {
+    Angular(AngularPair),
+    NTot(Spin),
+    RotorS(Spin),
+    RotorI(Spin),
+    AtomS(Spin),
+    AtomI(Spin)
 }
 
+#[derive(Clone, Copy, Debug, Default)]
 pub enum ParityBlock {
+    #[default]
     Positive,
     Negative,
     All
 }
 
-pub static PARITY_BLOCK: Mutex<ParityBlock> = Mutex::new(ParityBlock::Positive); // todo! very temporary, change to actual parameter
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TramBasisRecipe {
+    pub l_max: u32,
+    pub n_max: u32,
+    pub n_tot_max: u32,
+    pub parity: ParityBlock
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct UncoupledRotorBasisRecipe {
+    pub l_max: u32,
+    pub n_max: u32,
+    pub parity: ParityBlock
+}
 
 impl<P, V> AlkaliRotorAtomProblemBuilder<P, V> 
 where 
     P: SimplePotential,
     V: SimplePotential
 {
-    pub fn new(hifi_problem: DoubleHifiProblemBuilder, triplet: Vec<(u32, P)>, singlet: Vec<(u32, V)>) -> Self {
-        assert!(hifi_problem.first.s == hu32!(1/2));
-        assert!(hifi_problem.second.s == hu32!(1/2)
-            || hifi_problem.second.s == hu32!(0));
-        assert!(matches!(hifi_problem.symmetry, Symmetry::None));
-
+    pub fn new(triplet: Vec<(u32, P)>, singlet: Vec<(u32, V)>) -> Self {
         Self {
-            hifi_problem,
             triplet_potential: triplet,
             singlet_potential: singlet,
         }
     }
 
-    pub fn build(self, particles: &Particles) -> AlkaliRotorAtomProblem<P, V> {
-        // todo! change to rotor particle having RotConst
-        let rot_const = particles.get::<RotConst>()
-            .expect("Did not find RotConst parameter in the particles").0;
-        let gamma_spin_rot = particles.get::<GammaSpinRot>().unwrap_or(&GammaSpinRot(0.)).0;
-        let aniso_hifi = particles.get::<AnisoHifi>().unwrap_or(&AnisoHifi(0.)).0;
+    pub fn build(self, params: &Params, basis_recipe: &TramBasisRecipe) -> AlkaliRotorAtomProblem<TramStates, P, V> {
+        let rot_const = params.get::<RotConst>()
+            .expect("Did not find RotConst parameter in the params").0;
+        let gamma_spin_rot = params.get::<GammaSpinRot>().unwrap_or(&GammaSpinRot(0.)).0;
+        let aniso_hifi = params.get::<AnisoHifi>().unwrap_or(&AnisoHifi(0.)).0;
+        let hifi_problem = params.get::<DoubleHifiProblemBuilder>()
+            .expect("Did not find DoubleHifiProblemBuilder in the params");
 
-        let l_max = particles.get::<RotorLMax>()
-            .expect("Did not find SystemLMax parameter in particles").0;
-        let ordered_basis = self.basis(particles);
+        assert!(hifi_problem.first.s == hu32!(1/2));
+        assert!(hifi_problem.second.s == hu32!(1/2)
+            || hifi_problem.second.s == hu32!(0));
+        assert!(matches!(hifi_problem.symmetry, Symmetry::None));
 
-        assert!(ordered_basis.is_sorted_by_key(|s| cast_variant!(s.variants[0], SpinRotorAtom::Angular).0));
+        let l_max = basis_recipe.l_max;
+        let ordered_basis = self.basis(hifi_problem, basis_recipe);
+
+        assert!(ordered_basis.is_sorted_by_key(|s| cast_variant!(s[0], TramStates::Angular).l));
 
         let angular_block_basis = (0..=l_max).map(|l| {
                 let red_basis = ordered_basis.iter().filter(|s| {
-                    matches!(s.variants[0], SpinRotorAtom::Angular((l_current, _, _)) if l == l_current)
+                    matches!(s[0], TramStates::Angular(ang_curr) if ang_curr.l == l)
                 })
                 .cloned()
-                .collect::<StatesBasis<SpinRotorAtom, HalfI32>>();
+                .collect::<StatesBasis<TramStates>>();
 
                 (l, red_basis)
             })
             .filter(|(_, b)| !b.is_empty())
-            .collect::<Vec<(u32, StatesBasis<SpinRotorAtom, HalfI32>)>>();
+            .collect::<Vec<(u32, StatesBasis<TramStates>)>>();
 
         let angular_blocks = angular_block_basis.iter()
             .map(|(l, basis)| {
-                let j_centrifugal = Operator::from_diagonal_mel(&basis, [SpinRotorAtom::Angular((0, 0, 0))], |[ang]| {
-                    let (_, j, _) = cast_variant!(ang.0, SpinRotorAtom::Angular);
-        
-                    rot_const * (j * (j + 1)) as f64
+                let n_centrifugal = operator_diagonal_mel!(&basis, |[ang: TramStates::Angular]| {
+                    rot_const * ang.n.value() * (ang.n.value() + 1.0)
                 });
         
                 let mut hifi = Mat::zeros(basis.len(), basis.len());
-                if let Some(a_hifi) = self.hifi_problem.first.a_hifi {
-                    hifi += get_hifi!(basis, SpinRotorAtom::RotorS, SpinRotorAtom::RotorI, a_hifi).as_ref()
+                if let Some(a_hifi) = hifi_problem.first.a_hifi {
+                    hifi += operator_mel!(&basis, |[s: TramStates::RotorS, i: TramStates::RotorI]| {
+                        a_hifi * SpinOperators::dot(s, i)
+                    }).as_ref();
                 }
-                if let Some(a_hifi) = self.hifi_problem.second.a_hifi {
-                    hifi += get_hifi!(basis, SpinRotorAtom::AtomS, SpinRotorAtom::AtomI, a_hifi).as_ref()
+                if let Some(a_hifi) = hifi_problem.second.a_hifi {
+                    hifi += operator_mel!(&basis, |[s: TramStates::AtomS, i: TramStates::AtomI]| {
+                        a_hifi * SpinOperators::dot(s, i)
+                    }).as_ref();
                 }
         
-                let mut zeeman_prop = get_zeeman_prop!(basis, SpinRotorAtom::RotorS, self.hifi_problem.first.gamma_e).as_ref()
-                    + get_zeeman_prop!(basis, SpinRotorAtom::AtomS, self.hifi_problem.second.gamma_e).as_ref();
-                if let Some(gamma_i) = self.hifi_problem.first.gamma_i {
-                    zeeman_prop += get_zeeman_prop!(basis, SpinRotorAtom::RotorI, gamma_i).as_ref()
+                let mut zeeman_prop = operator_diagonal_mel!(&basis, |[s_rotor: TramStates::RotorS, s_atom: TramStates::AtomS]| {
+                    -hifi_problem.first.gamma_e * s_rotor.ms.value() - hifi_problem.second.gamma_e * s_atom.ms.value()
+                }).into_backed();
+                if let Some(gamma_i) = hifi_problem.first.gamma_i {
+                    zeeman_prop += operator_diagonal_mel!(&basis, |[i: TramStates::RotorI]| {
+                        -gamma_i * i.ms.value()
+                    }).as_ref()
                 }
-                if let Some(gamma_i) = self.hifi_problem.second.gamma_i {
-                    zeeman_prop += get_zeeman_prop!(basis, SpinRotorAtom::AtomI, gamma_i).as_ref()
+                if let Some(gamma_i) = hifi_problem.second.gamma_i {
+                    zeeman_prop += operator_diagonal_mel!(&basis, |[i: TramStates::AtomI]| {
+                        -gamma_i * i.ms.value()
+                    }).as_ref()
                 }
 
-                let spin_rot = get_spin_rot!(&basis, SpinRotorAtom::Angular, SpinRotorAtom::RotorS, gamma_spin_rot);
+                let spin_rot = operator_mel!(&basis, 
+                    |[ang: TramStates::Angular, n_tot: TramStates::NTot, s: TramStates::RotorS]| {
+                        gamma_spin_rot * spin_rot_tram_mel(ang, n_tot, s)
+                    }
+                );
 
-                let aniso_hifi = get_aniso_hifi!(&basis, SpinRotorAtom::Angular, 
-                    SpinRotorAtom::RotorS, SpinRotorAtom::RotorI, aniso_hifi);
+                let aniso_hifi = operator_mel!(&basis, 
+                    |[ang: TramStates::Angular, n_tot: TramStates::NTot, s: TramStates::RotorS, i: TramStates::RotorI]| {
+                        aniso_hifi * aniso_hifi_tram_mel(ang, n_tot, s, i)
+                    }
+                );
 
                 let field_inv = vec![
                     hifi, 
                     aniso_hifi.into_backed(),
-                    j_centrifugal.into_backed(),
+                    n_centrifugal.into_backed(),
                     spin_rot.into_backed()
                 ];
 
@@ -125,9 +150,10 @@ where
 
         let singlet_potentials = self.singlet_potential.into_iter()
             .map(|(lambda, pot)| {
-                let masking_singlet = get_rotor_atom_potential_masking!(
-                    Singlet lambda; &ordered_basis, SpinRotorAtom::Angular, 
-                    SpinRotorAtom::RotorS, SpinRotorAtom::AtomS
+                let masking_singlet = operator_mel!(&ordered_basis, 
+                    |[ang: TramStates::Angular, n_tot: TramStates::NTot, s_rotor: TramStates::RotorS, s_atom: TramStates::AtomS]| {
+                        singlet_projection_uncoupled(s_rotor, s_atom) * percival_coef_tram_mel(lambda, ang, n_tot)
+                    }
                 );
 
                 (pot, masking_singlet.into_backed())
@@ -136,9 +162,10 @@ where
 
         let triplet_potentials = self.triplet_potential.into_iter()
             .map(|(lambda, pot)| {
-                let masking_triplet = get_rotor_atom_potential_masking!(
-                    Triplet lambda; &ordered_basis, SpinRotorAtom::Angular, 
-                    SpinRotorAtom::RotorS, SpinRotorAtom::AtomS
+                let masking_triplet = operator_mel!(&ordered_basis, 
+                    |[ang: TramStates::Angular, n_tot: TramStates::NTot, s_rotor: TramStates::RotorS, s_atom: TramStates::AtomS]| {
+                        triplet_projection_uncoupled(s_rotor, s_atom) * percival_coef_tram_mel(lambda, ang, n_tot)
+                    }
                 );
 
                 (pot, masking_triplet.into_backed())
@@ -153,101 +180,83 @@ where
         }
     }
 
-    fn basis(&self, particles: &Particles) -> StatesBasis<SpinRotorAtom, HalfI32> {
-        let l_max = particles.get::<RotorLMax>()
-            .expect("Did not find SystemLMax parameter in particles").0;
-        let j_max = particles.get::<RotorJMax>()
-            .expect("Did not find RotorJMax parameter in particles").0;
-        let j_tot_max = particles.get::<RotorJTotMax>().map_or(0, |x| x.0);
-            
-        let ls: Vec<u32> = (0..=l_max).collect();
+    fn basis(&self, hifi_problem: &DoubleHifiProblemBuilder, basis_recipe: &TramBasisRecipe) -> StatesBasis<TramStates> {
+        let l_max = basis_recipe.l_max;
+        let n_max = basis_recipe.n_max;
+        let n_tot_max = basis_recipe.n_tot_max;
+        let parity = basis_recipe.parity;
         
-        let mut angular_states = vec![];
-        for j_tot in 0..=j_tot_max {
-            for &l in &ls {
-                let j_lower = (l as i32 - j_tot as i32).unsigned_abs();
-                if j_lower > j_max {
-                    continue; // todo! change
-                }
+        let angular_states = create_angular_pairs(l_max, n_max, n_tot_max, parity);
+        let angular_states = into_variant(angular_states, TramStates::Angular);
 
-                let j_upper = (l + j_tot).min(j_max);
-                
-                for j in j_lower..=j_upper {
-                    match *PARITY_BLOCK.lock().unwrap() { // todo! very temporary, change to actual parameter
-                        ParityBlock::Positive => if (j + l) & 1 == 1 {
-                            continue;
-                        },
-                        ParityBlock::Negative => if (j + l) & 1 == 0 {
-                            continue;
-                        },
-                        ParityBlock::All => (),
-                    }
+        let total_angular = (0..=n_tot_max).map(|n_tot| {
+            into_variant(get_spin_basis(n_tot.into()), TramStates::NTot)
+        })
+        .flatten()
+        .collect();
 
-                    let projections = spin_projections(HalfU32::from_doubled(2 * j_tot));
-                    let state = State::new(SpinRotorAtom::Angular((l, j, j_tot)), projections);
-                    angular_states.push(state);
-                }
-            }
-        }
-
-        let s_rotor = State::new(
-            SpinRotorAtom::RotorS(self.hifi_problem.first.s),
-            spin_projections(self.hifi_problem.first.s),
-        );
-        let s_atom = State::new(
-            SpinRotorAtom::AtomS(self.hifi_problem.second.s),
-            spin_projections(self.hifi_problem.second.s),
-        );
-        let i_rotor = State::new(
-            SpinRotorAtom::RotorI(self.hifi_problem.first.i),
-            spin_projections(self.hifi_problem.first.i),
-        );
-        let i_atom = State::new(
-            SpinRotorAtom::AtomI(self.hifi_problem.second.i),
-            spin_projections(self.hifi_problem.second.i),
-        );
+        let s_rotor = into_variant(get_spin_basis(hifi_problem.first.s), TramStates::RotorS);
+        let s_atom = into_variant(get_spin_basis(hifi_problem.second.s), TramStates::AtomS);
+        let i_rotor = into_variant(get_spin_basis(hifi_problem.first.i), TramStates::RotorI);
+        let i_atom = into_variant(get_spin_basis(hifi_problem.second.i), TramStates::AtomI);
 
         let mut states = States::default();
-        states.push_state(StateType::Sum(angular_states))
-            .push_state(StateType::Irreducible(i_rotor))
-            .push_state(StateType::Irreducible(s_rotor))
-            .push_state(StateType::Irreducible(i_atom))
-            .push_state(StateType::Irreducible(s_atom));
+        states.push_state(StateBasis::new(angular_states))
+            .push_state(StateBasis::new(total_angular))
+            .push_state(StateBasis::new(s_rotor))
+            .push_state(StateBasis::new(s_atom))
+            .push_state(StateBasis::new(i_rotor))
+            .push_state(StateBasis::new(i_atom));
 
-        let mut basis = match self.hifi_problem.total_projection {
+        let mut basis: StatesBasis<TramStates> = match hifi_problem.total_projection {
             Some(m_tot) => {
                 states.iter_elements()
-                    .filter(|els| {
-                        els.values.iter().copied().sum::<HalfI32>() == m_tot
+                    .filter(|b| {
+                        let ang = cast_variant!(b[0], TramStates::Angular);
+                        let m_n_tot = cast_variant!(b[1], TramStates::NTot);
+                        let s_rotor = cast_variant!(b[2], TramStates::RotorS);
+                        let s_atom = cast_variant!(b[3], TramStates::AtomS);
+                        let i_rotor = cast_variant!(b[4], TramStates::RotorI);
+                        let i_atom = cast_variant!(b[5], TramStates::AtomI);
+
+                        m_n_tot.ms + s_rotor.ms + s_atom.ms + i_rotor.ms + i_atom.ms == m_tot
+                            && (ang.l + ang.n) >= m_n_tot.s
+                            && (ang.l + m_n_tot.s) >= ang.n 
+                            && (ang.n + m_n_tot.s) >= ang.l
                     })
                     .collect()
             },
-            None => states.get_basis(),
+            None => states.iter_elements()
+                .filter(|b| {
+                    let ang = cast_variant!(b[0], TramStates::Angular);
+                    let m_n_tot = cast_variant!(b[1], TramStates::NTot);
+                    
+                    (ang.l + ang.n) >= m_n_tot.s
+                        && (ang.l + m_n_tot.s) >= ang.n 
+                        && (ang.n + m_n_tot.s) >= ang.l
+                })
+                .collect()
         };
 
-        basis.sort_by_key(|s| {
-            let (l, _, _) = cast_variant!(s.variants[0], SpinRotorAtom::Angular);
-
-            l
-        });
+        basis.sort_by_key(|b| cast_variant!(b[0], TramStates::Angular).l);
 
         basis
     }
 }
 
-pub struct AlkaliRotorAtomProblem<P: SimplePotential, V: SimplePotential> {
-    pub basis: StatesBasis<SpinRotorAtom, HalfI32>,
+pub struct AlkaliRotorAtomProblem<T, P: SimplePotential, V: SimplePotential> {
+    pub basis: StatesBasis<T>,
     pub angular_blocks: AngularBlocks,
-    triplets: Vec<(P, Mat<f64>)>,
-    singlets: Vec<(V, Mat<f64>)>,
+    pub(super) triplets: Vec<(P, Mat<f64>)>,
+    pub(super) singlets: Vec<(V, Mat<f64>)>,
 }
 
-impl<P, V> AlkaliRotorAtomProblem<P, V> 
+impl<T, P, V> FieldScatteringProblem<IndexBasisDescription> for AlkaliRotorAtomProblem<T, P, V> 
 where 
     P: SimplePotential + Clone,
     V: SimplePotential + Clone
 {
-    pub fn scattering_at_field(&self, mag_field: f64) -> ScatteringProblem<impl MatPotential, impl BasisDescription> {
+    fn scattering_for(&self, mag_field: f64) -> ScatteringProblem<impl MatPotential, IndexBasisDescription> {
         let (energies, states) = self.angular_blocks.diagonalize(mag_field);
 
         let energy_levels = energies.iter()
@@ -293,10 +302,14 @@ where
         }
     }
 
-    pub fn levels_at_field(&self, l: u32, mag_field: f64) -> (Vec<f64>, Mat<f64>) {
-        let block = &self.angular_blocks.0[l as usize];
-        let internal = &block.field_inv() + mag_field * &block.field_prop();
-
-        diagonalize(internal.as_ref())
+    fn levels(&self, field: f64, l: Option<u32>) -> (Vec<f64>, Mat<f64>) {
+        if let Some(l) = l {
+            let block = &self.angular_blocks.0[l as usize];
+            let internal = &block.field_inv() + field * &block.field_prop();
+    
+            diagonalize(internal.as_ref())
+        } else {
+            self.angular_blocks.diagonalize(field)
+        }
     }
 }

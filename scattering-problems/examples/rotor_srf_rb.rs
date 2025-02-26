@@ -2,11 +2,11 @@ use std::{f64::consts::PI, fs::File, io::{BufRead, BufReader}, time::Instant};
 
 use abm::{DoubleHifiProblemBuilder, HifiProblemBuilder};
 use clebsch_gordan::{hi32, half_integer::HalfI32, hu32};
-use faer::{prelude::SpSolver, Col, Mat, Side};
+use faer::Mat;
 use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
-use quantum::{params::{particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::{Angstrom, Distance}, energy_units::{CmInv, Energy, EnergyUnit, GHz, Kelvin}, mass_units::{Dalton, Mass}, Au, Unit}, utility::{legendre_polynomials, linspace}};
-use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder}, potential_interpolation::{interpolate_potentials, PotentialArray, TransitionedPotential}, rotor_atom::RotorAtomProblemBuilder, utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorJTotMax, RotorLMax}};
+use quantum::{params::{particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles, Params}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::{Angstrom, Distance}, energy_units::{CmInv, Energy, EnergyUnit, GHz, Kelvin}, mass_units::{Dalton, Mass}, Au, Unit}, utility::{legendre_polynomials, linspace}};
+use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder, TramBasisRecipe, TramStates}, potential_interpolation::{interpolate_potentials, PotentialArray, TransitionedPotential}, rkhs_interpolation::RKHSInterpolation, rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder}, utility::{AnisoHifi, GammaSpinRot}, FieldScatteringProblem};
 use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, numerov_modifier::NumerovLogging, propagator::MultiStepRule}, observables::s_matrix::{ScatteringDependence, ScatteringObservables}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, ScaledPotential, SimplePotential}}, utility::{save_data, save_serialize}};
 
 use rayon::prelude::*;
@@ -82,14 +82,19 @@ impl Problems {
         let projection = hi32!(1);
         let energy_relative = Energy(1e-7, Kelvin);
 
+        let basis_recipe = TramBasisRecipe {
+            l_max: 10,
+            n_max: 10,
+            ..Default::default()
+        };
+
         ///////////////////////////////////
 
         let start = Instant::now();
-        let atoms = get_particles(energy_relative);
-        let alkali_problem = get_problem(projection, &atoms);
+        let mut atoms = get_particles(energy_relative, projection);
+        let alkali_problem = get_problem(&atoms, &basis_recipe);
 
-        let mut atoms = get_particles(energy_relative);
-        let alkali_problem = alkali_problem.scattering_at_field(mag_field);
+        let alkali_problem = alkali_problem.scattering_for(mag_field);
         let mut asymptotic = alkali_problem.asymptotic;
         asymptotic.entrance = entrance;
         atoms.insert(asymptotic);
@@ -122,15 +127,6 @@ impl Problems {
 
         ////////////////////////////////////
 
-        let hifi_srf = HifiProblemBuilder::new(hu32!(1/2), hu32!(1/2))
-            .with_hyperfine_coupling(Energy(3.2383e-3 + 1.0096e-3 / 3., CmInv).to_au());
-
-        let hifi_rb = HifiProblemBuilder::new(hu32!(1/2), hu32!(3/2))
-            .with_hyperfine_coupling(Energy(0.113990, CmInv).to_au());
-
-        let hifi_problem = DoubleHifiProblemBuilder::new(hifi_srf, hifi_rb)
-            .with_projection(projection);
-
         let [singlet, triplet] = read_extended(25);
 
         let singlets = get_interpolated(&singlet);
@@ -138,14 +134,15 @@ impl Problems {
         let singlet = singlets[0].1.clone();
         let triplet = triplets[0].1.clone();
 
-        let alkali_problem = AlkaliAtomsProblemBuilder::new(hifi_problem, triplet, singlet);
+        let atoms = get_particles(energy_relative, projection);
+        let hifi_problem = atoms.get::<DoubleHifiProblemBuilder>().unwrap();
+
+        let alkali_problem = AlkaliAtomsProblemBuilder::new(hifi_problem.to_owned(), singlet, triplet);
 
         ///////////////////////////////////
 
         let start = Instant::now();
-        let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
-            let mut atoms = get_particles(energy_relative);
-
+        let scatterings = mag_fields.par_iter().progress().map_with(atoms, |atoms, &mag_field| {
             let alkali_problem = alkali_problem.clone().build(mag_field);
             let mut asymptotic = alkali_problem.asymptotic;
             asymptotic.entrance = entrance;
@@ -180,16 +177,20 @@ impl Problems {
         let projection = hi32!(1);
         let energy_relative = Energy(1e-7, Kelvin);
         let mag_fields = linspace(0., 2000., 1000);
-        let atoms = get_particles(energy_relative);
-        let alkali_problem = get_problem(projection, &atoms);
+        let basis_recipe = TramBasisRecipe {
+            l_max: 10,
+            n_max: 10,
+            ..Default::default()
+        };
+
+        let atoms = get_particles(energy_relative, projection);
+        let alkali_problem = get_problem(&atoms, &basis_recipe);
 
         ///////////////////////////////////
 
         let start = Instant::now();
-        let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
-            let mut atoms = get_particles(energy_relative);
-
-            let alkali_problem = alkali_problem.scattering_at_field(mag_field);
+        let scatterings = mag_fields.par_iter().progress().map_with(atoms, |atoms, &mag_field| {
+            let alkali_problem = alkali_problem.scattering_for(mag_field);
             let mut asymptotic = alkali_problem.asymptotic;
             asymptotic.entrance = entrance;
             atoms.insert(asymptotic);
@@ -219,20 +220,21 @@ impl Problems {
 
     fn potential_scaling_propagation() {
         let scalings = linspace(1.0, 1.05, 500);
-        let n_max = 5;
-
         let energy_relative = Energy(1e-7, Kelvin);
+        let basis_recipe = RotorAtomBasisRecipe {
+            l_max: 5,
+            n_max: 5,
+            ..Default::default()
+        };
 
         let [singlet, triplet] = read_extended(25);
         let singlets = get_interpolated(&singlet);
         let triplets = get_interpolated(&triplet);
 
-        let start = Instant::now();
-        let singlet_scattering = scalings.par_iter().progress().map(|&scaling| {
-            let mut atoms = get_particles(energy_relative);
-            atoms.insert(RotorJMax(n_max));
-            atoms.insert(RotorLMax(n_max));
+        let atoms = get_particles(energy_relative, hi32!(0));
 
+        let start = Instant::now();
+        let singlet_scattering = scalings.par_iter().progress().map_with(atoms.clone(), |atoms, &scaling| {
             let potential = singlets.iter().map(|(lambda, p)| {
                 (*lambda, ScaledPotential {
                     potential: p.clone(),
@@ -242,7 +244,7 @@ impl Problems {
             .collect();
 
             let problem = RotorAtomProblemBuilder::new(potential)
-                .build(&atoms);
+                .build(&atoms, &basis_recipe);
 
             let asymptotic = problem.asymptotic;
             atoms.insert(asymptotic);
@@ -260,13 +262,9 @@ impl Problems {
 
         let elapsed = start.elapsed();
         println!("calculated in {}", elapsed.hhmmssxxx());
+
         let start = Instant::now();
-
-        let triplet_scattering = scalings.par_iter().progress().map(|&scaling| {
-            let mut atoms = get_particles(energy_relative);
-            atoms.insert(RotorJMax(n_max));
-            atoms.insert(RotorLMax(n_max));
-
+        let triplet_scattering = scalings.par_iter().progress().map_with(atoms, |atoms, &scaling| {
             let potential = triplets.iter().map(|(lambda, p)| {
                 (*lambda, ScaledPotential {
                     potential: p.clone(),
@@ -276,7 +274,7 @@ impl Problems {
             .collect();
 
             let problem = RotorAtomProblemBuilder::new(potential)
-                .build(&atoms);
+                .build(&atoms, &basis_recipe);
 
             let asymptotic = problem.asymptotic;
             atoms.insert(asymptotic);
@@ -297,28 +295,30 @@ impl Problems {
 
         let data = vec![scalings, singlet_scattering, triplet_scattering];
 
-        save_data(&format!("srf_rb_potential_scaling_n_max_{n_max}"), "scaling\tsinglet\ttriplet", &data)
+        save_data(&format!("srf_rb_potential_scaling_n_max_{}", basis_recipe.n_max), "scaling\tsinglet\ttriplet", &data)
             .unwrap();
     }
 
     fn spinless_convergence() {
         let n_maxes: Vec<u32> = (0..200).collect();
-
         let energy_relative = Energy(1e-7, Kelvin);
 
         let [singlet, triplet] = read_extended(25);
         let singlets = get_interpolated(&singlet);
         let triplets = get_interpolated(&triplet);
 
+        let atoms = get_particles(energy_relative, hi32!(0));
+
         let start = Instant::now();
-        
-        let singlet_scattering = n_maxes.par_iter().progress().map(|&n_max| {
-            let mut atoms = get_particles(energy_relative);
-            atoms.insert(RotorJMax(n_max));
-            atoms.insert(RotorLMax(n_max));
+        let singlet_scattering = n_maxes.par_iter().progress().map_with(atoms.clone(), |atoms, &n_max| {
+            let basis_recipe = RotorAtomBasisRecipe {
+                l_max: n_max,
+                n_max: n_max,
+                ..Default::default()
+            };
 
             let problem = RotorAtomProblemBuilder::new(singlets.clone())
-                .build(&atoms);
+                .build(&atoms, &basis_recipe);
 
             let asymptotic = problem.asymptotic;
             atoms.insert(asymptotic);
@@ -338,13 +338,15 @@ impl Problems {
         println!("calculated in {}", elapsed.hhmmssxxx());
         let start = Instant::now();
 
-        let triplet_scattering = n_maxes.par_iter().progress().map(|&n_max| {
-            let mut atoms = get_particles(energy_relative);
-            atoms.insert(RotorJMax(n_max));
-            atoms.insert(RotorLMax(n_max));
+        let triplet_scattering = n_maxes.par_iter().progress().map_with(atoms, |atoms, &n_max| {
+            let basis_recipe = RotorAtomBasisRecipe {
+                l_max: n_max,
+                n_max: n_max,
+                ..Default::default()
+            };
 
             let problem = RotorAtomProblemBuilder::new(triplets.clone())
-                .build(&atoms);
+                .build(&atoms, &basis_recipe);
 
             let asymptotic = problem.asymptotic;
             atoms.insert(asymptotic);
@@ -362,6 +364,7 @@ impl Problems {
 
         let elapsed = start.elapsed();
         println!("calculated in {}", elapsed.hhmmssxxx());
+
         let n_maxes = n_maxes.into_iter().map(|x| x as f64).collect();
         let data = vec![n_maxes, singlet_scattering, triplet_scattering];
 
@@ -385,10 +388,13 @@ impl Problems {
         let projection = hi32!(1);
         let energy_relative = Energy(1e-7, Kelvin);
         let mag_fields = linspace(0., 2000., 1000);
+        let basis_recipe = TramBasisRecipe {
+            l_max: n_max,
+            n_max: n_max,
+            ..Default::default()
+        };
 
-        let mut atoms = get_particles(energy_relative);
-        atoms.insert(RotorJMax(n_max));
-        atoms.insert(RotorLMax(n_max));
+        let atoms = get_particles(energy_relative, projection);
 
         let [singlet, triplet] = read_extended(25);
         let singlets = get_interpolated(&singlet);
@@ -410,25 +416,14 @@ impl Problems {
         })
         .collect();
 
-        let hifi_srf = HifiProblemBuilder::new(hu32!(1/2), hu32!(1/2))
-            .with_hyperfine_coupling(Energy(3.2383e-3 + 1.0096e-3 / 3., CmInv).to_au());
-
-        let hifi_rb = HifiProblemBuilder::new(hu32!(1/2), hu32!(3/2))
-            .with_hyperfine_coupling(Energy(6.834682610904290 / 2., GHz).to_au());
-
-        let hifi_problem = DoubleHifiProblemBuilder::new(hifi_srf, hifi_rb)
-            .with_projection(projection);
-
-        let alkali_problem = AlkaliRotorAtomProblemBuilder::new(hifi_problem, triplets, singlets)
-            .build(&atoms);
+        let alkali_problem = AlkaliRotorAtomProblemBuilder::new(triplets, singlets)
+            .build(&atoms, &basis_recipe);
 
         /////////////////////////////////////////////////
 
         let start = Instant::now();
-        let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
-            let mut atoms = get_particles(energy_relative);
-
-            let alkali_problem = alkali_problem.scattering_at_field(mag_field);
+        let scatterings = mag_fields.par_iter().progress().map_with(atoms, |atoms,&mag_field| {
+            let alkali_problem = alkali_problem.scattering_for(mag_field);
             atoms.insert(alkali_problem.asymptotic);
             let potential = &alkali_problem.potential;
 
@@ -455,7 +450,7 @@ impl Problems {
     }
 }
 
-fn get_particles(energy: Energy<impl EnergyUnit>) -> Particles {
+fn get_particles(energy: Energy<impl EnergyUnit>, projection: HalfI32) -> Particles {
     let rb = create_atom("Rb87").unwrap();
     let srf = Particle::new("SrF", Mass(88. + 19., Dalton));
 
@@ -464,17 +459,10 @@ fn get_particles(energy: Energy<impl EnergyUnit>) -> Particles {
     let mass = 47.9376046914861;
     particles.insert(Mass(mass, Dalton).to(Au));
 
-    particles.insert(RotorLMax(10));
-    particles.insert(RotorJMax(10));
-    particles.insert(RotorJTotMax(0));
     particles.insert(RotConst(Energy(0.24975935, CmInv).to_au()));
     particles.insert(GammaSpinRot(Energy(2.4974e-3, CmInv).to_au()));
     particles.insert(AnisoHifi(Energy(1.0096e-3, CmInv).to_au()));
 
-    particles
-}
-
-fn get_problem(projection: HalfI32, particles: &Particles) -> AlkaliRotorAtomProblem<impl SimplePotential + Clone, impl SimplePotential + Clone> {
     let hifi_srf = HifiProblemBuilder::new(hu32!(1/2), hu32!(1/2))
         .with_hyperfine_coupling(Energy(3.2383e-3 + 1.0096e-3 / 3., CmInv).to_au());
 
@@ -483,14 +471,19 @@ fn get_problem(projection: HalfI32, particles: &Particles) -> AlkaliRotorAtomPro
 
     let hifi_problem = DoubleHifiProblemBuilder::new(hifi_srf, hifi_rb)
         .with_projection(projection);
+    particles.insert(hifi_problem);
 
+    particles
+}
+
+fn get_problem(params: &Params, basis_recipe: &TramBasisRecipe) -> AlkaliRotorAtomProblem<TramStates, impl SimplePotential + Clone + use<>, impl SimplePotential + Clone + use<>> {
     let [singlet, triplet] = read_extended(25);
 
     let singlets = get_interpolated(&singlet);
     let triplets = get_interpolated(&triplet);
 
-    AlkaliRotorAtomProblemBuilder::new(hifi_problem, triplets, singlets)
-        .build(particles)
+    AlkaliRotorAtomProblemBuilder::new(triplets, singlets)
+        .build(params, basis_recipe)
 }
 
 fn read_potentials(max_degree: u32) -> [PotentialArray; 2] {
@@ -651,12 +644,12 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
     }
 
     let rkhs_triplet = values_triplet.col_iter()
-        .map(|col| interpolate_rkhs(&distances, &col.iter().copied().collect::<Vec<f64>>()))
-        .collect::<Vec<ReproducingKernelInterpolation>>();
+        .map(|col| RKHSInterpolation::new(&distances, &col.iter().copied().collect::<Vec<f64>>()))
+        .collect::<Vec<RKHSInterpolation>>();
 
     let rkhs_exch = values_exch.col_iter()
-        .map(|col| interpolate_rkhs(&distances, &col.iter().copied().collect::<Vec<f64>>()))
-        .collect::<Vec<ReproducingKernelInterpolation>>();
+        .map(|col| RKHSInterpolation::new(&distances, &col.iter().copied().collect::<Vec<f64>>()))
+        .collect::<Vec<RKHSInterpolation>>();
 
     let filename = "weights.txt";
     path.pop();
@@ -848,74 +841,4 @@ fn get_interpolated(pot_array: &PotentialArray) -> Vec<(u32, impl SimplePotentia
             (lambda, combined)
         })
         .collect()
-}
-
-struct ReproducingKernelInterpolation {
-    m: u32,
-    alpha_factors: Vec<f64>,
-    beta_factors: Vec<f64>,
-    distances: Vec<f64>
-}
-
-impl Potential for ReproducingKernelInterpolation {
-    type Space = f64;
-
-    fn value_inplace(&self, r: f64, value: &mut Self::Space) {
-        let result = self.alpha_factors.iter()
-            .zip(self.distances.iter())
-            .map(|(alpha, &r_i)| {
-                let r_lower = r.min(r_i);
-                let r_upper = r.max(r_i);
-
-                alpha / r_upper.powi(self.m as i32 + 1) 
-                    * self.beta_factors.iter()
-                        .enumerate()
-                        .map(|(k, beta)| beta * (r_lower / r_upper).powi(k as i32))
-                        .sum::<f64>()
-            })
-            .sum::<f64>();
-        *value = result
-    }
-
-    fn size(&self) -> usize {
-        1
-    }
-}
-
-fn interpolate_rkhs(points: &[f64], values: &[f64]) -> ReproducingKernelInterpolation {
-    assert!(points.len() == values.len());
-    let m = 5;
-    let betas = vec![
-        0.05357142857142857, 
-        -0.07142857142857142,
-        0.025
-    ];
-
-    let q_matrix = Mat::from_fn(points.len(), points.len(), |i, j| {
-        let r_i = points[i];
-        let r_j = points[j];
-
-        let r_lower = r_j.min(r_i);
-        let r_upper = r_j.max(r_i);
-
-        1. / r_upper.powi(m as i32 + 1) 
-            * betas.iter()
-                .enumerate()
-                .map(|(k, beta)| beta * (r_lower / r_upper).powi(k as i32))
-                .sum::<f64>()
-    });
-
-    let values = Col::from_fn(values.len(), |i| values[i]);
-
-    let cholesky = q_matrix.cholesky(Side::Lower).unwrap();
-    let alphas = cholesky.solve(values.as_ref());
-
-    let alphas = alphas.iter().copied().collect();
-
-    ReproducingKernelInterpolation {
-        m,
-        alpha_factors: alphas,
-        beta_factors: betas,
-        distances: points.to_vec(),
-    }
 }

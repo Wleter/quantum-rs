@@ -1,19 +1,18 @@
-use abm::{get_hifi, get_zeeman_prop, utility::diagonalize};
-use clebsch_gordan::{clebsch_gordan, hi32, half_integer::{HalfI32, HalfU32}, hu32, wigner_3j};
+use abm::DoubleHifiProblemBuilder;
 use faer::Mat;
-use quantum::{cast_variant, params::{particle_factory::RotConst, particles::Particles}, states::{operator::Operator, spins::{spin_projections, Spin, SpinOperators}, state::State, state_type::StateType, States, StatesBasis}};
-use scattering_solver::{boundary::Asymptotic, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, masked_potential::MaskedPotential, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{MatPotential, SimplePotential}}, utility::AngMomentum};
+use quantum::{cast_variant, operator_diagonal_mel, operator_mel, params::{particle_factory::RotConst, Params}, states::{operator::Operator, spins::{get_spin_basis, Spin, SpinOperators}, state::{into_variant, StateBasis}, States, StatesBasis}};
+use scattering_solver::{potentials::potential::SimplePotential, utility::AngMomentum};
 
-use crate::{alkali_rotor_atom::AlkaliRotorAtomProblemBuilder, angular_block::{AngularBlock, AngularBlocks}, cast_spin_braket, utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorLMax}, BasisDescription, IndexBasisDescription, ScatteringProblem};
+use crate::{alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder, UncoupledRotorBasisRecipe}, angular_block::{AngularBlock, AngularBlocks}, utility::{aniso_hifi_uncoupled_mel, percival_coef_uncoupled_mel, singlet_projection_uncoupled, triplet_projection_uncoupled, AnisoHifi, GammaSpinRot}};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum UncoupledSpinRotorAtom {
-    SystemL(HalfU32),
-    RotorN(HalfU32),
-    RotorS(HalfU32),
-    RotorI(HalfU32),
-    AtomS(HalfU32),
-    AtomI(HalfU32)
+pub enum UncoupledAlkaliRotorAtomStates {
+    SystemL(Spin),
+    RotorN(Spin),
+    RotorS(Spin),
+    RotorI(Spin),
+    AtomS(Spin),
+    AtomI(Spin)
 }
 
 impl<P, V> AlkaliRotorAtomProblemBuilder<P, V> 
@@ -21,97 +20,79 @@ where
     P: SimplePotential,
     V: SimplePotential
 {
-    pub fn build_uncoupled(self, particles: &Particles) -> UncoupledAlkaliRotorAtomProblem<P, V> {
-        // todo! change to rotor particle having RotConst
-        let rot_const = particles.get::<RotConst>()
-            .expect("Did not find RotConst parameter in the particles").0;
-        let gamma_spin_rot = particles.get::<GammaSpinRot>().unwrap_or(&GammaSpinRot(0.)).0;
-        let aniso_hifi = particles.get::<AnisoHifi>().unwrap_or(&AnisoHifi(0.)).0;
+    pub fn build_uncoupled(self, params: &Params, basis_recipe: &UncoupledRotorBasisRecipe) -> AlkaliRotorAtomProblem<UncoupledAlkaliRotorAtomStates, P, V> {
+        let rot_const = params.get::<RotConst>()
+            .expect("Did not find RotConst parameter in the params").0;
+        let gamma_spin_rot = params.get::<GammaSpinRot>().unwrap_or(&GammaSpinRot(0.)).0;
+        let aniso_hifi = params.get::<AnisoHifi>().unwrap_or(&AnisoHifi(0.)).0;
+        let hifi_problem = params.get::<DoubleHifiProblemBuilder>()
+            .expect("Did not find DoubleHifiProblemBuilder in the params");
 
-        let l_max = particles.get::<RotorLMax>()
-            .expect("Did not find SystemLMax parameter in particles").0;
-        let ordered_basis = self.basis_uncoupled(particles);
+        let l_max = basis_recipe.l_max;
+        let ordered_basis = self.basis_uncoupled(basis_recipe, hifi_problem);
 
-        assert!(ordered_basis.is_sorted_by_key(|s| cast_variant!(s.variants[0], UncoupledSpinRotorAtom::SystemL)));
+        assert!(ordered_basis.is_sorted_by_key(|s| cast_variant!(s[0], UncoupledAlkaliRotorAtomStates::SystemL).s));
 
         let angular_block_basis = (0..=l_max).map(|l| {
-                let l_block  = HalfU32::from_doubled(2 * l);
                 let red_basis = ordered_basis.iter().filter(|s| {
-                        matches!(s.variants[0], UncoupledSpinRotorAtom::SystemL(l_current) if l_block == l_current)
+                        matches!(s[0], UncoupledAlkaliRotorAtomStates::SystemL(l_current) if l_current.s == l)
                     })
                     .cloned()
-                    .collect::<StatesBasis<UncoupledSpinRotorAtom, HalfI32>>();
+                    .collect::<StatesBasis<UncoupledAlkaliRotorAtomStates>>();
 
                 (l, red_basis)
             })
             .filter(|(_, b)| !b.is_empty())
-            .collect::<Vec<(u32, StatesBasis<UncoupledSpinRotorAtom, HalfI32>)>>();
+            .collect::<Vec<(u32, StatesBasis<UncoupledAlkaliRotorAtomStates>)>>();
 
         let angular_blocks = angular_block_basis.iter()
             .map(|(l, basis)| {
-                let j_centrifugal = Operator::from_diagonal_mel(&basis, [UncoupledSpinRotorAtom::RotorN(hu32!(0))], |[ang]| {
-                    let j = cast_variant!(ang.0, UncoupledSpinRotorAtom::RotorN).value();
-        
-                    rot_const * (j * (j + 1.))
+                let n_centrifugal = operator_diagonal_mel!(&basis, |[n: UncoupledAlkaliRotorAtomStates::RotorN]| {
+                    rot_const * n.s.value() * (n.s.value() + 1.0)
                 });
         
                 let mut hifi = Mat::zeros(basis.len(), basis.len());
-                if let Some(a_hifi) = self.hifi_problem.first.a_hifi {
-                    hifi += get_hifi!(basis, UncoupledSpinRotorAtom::RotorS, UncoupledSpinRotorAtom::RotorI, a_hifi).as_ref()
+                if let Some(a_hifi) = hifi_problem.first.a_hifi {
+                    hifi += operator_mel!(&basis, |[s: UncoupledAlkaliRotorAtomStates::RotorS, i: UncoupledAlkaliRotorAtomStates::RotorI]| {
+                        a_hifi * SpinOperators::dot(s, i)
+                    }).as_ref();
                 }
-                if let Some(a_hifi) = self.hifi_problem.second.a_hifi {
-                    hifi += get_hifi!(basis, UncoupledSpinRotorAtom::AtomS, UncoupledSpinRotorAtom::AtomI, a_hifi).as_ref()
+                if let Some(a_hifi) = hifi_problem.second.a_hifi {
+                    hifi += operator_mel!(&basis, |[s: UncoupledAlkaliRotorAtomStates::AtomS, i: UncoupledAlkaliRotorAtomStates::AtomI]| {
+                        a_hifi * SpinOperators::dot(s, i)
+                    }).as_ref();
                 }
         
-                let mut zeeman_prop = get_zeeman_prop!(basis, UncoupledSpinRotorAtom::RotorS, self.hifi_problem.first.gamma_e).as_ref()
-                    + get_zeeman_prop!(basis, UncoupledSpinRotorAtom::AtomS, self.hifi_problem.second.gamma_e).as_ref();
-                if let Some(gamma_i) = self.hifi_problem.first.gamma_i {
-                    zeeman_prop += get_zeeman_prop!(basis, UncoupledSpinRotorAtom::RotorI, gamma_i).as_ref()
+                let mut zeeman_prop = operator_diagonal_mel!(&basis, |[s_rotor: UncoupledAlkaliRotorAtomStates::RotorS, s_atom: UncoupledAlkaliRotorAtomStates::AtomS]| {
+                    -hifi_problem.first.gamma_e * s_rotor.ms.value() - hifi_problem.second.gamma_e * s_atom.ms.value()
+                }).into_backed();
+                if let Some(gamma_i) = hifi_problem.first.gamma_i {
+                    zeeman_prop += operator_diagonal_mel!(&basis, |[i: UncoupledAlkaliRotorAtomStates::RotorI]| {
+                        -gamma_i * i.ms.value()
+                    }).as_ref()
                 }
-                if let Some(gamma_i) = self.hifi_problem.second.gamma_i {
-                    zeeman_prop += get_zeeman_prop!(basis, UncoupledSpinRotorAtom::AtomI, gamma_i).as_ref()
+                if let Some(gamma_i) = hifi_problem.second.gamma_i {
+                    zeeman_prop += operator_diagonal_mel!(&basis, |[i: UncoupledAlkaliRotorAtomStates::AtomI]| {
+                        -gamma_i * i.ms.value()
+                    }).as_ref()
                 }
 
-                let spin_rot = Operator::from_mel(&basis, 
-                    [UncoupledSpinRotorAtom::RotorN(hu32!(0)), UncoupledSpinRotorAtom::RotorS(hu32!(0))], 
-                    |[n, s]| {
-                        let n_braket = cast_spin_braket!(n, UncoupledSpinRotorAtom::RotorN);
-                        let s_braket = cast_spin_braket!(s, UncoupledSpinRotorAtom::RotorS);
-        
-                        gamma_spin_rot * SpinOperators::dot(n_braket, s_braket)
+                let spin_rot = operator_mel!(&basis, 
+                    |[n: UncoupledAlkaliRotorAtomStates::RotorN, s: UncoupledAlkaliRotorAtomStates::RotorS]| {
+                        gamma_spin_rot * SpinOperators::dot(n, s)
                     }
                 );
 
-                let aniso_hifi = Operator::from_mel(&basis, 
-                    [
-                        UncoupledSpinRotorAtom::RotorN(hu32!(0)), 
-                        UncoupledSpinRotorAtom::RotorS(hu32!(0)), 
-                        UncoupledSpinRotorAtom::RotorI(hu32!(0))
-                    ], 
-                    |[n, s, i]| {
-                        let n_braket = cast_spin_braket!(n, UncoupledSpinRotorAtom::RotorN);
-                        let s_braket = cast_spin_braket!(s, UncoupledSpinRotorAtom::RotorS);
-                        let i_braket = cast_spin_braket!(i, UncoupledSpinRotorAtom::RotorI);
-
-                        let factor = aniso_hifi / f64::sqrt(0.3) * p3_factor(&s_braket.0) * p3_factor(&i_braket.0) 
-                            * ((2. * n_braket.0.s.value() + 1.) * (2. * n_braket.1.s.value() + 1.)).sqrt();
-
-                        let sign = (-1.0f64).powf(s_braket.0.s.value() - s_braket.0.ms.value() + i_braket.0.s.value() - i_braket.0.ms.value());
-
-                        let wigners = wigner_3j(n_braket.0.s, hu32!(2), n_braket.1.s, -n_braket.0.ms, n_braket.0.ms - n_braket.1.ms, n_braket.1.ms)
-                            * wigner_3j(n_braket.0.s, hu32!(2), n_braket.1.s, hi32!(0), hi32!(0), hi32!(0))
-                            * wigner_3j(hu32!(1), hu32!(1), hu32!(2), s_braket.0.ms - s_braket.1.ms, i_braket.0.ms - i_braket.1.ms, n_braket.0.ms - n_braket.1.ms)
-                            * wigner_3j(s_braket.0.s, hu32!(1), s_braket.1.s, -s_braket.0.ms, s_braket.0.ms - s_braket.1.ms, s_braket.1.ms)
-                            * wigner_3j(i_braket.0.s, hu32!(1), i_braket.1.s, -i_braket.0.ms, i_braket.0.ms - i_braket.1.ms, i_braket.1.ms);
-
-                        factor * sign * wigners
+                let aniso_hifi = operator_mel!(&basis, 
+                    |[n: UncoupledAlkaliRotorAtomStates::RotorN, s: UncoupledAlkaliRotorAtomStates::RotorS, i: UncoupledAlkaliRotorAtomStates::RotorI]| {
+                        aniso_hifi * aniso_hifi_uncoupled_mel(n, s, i)
                     }
                 );
 
                 let field_inv = vec![
                     hifi, 
                     aniso_hifi.into_backed(),
-                    j_centrifugal.into_backed(),
+                    n_centrifugal.into_backed(),
                     spin_rot.into_backed()
                 ];
 
@@ -123,44 +104,10 @@ where
 
         let singlet_potentials = self.singlet_potential.into_iter()
             .map(|(lambda, pot)| {
-                let lambda_h32 = HalfU32::from_doubled(2 * lambda);
-
-                let masking_singlet = Operator::from_mel(&ordered_basis, 
-                    [
-                        UncoupledSpinRotorAtom::SystemL(hu32!(0)),
-                        UncoupledSpinRotorAtom::RotorN(hu32!(0)),
-                        UncoupledSpinRotorAtom::RotorS(hu32!(0)),
-                        UncoupledSpinRotorAtom::AtomS(hu32!(0))
-                    ],
-                    |[l, n, s, s_a]| {
-                        if s.bra.0 == s.ket.0 && s_a.bra.0 == s_a.ket.0 {
-                            let l_braket = cast_spin_braket!(l, UncoupledSpinRotorAtom::SystemL);
-                            let n_braket = cast_spin_braket!(n, UncoupledSpinRotorAtom::RotorN);
-                            let s_braket = cast_spin_braket!(s, UncoupledSpinRotorAtom::RotorS);
-                            let s_a_braket = cast_spin_braket!(s_a, UncoupledSpinRotorAtom::AtomS);
-            
-                            let factor = ((2. * l_braket.0.s.value() + 1.) * (2. * l_braket.1.s.value() + 1.)
-                                * (2. * n_braket.0.s.value() + 1.) * (2. * n_braket.1.s.value() + 1.)).sqrt();
-    
-                            let wigners = wigner_3j(l_braket.0.s, lambda_h32, l_braket.1.s, hi32!(0), hi32!(0), hi32!(0))
-                                * wigner_3j(n_braket.0.s, lambda_h32, n_braket.1.s, hi32!(0), hi32!(0), hi32!(0))
-                                * clebsch_gordan(s_braket.0.s, s_braket.0.ms, s_a_braket.0.s, s_a_braket.0.ms, hu32!(0), hi32!(0))
-                                * clebsch_gordan(s_braket.1.s, s_braket.1.ms, s_a_braket.1.s, s_a_braket.1.ms, hu32!(0), hi32!(0));
-
-                            let summed = (0..=lambda)
-                                .map(|m_lambda| {
-                                    let m_lambda_h32 = HalfI32::from_doubled(2 * m_lambda as i32);
-
-                                    (-1.0f64).powf(m_lambda as f64 - l_braket.0.ms.value() - n_braket.0.ms.value())
-                                        * wigner_3j(l_braket.0.s, lambda_h32, l_braket.1.s, -l_braket.0.ms, -m_lambda_h32, l_braket.1.ms)
-                                        * wigner_3j(n_braket.0.s, lambda_h32, n_braket.1.s, -n_braket.0.ms, m_lambda_h32, n_braket.1.ms)
-                                })
-                                .sum::<f64>();
-    
-                            factor * wigners * summed
-                        } else {
-                            0.
-                        }
+                let masking_singlet = operator_mel!(&ordered_basis, 
+                    |[l: UncoupledAlkaliRotorAtomStates::SystemL, n: UncoupledAlkaliRotorAtomStates::RotorN, 
+                        s_rotor: UncoupledAlkaliRotorAtomStates::RotorS, s_atom: UncoupledAlkaliRotorAtomStates::AtomS]| {
+                        singlet_projection_uncoupled(s_rotor, s_atom) * percival_coef_uncoupled_mel(lambda, n, l)
                     }
                 );
 
@@ -170,51 +117,10 @@ where
 
         let triplet_potentials = self.triplet_potential.into_iter()
             .map(|(lambda, pot)| {
-                let lambda_h32 = HalfU32::from_doubled(2 * lambda);
-
-                let masking_triplet = Operator::from_mel(&ordered_basis, 
-                    [
-                        UncoupledSpinRotorAtom::SystemL(hu32!(0)),
-                        UncoupledSpinRotorAtom::RotorN(hu32!(0)),
-                        UncoupledSpinRotorAtom::RotorS(hu32!(0)),
-                        UncoupledSpinRotorAtom::AtomS(hu32!(0))
-                    ],
-                    |[l, n, s, s_a]| {
-                        if s.bra.0 == s.ket.0 && s_a.bra.0 == s_a.ket.0 {
-                            let l_braket = cast_spin_braket!(l, UncoupledSpinRotorAtom::SystemL);
-                            let n_braket = cast_spin_braket!(n, UncoupledSpinRotorAtom::RotorN);
-                            let s_braket = cast_spin_braket!(s, UncoupledSpinRotorAtom::RotorS);
-                            let s_a_braket = cast_spin_braket!(s_a, UncoupledSpinRotorAtom::AtomS);
-            
-                            let factor = ((2. * l_braket.0.s.value() + 1.) * (2. * l_braket.1.s.value() + 1.)
-                                * (2. * n_braket.0.s.value() + 1.) * (2. * n_braket.1.s.value() + 1.)).sqrt();
-    
-                            let wigners = wigner_3j(l_braket.0.s, lambda_h32, l_braket.1.s, hi32!(0), hi32!(0), hi32!(0))
-                                * wigner_3j(n_braket.0.s, lambda_h32, n_braket.1.s, hi32!(0), hi32!(0), hi32!(0));
-                            
-                            let triplet_factor = (-1..=1)
-                                .map(|ms_tot| {
-                                    let ms_tot = HalfI32::from_doubled(2 * ms_tot);
-
-                                    clebsch_gordan(s_braket.0.s, s_braket.0.ms, s_a_braket.0.s, s_a_braket.0.ms, hu32!(1), ms_tot)
-                                        * clebsch_gordan(s_braket.1.s, s_braket.1.ms, s_a_braket.1.s, s_a_braket.1.ms, hu32!(1), ms_tot)
-                                })
-                                .sum::<f64>();
-
-                            let summed = (0..=lambda)
-                                .map(|m_lambda| {
-                                    let m_lambda_h32 = HalfI32::from_doubled(2 * m_lambda as i32);
-
-                                    (-1.0f64).powf(m_lambda as f64 - l_braket.0.ms.value() - n_braket.0.ms.value())
-                                        * wigner_3j(l_braket.0.s, lambda_h32, l_braket.1.s, -l_braket.0.ms, -m_lambda_h32, l_braket.1.ms)
-                                        * wigner_3j(n_braket.0.s, lambda_h32, n_braket.1.s, -n_braket.0.ms, m_lambda_h32, n_braket.1.ms)
-                                })
-                                .sum::<f64>();
-    
-                            factor * wigners * triplet_factor * summed
-                        } else {
-                            0.
-                        }
+                let masking_triplet = operator_mel!(&ordered_basis, 
+                    |[l: UncoupledAlkaliRotorAtomStates::SystemL, n: UncoupledAlkaliRotorAtomStates::RotorN, 
+                        s_rotor: UncoupledAlkaliRotorAtomStates::RotorS, s_atom: UncoupledAlkaliRotorAtomStates::AtomS]| {
+                        triplet_projection_uncoupled(s_rotor, s_atom) * percival_coef_uncoupled_mel(lambda, n, l)
                     }
                 );
 
@@ -222,7 +128,7 @@ where
             })
             .collect();
 
-        UncoupledAlkaliRotorAtomProblem {
+        AlkaliRotorAtomProblem {
             angular_blocks: AngularBlocks(angular_blocks),
             basis: ordered_basis,
             triplets: triplet_potentials,
@@ -230,140 +136,56 @@ where
         }
     }
 
-    fn basis_uncoupled(&self, particles: &Particles) -> StatesBasis<UncoupledSpinRotorAtom, HalfI32> {
-        let l_max = particles.get::<RotorLMax>()
-            .expect("Did not find SystemLMax parameter in particles").0;
-        let j_max = particles.get::<RotorJMax>()
-            .expect("Did not find RotorJMax parameter in particles").0;
+    fn basis_uncoupled(&self, basis_recipe: &UncoupledRotorBasisRecipe, hifi_problem: &DoubleHifiProblemBuilder) -> StatesBasis<UncoupledAlkaliRotorAtomStates> {
+        let l_max = basis_recipe.l_max;
+        let n_max = basis_recipe.n_max;
 
-        let l_states = (0..=l_max)
-            .map(|l| {
-                let l = HalfU32::from_doubled(2 * l);
-                let projections = spin_projections(l);
-                State::new(UncoupledSpinRotorAtom::SystemL(l), projections)
-            })
-            .collect();
+        let l_system = (0..=l_max).map(|n_tot| {
+            into_variant(get_spin_basis(n_tot.into()), UncoupledAlkaliRotorAtomStates::SystemL)
+        })
+        .flatten()
+        .collect();
 
-        let n_states = (0..=j_max)
-            .map(|j| {
-                let j = HalfU32::from_doubled(2 * j);
-                let projections = spin_projections(j);
-                State::new(UncoupledSpinRotorAtom::RotorN(j), projections)
-            })
-            .collect();
+        let n_rotor = (0..=n_max).map(|n_tot| {
+            into_variant(get_spin_basis(n_tot.into()), UncoupledAlkaliRotorAtomStates::RotorN)
+        })
+        .flatten()
+        .collect();
 
-        let s_rotor = State::new(
-            UncoupledSpinRotorAtom::RotorS(self.hifi_problem.first.s),
-            spin_projections(self.hifi_problem.first.s),
-        );
-        let s_atom = State::new(
-            UncoupledSpinRotorAtom::AtomS(self.hifi_problem.second.s),
-            spin_projections(self.hifi_problem.second.s),
-        );
-        let i_rotor = State::new(
-            UncoupledSpinRotorAtom::RotorI(self.hifi_problem.first.i),
-            spin_projections(self.hifi_problem.first.i),
-        );
-        let i_atom = State::new(
-            UncoupledSpinRotorAtom::AtomI(self.hifi_problem.second.i),
-            spin_projections(self.hifi_problem.second.i),
-        );
+        let s_rotor = into_variant(get_spin_basis(hifi_problem.first.s), UncoupledAlkaliRotorAtomStates::RotorS);
+        let s_atom = into_variant(get_spin_basis(hifi_problem.second.s), UncoupledAlkaliRotorAtomStates::AtomS);
+        let i_rotor = into_variant(get_spin_basis(hifi_problem.first.i), UncoupledAlkaliRotorAtomStates::RotorI);
+        let i_atom = into_variant(get_spin_basis(hifi_problem.second.i), UncoupledAlkaliRotorAtomStates::AtomS);
 
         let mut states = States::default();
-        states.push_state(StateType::Sum(l_states))
-            .push_state(StateType::Sum(n_states))
-            .push_state(StateType::Irreducible(s_rotor))
-            .push_state(StateType::Irreducible(i_rotor))
-            .push_state(StateType::Irreducible(s_atom))
-            .push_state(StateType::Irreducible(i_atom));
+        states.push_state(StateBasis::new(l_system))
+            .push_state(StateBasis::new(n_rotor))
+            .push_state(StateBasis::new(s_rotor))
+            .push_state(StateBasis::new(s_atom))
+            .push_state(StateBasis::new(i_rotor))
+            .push_state(StateBasis::new(i_atom));
 
-        let mut basis = match self.hifi_problem.total_projection {
+        // todo! check if for uncoupled parity also works
+        let mut basis: StatesBasis<UncoupledAlkaliRotorAtomStates> = match hifi_problem.total_projection {
             Some(m_tot) => {
                 states.iter_elements()
-                    .filter(|els| {
-                        els.values.iter().copied().sum::<HalfI32>() == m_tot
+                    .filter(|b| {
+                        let l = cast_variant!(b[0], UncoupledAlkaliRotorAtomStates::SystemL);
+                        let n = cast_variant!(b[1], UncoupledAlkaliRotorAtomStates::RotorN);
+                        let s_rotor = cast_variant!(b[2], UncoupledAlkaliRotorAtomStates::RotorS);
+                        let s_atom = cast_variant!(b[3], UncoupledAlkaliRotorAtomStates::AtomS);
+                        let i_rotor = cast_variant!(b[4], UncoupledAlkaliRotorAtomStates::RotorI);
+                        let i_atom = cast_variant!(b[5], UncoupledAlkaliRotorAtomStates::AtomI);
+
+                        l.ms + n.ms + s_rotor.ms + s_atom.ms + i_rotor.ms + i_atom.ms == m_tot
                     })
                     .collect()
             },
-            None => states.get_basis(),
+            None => states.iter_elements().collect()
         };
 
-        basis.sort_by_key(|s| {
-            cast_variant!(s.variants[0], UncoupledSpinRotorAtom::SystemL)
-        });
+        basis.sort_by_key(|b| cast_variant!(b[0], UncoupledAlkaliRotorAtomStates::SystemL).s);
 
         basis
-    }
-}
-
-#[inline]
-pub fn p3_factor(s: &Spin) -> f64 {
-    let s = s.s.value();
-    ((2. * s + 1.) * s * (s + 1.)).sqrt()
-}
-
-pub struct UncoupledAlkaliRotorAtomProblem<P: SimplePotential, V: SimplePotential> {
-    pub basis: StatesBasis<UncoupledSpinRotorAtom, HalfI32>,
-    pub angular_blocks: AngularBlocks,
-    triplets: Vec<(P, Mat<f64>)>,
-    singlets: Vec<(V, Mat<f64>)>,
-}
-
-impl<P, V> UncoupledAlkaliRotorAtomProblem<P, V> 
-where 
-    P: SimplePotential + Clone,
-    V: SimplePotential + Clone
-{
-    pub fn scattering_at_field(&self, mag_field: f64) -> ScatteringProblem<impl MatPotential, impl BasisDescription> {
-        let (energies, states) = self.angular_blocks.diagonalize(mag_field);
-
-        let energy_levels = energies.iter()
-            .map(|e| Dispersion::new(*e, 0))
-            .collect();
-
-        let energy_levels = Diagonal::from_vec(energy_levels);
-
-        let mut triplets_iter = self.triplets.iter()
-            .map(|(p, m)| {
-                let masking = states.transpose() * m * states.as_ref();
-                MaskedPotential::new(p.clone(), masking)
-            });
-        let mut triplets = Composite::new(triplets_iter.next().expect("No triplet potentials found"));
-        for p in triplets_iter {
-            triplets.add_potential(p);
-        }
-
-        let mut singlets_iter = self.singlets.iter()
-            .map(|(p, m)| {
-                let masking = states.transpose() * m * states.as_ref();
-                MaskedPotential::new(p.clone(), masking)
-            });
-        let mut singlets = Composite::new(singlets_iter.next().expect("No triplet potentials found"));
-        for p in singlets_iter {
-            singlets.add_potential(p);
-        }
-
-        let potential = PairPotential::new(triplets, singlets);
-        let full_potential = PairPotential::new(energy_levels, potential);
-
-        let asymptotic = Asymptotic {
-            channel_energies: energies,
-            centrifugal: self.angular_blocks.angular_states(),
-            entrance: 0,
-            channel_states: states,
-        };
-        
-        ScatteringProblem {
-            potential: full_potential,
-            asymptotic,
-            basis_description: IndexBasisDescription
-        }
-    }
-
-    pub fn levels_at_field(&self, l: u32, mag_field: f64) -> (Vec<f64>, Mat<f64>) {
-        let block = &self.angular_blocks.0[l as usize];
-        let internal = &block.field_inv() + mag_field * &block.field_prop();
-
-        diagonalize(internal.as_ref())
     }
 }

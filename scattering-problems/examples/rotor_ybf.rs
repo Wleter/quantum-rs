@@ -1,7 +1,7 @@
 use abm::{utility::save_spectrum, HifiProblemBuilder};
 use clebsch_gordan::{hi32, half_integer::HalfI32, hu32};
-use quantum::{params::{particle::Particle, particle_factory::RotConst}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{energy_units::{CmInv, Energy}, mass_units::{Dalton, Mass}, Au}, utility::linspace};
-use scattering_problems::{alkali_rotor::{AlkaliRotorProblem, AlkaliRotorProblemBuilder, UncoupledAlkaliRotorProblem}, utility::{AnisoHifi, GammaSpinRot, RotorJMax, RotorJTotMax, RotorLMax}};
+use quantum::{params::{particle::Particle, particle_factory::RotConst, Params}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{energy_units::{CmInv, Energy}, mass_units::{Dalton, Mass}, Au}, utility::linspace};
+use scattering_problems::{alkali_rotor::{AlkaliRotorProblem, AlkaliRotorProblemBuilder, UncoupledAlkaliRotorProblem}, alkali_rotor_atom::{ParityBlock, TramBasisRecipe}, utility::{AnisoHifi, GammaSpinRot}};
 
 use rayon::prelude::*;
 
@@ -12,22 +12,30 @@ pub fn main() {
 struct Problems;
 
 problems_impl!(Problems, "YbF levels",
-    "levels" => |_| Self::levels(),
+    "levels tram" => |_| Self::levels_tram(),
     "levels uncoupled" => |_| Self::levels_uncoupled(),
 );
 
 impl Problems {
-    fn levels() {
+    fn levels_tram() {
         let projection = hi32!(1);
         let yb_f = get_particle();
-        let alkali_problem = get_problem(projection, &yb_f);
+
+        let basis_recipe = TramBasisRecipe {
+            l_max: 4,
+            n_max: 4,
+            n_tot_max: 2,
+            parity: ParityBlock::All,
+        };
+
+        let alkali_problem = get_problem(projection, &yb_f, &basis_recipe);
         println!("{}", alkali_problem.basis.len());
 
         let mag_fields = linspace(0., 70., 8);
 
         let energies: Vec<Vec<f64>> = mag_fields.par_iter()
             .map(|mag_field| {
-                let (levels, _) = alkali_problem.levels_at_field(*mag_field);
+                let (levels, _) = alkali_problem.levels(*mag_field);
 
                 levels.iter().map(|x| Energy(*x, Au).to(CmInv).value()).collect()
             })
@@ -40,14 +48,14 @@ impl Problems {
 
     fn levels_uncoupled() {
         let yb_f = get_particle_uncoupled();
-        let alkali_problem = get_problem_uncoupled(&yb_f);
+        let alkali_problem = get_problem_uncoupled(&yb_f, 4);
         println!("{}", alkali_problem.basis.len());
 
         let mag_fields = linspace(0., 70., 70);
 
         let energies: Vec<Vec<f64>> = mag_fields.par_iter()
             .map(|mag_field| {
-                let (levels, _) = alkali_problem.levels_at_field(*mag_field);
+                let (levels, _) = alkali_problem.levels(*mag_field);
 
                 levels.iter().map(|x| Energy(*x, Au).to(CmInv).value()).collect()
             })
@@ -62,9 +70,6 @@ impl Problems {
 fn get_particle() -> Particle {
     let mut caf = Particle::new("YbF", Mass(192.9372652, Dalton));
 
-    caf.insert(RotorJMax(4));
-    caf.insert(RotorLMax(4));
-    caf.insert(RotorJTotMax(2));
     caf.insert(RotConst(Energy(0.24129, CmInv).to_au()));
     caf.insert(GammaSpinRot(Energy(4.4778e-4, CmInv).to_au()));
     caf.insert(AnisoHifi(Energy(2.84875e-3, CmInv).to_au()));
@@ -72,20 +77,18 @@ fn get_particle() -> Particle {
     caf
 }
 
-fn get_problem(projection: HalfI32, particle: &Particle) -> AlkaliRotorProblem {
+fn get_problem(projection: HalfI32, params: &Params, basis_recipe: &TramBasisRecipe) -> AlkaliRotorProblem {
     let hifi_ybf = HifiProblemBuilder::new(hu32!(1/2), hu32!(1/2))
         .with_hyperfine_coupling(Energy(5.6794e-3, CmInv).to_au())
         .with_total_projection(projection);
 
     AlkaliRotorProblemBuilder::new(hifi_ybf)
-        .build(particle)
+        .build(params, basis_recipe)
 }
 
 fn get_particle_uncoupled() -> Particle {
     let mut caf = Particle::new("YbF", Mass(192.9372652, Dalton));
 
-    caf.insert(RotorJMax(4));
-    caf.insert(RotorLMax(4));
     caf.insert(RotConst(Energy(0.24129, CmInv).to_au()));
     caf.insert(GammaSpinRot(Energy(4.4778e-4, CmInv).to_au()));
     caf.insert(AnisoHifi(Energy(2.84875e-3, CmInv).to_au()));
@@ -93,10 +96,10 @@ fn get_particle_uncoupled() -> Particle {
     caf
 }
 
-fn get_problem_uncoupled(particle: &Particle) -> UncoupledAlkaliRotorProblem {
+fn get_problem_uncoupled(particle: &Particle, n_max: u32) -> UncoupledAlkaliRotorProblem {
     let hifi_ybf = HifiProblemBuilder::new(hu32!(1/2), hu32!(1/2))
         .with_hyperfine_coupling(Energy(5.6794e-3, CmInv).to_au());
 
     AlkaliRotorProblemBuilder::new(hifi_ybf)
-        .build_uncoupled(particle)
+        .build_uncoupled(particle, n_max)
 }
