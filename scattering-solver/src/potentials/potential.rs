@@ -8,7 +8,7 @@ impl Dimension for f64 {
     }
 }
 
-use faer::{Mat, Entity};
+use faer::{Entity, Mat};
 impl<T: Entity> Dimension for Mat<T> {
     fn size(&self) -> usize {
         assert!(self.nrows() == self.ncols());
@@ -40,24 +40,24 @@ pub trait SimplePotential: Potential<Space = f64> {
     }
 }
 
-impl<P: Potential<Space = f64>> SimplePotential for P { }
+impl<P: Potential<Space = f64>> SimplePotential for P {}
 
-pub trait MatPotential: Potential<Space = Mat<f64>> { }
+pub trait MatPotential: Potential<Space = Mat<f64>> {}
 
-impl<P: Potential<Space = Mat<f64>>> MatPotential for P { }
+impl<P: Potential<Space = Mat<f64>>> MatPotential for P {}
 
 #[derive(Clone)]
 pub struct ScaledPotential<P: SimplePotential> {
     pub potential: P,
-    pub scaling: f64
-} 
+    pub scaling: f64,
+}
 
 impl<P: SimplePotential> Potential for ScaledPotential<P> {
     type Space = f64;
 
     fn value_inplace(&self, r: f64, value: &mut Self::Space) {
         self.potential.value_inplace(r, value);
-        *value *= self.scaling 
+        *value *= self.scaling
     }
 
     fn size(&self) -> usize {
@@ -69,4 +69,4 @@ impl<P: SimplePotential + SubPotential> SubPotential for ScaledPotential<P> {
     fn value_add(&self, r: f64, value: &mut Self::Space) {
         *value += self.scaling * self.potential.value(r)
     }
-} 
+}

@@ -10,8 +10,7 @@ pub struct MultiCoupling<A, P: Potential> {
     phantom: PhantomData<A>,
 }
 
-impl<A, P: Potential> MultiCoupling<A, P>
-{
+impl<A, P: Potential> MultiCoupling<A, P> {
     /// Creates new multi coupling potential with given vector of potentials with their coupling indices in potential matrix.
     /// If `symmetric` is true, the coupling matrix will be symmetric.
     pub fn new(size: usize, potentials: Vec<(P, usize, usize)>) -> Self {
@@ -19,11 +18,11 @@ impl<A, P: Potential> MultiCoupling<A, P>
             assert!(p.1 < size);
             assert!(p.2 < size);
         }
-        
+
         Self {
             potentials,
             size,
-            phantom: PhantomData
+            phantom: PhantomData,
         }
     }
 
@@ -44,7 +43,7 @@ use faer::Mat;
 
 impl<P: Potential<Space = f64>> Potential for MultiCoupling<Mat<f64>, P> {
     type Space = Mat<f64>;
-    
+
     fn value_inplace(&self, r: f64, value: &mut Mat<f64>) {
         value.fill_zero();
         for (p, i, j) in &self.potentials {

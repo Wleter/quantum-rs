@@ -1,5 +1,5 @@
-mod two_channel;
 mod many_channels;
+mod two_channel;
 
 use many_channels::ManyChannels;
 use quantum::problems_impl;

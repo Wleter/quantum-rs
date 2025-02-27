@@ -18,8 +18,10 @@ impl<P: SubPotential> Composite<P> {
     pub fn from_vec(potentials: Vec<P>) -> Self {
         let mut potentials = potentials.into_iter();
 
-        let mut potential = Composite::new(potentials.next()
-            .expect("passed 0 sized vector of potential")
+        let mut potential = Composite::new(
+            potentials
+                .next()
+                .expect("passed 0 sized vector of potential"),
         );
         for p in potentials {
             potential.add_potential(p);
@@ -39,7 +41,7 @@ impl<P: SubPotential> Composite<P> {
 
 impl<P: SubPotential> Potential for Composite<P> {
     type Space = <P as Potential>::Space;
-    
+
     fn value_inplace(&self, r: f64, value: &mut Self::Space) {
         self.main_potential.value_inplace(r, value);
 
@@ -47,7 +49,7 @@ impl<P: SubPotential> Potential for Composite<P> {
             potential.value_add(r, value);
         }
     }
-    
+
     fn size(&self) -> usize {
         self.main_potential.size()
     }
@@ -56,7 +58,7 @@ impl<P: SubPotential> Potential for Composite<P> {
 impl<P: SubPotential> SubPotential for Composite<P> {
     fn value_add(&self, r: f64, value: &mut Self::Space) {
         self.main_potential.value_add(r, value);
-        
+
         for potential in &self.potentials {
             potential.value_add(r, value);
         }

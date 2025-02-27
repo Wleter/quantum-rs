@@ -1,5 +1,5 @@
 use problems::Problems;
-use quantum::problem_selector::{get_args, ProblemSelector};
+use quantum::problem_selector::{ProblemSelector, get_args};
 
 pub mod problems;
 

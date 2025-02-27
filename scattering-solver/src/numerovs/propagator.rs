@@ -36,14 +36,14 @@ pub trait StepRule<D: PropagatorData> {
 }
 
 pub struct SingleStepRule {
-    pub step: f64
+    pub step: f64,
 }
 
 impl<D: PropagatorData> StepRule<D> for SingleStepRule {
     fn get_step(&self, _data: &D) -> f64 {
         self.step
     }
-    
+
     fn assign(&mut self, data: &D) -> StepAction {
         let prop_step = data.step_size();
 
@@ -69,9 +69,9 @@ pub struct MultiStepRule<D> {
 
 impl<D> Default for MultiStepRule<D> {
     fn default() -> Self {
-        Self { 
+        Self {
             doubled_step: false,
-            min_step: 0., 
+            min_step: 0.,
             max_step: f64::MAX,
             phantom: PhantomData,
             wave_step_ratio: 500.,
@@ -83,7 +83,7 @@ impl<D> MultiStepRule<D> {
     pub fn new(min_step: f64, max_step: f64, wave_step_ratio: f64) -> Self {
         Self {
             doubled_step: false,
-            min_step, 
+            min_step,
             max_step,
             phantom: PhantomData,
             wave_step_ratio,
@@ -102,22 +102,22 @@ pub struct NumerovResult<T> {
     pub wave_ratio: T,
 }
 
-pub struct Numerov<D, S, M> 
-where 
+pub struct Numerov<D, S, M>
+where
     D: PropagatorData,
     S: StepRule<D>,
-    M: MultiStep<D>
+    M: MultiStep<D>,
 {
     pub data: D,
     pub(crate) step_rules: S,
     pub(crate) multi_step: M,
 }
 
-impl<D, S, M> Numerov<D, S, M> 
-where 
+impl<D, S, M> Numerov<D, S, M>
+where
     D: PropagatorData,
     S: StepRule<D>,
-    M: MultiStep<D>
+    M: MultiStep<D>,
 {
     pub fn propagate_to(&mut self, r: f64) {
         while !self.data.crossed_distance(r) {
@@ -127,7 +127,7 @@ where
 
     pub fn propagate_to_with<P: PropagatorModifier<D>>(&mut self, r: f64, modifier: &mut P) {
         modifier.before(&mut self.data, r);
-        
+
         while !self.data.crossed_distance(r) {
             self.variable_step();
             modifier.after_step(&mut self.data);
@@ -150,7 +150,7 @@ where
             self.multi_step.halve_step(&mut self.data);
             action = self.step_rules.assign(&self.data);
             halved = true;
-        };
+        }
 
         if halved {
             self.data.current_g_func();
@@ -163,7 +163,7 @@ where
         Numerov {
             data: self.data,
             step_rules,
-            multi_step: self.multi_step
+            multi_step: self.multi_step,
         }
     }
 }

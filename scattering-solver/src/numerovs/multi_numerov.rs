@@ -1,20 +1,38 @@
-use faer::{linalg::matmul::matmul, prelude::{c64, SolverCore}, unzipped, zipped, Mat, MatMut};
-use quantum::{params::particles::Particles, units::{energy_units::Energy, mass_units::Mass, Au}, utility::{ratio_riccati_i, ratio_riccati_k, riccati_j, riccati_n}};
-use crate::{boundary::{Asymptotic, Boundary}, numerovs::{numerov_modifier::{PropagatorModifier, SampleConfig, WaveStorage}, propagator::{MultiStep, MultiStepRule, Numerov, NumerovResult, PropagatorData, StepAction, StepRule}}, observables::s_matrix::SMatrix, potentials::{dispersion_potential::Dispersion, potential::{MatPotential, SimplePotential}}, utility::inverse_inplace};
+use crate::{
+    boundary::{Asymptotic, Boundary},
+    numerovs::{
+        numerov_modifier::{PropagatorModifier, SampleConfig, WaveStorage},
+        propagator::{
+            MultiStep, MultiStepRule, Numerov, NumerovResult, PropagatorData, StepAction, StepRule,
+        },
+    },
+    observables::s_matrix::SMatrix,
+    potentials::{
+        dispersion_potential::Dispersion,
+        potential::{MatPotential, SimplePotential},
+    },
+    utility::inverse_inplace,
+};
+use faer::{
+    Mat, MatMut,
+    linalg::matmul::matmul,
+    prelude::{SolverCore, c64},
+    unzipped, zipped,
+};
+use quantum::{
+    params::particles::Particles,
+    units::{Au, energy_units::Energy, mass_units::Mass},
+    utility::{ratio_riccati_i, ratio_riccati_k, riccati_j, riccati_n},
+};
 
 use core::f64;
 use std::{f64::consts::PI, mem::swap};
 
 use super::numerov_modifier::ScatteringVsDistance;
 
-pub type MultiRatioNumerov<'a, P, S> = Numerov<
-    MultiNumerovData<'a, P>, 
-    S,
-    MultiRatioNumerovStep
->;
+pub type MultiRatioNumerov<'a, P, S> = Numerov<MultiNumerovData<'a, P>, S, MultiRatioNumerovStep>;
 
-pub struct MultiRatioNumerovStep
-{
+pub struct MultiRatioNumerovStep {
     f1: Mat<f64>,
     f2: Mat<f64>,
     f3: Mat<f64>,
@@ -25,8 +43,8 @@ pub struct MultiRatioNumerovStep
 
 #[derive(Clone)]
 pub struct MultiNumerovData<'a, P>
-where 
-    P: MatPotential
+where
+    P: MatPotential,
 {
     pub r: f64,
     pub dr: f64,
@@ -50,20 +68,20 @@ where
     pub(super) perm_inv_buffer: Vec<usize>,
 }
 
-impl<P> MultiNumerovData<'_, P> 
-where 
-    P: MatPotential
+impl<P> MultiNumerovData<'_, P>
+where
+    P: MatPotential,
 {
     pub fn get_g_func(&mut self, r: f64, out: MatMut<f64>) {
         self.potential.value_inplace(r, &mut self.potential_buffer);
 
         let centr_prop = self.centrifugal_prop.value(r);
-        self.potential_buffer.diagonal_mut()
+        self.potential_buffer
+            .diagonal_mut()
             .column_vector_mut()
             .iter_mut()
             .zip(self.asymptotic.centrifugal.iter())
             .for_each(|(x, l)| *x += (l.0 * (l.0 + 1)) as f64 * centr_prop);
-        
 
         zipped!(out, self.unit.as_ref(), self.potential_buffer.as_ref())
             .for_each(|unzipped!(o, u, p)| *o = 2.0 * self.mass * (self.energy * u - p));
@@ -138,7 +156,8 @@ where
         let denominator = (&id - &red_ik_matrix).partial_piv_lu();
         let denominator = denominator.inverse();
         let s_matrix = denominator * (id + red_ik_matrix);
-        let entrance = is_open_channel.iter()
+        let entrance = is_open_channel
+            .iter()
             .enumerate()
             .filter(|(_, x)| **x)
             .find(|(i, _)| *i == self.asymptotic.entrance)
@@ -149,11 +168,11 @@ where
     }
 }
 
-impl<'a, P, S, M> Numerov<MultiNumerovData<'a, P>, S, M> 
-where 
+impl<'a, P, S, M> Numerov<MultiNumerovData<'a, P>, S, M>
+where
     P: MatPotential,
     S: StepRule<MultiNumerovData<'a, P>>,
-    M: MultiStep<MultiNumerovData<'a, P>>
+    M: MultiStep<MultiNumerovData<'a, P>>,
 {
     pub fn get_result(&self) -> NumerovResult<Mat<f64>> {
         NumerovResult {
@@ -165,19 +184,27 @@ where
 }
 
 impl<'a, P, S> Numerov<MultiNumerovData<'a, P>, S, MultiRatioNumerovStep>
-where 
+where
     P: MatPotential,
     S: StepRule<MultiNumerovData<'a, P>>,
 {
-    pub fn new(potential: &'a P, particles: &'a Particles, step_rules: S, boundary: Boundary<Mat<f64>>) -> Self {
-        let mass = particles.get::<Mass<Au>>()
+    pub fn new(
+        potential: &'a P,
+        particles: &'a Particles,
+        step_rules: S,
+        boundary: Boundary<Mat<f64>>,
+    ) -> Self {
+        let mass = particles
+            .get::<Mass<Au>>()
             .expect("no reduced mass parameter Mass<Au> found in particles")
             .to_au();
-        let mut energy = particles.get::<Energy<Au>>()
+        let mut energy = particles
+            .get::<Energy<Au>>()
             .expect("no collision energy Energy<Au> found in particles")
             .to_au();
 
-        let asymptotic = particles.get::<Asymptotic>()
+        let asymptotic = particles
+            .get::<Asymptotic>()
             .expect("no Asymptotic found in particles for multi channel numerov problem");
         let centrifugal_prop = Dispersion::new(1. / (2. * mass), -2);
 
@@ -200,21 +227,21 @@ where
             psi1: Mat::zeros(size, size),
             psi2: Mat::zeros(size, size),
             perm_buffer: vec![0; size],
-            perm_inv_buffer: vec![0; size]
+            perm_inv_buffer: vec![0; size],
         };
 
         data.current_g_func();
-    
+
         let dr = match boundary.direction {
             crate::boundary::Direction::Inwards => -step_rules.get_step(&data),
             crate::boundary::Direction::Outwards => step_rules.get_step(&data),
             crate::boundary::Direction::Step(dr) => dr,
         };
         data.dr = dr;
-    
+
         data.psi1 = boundary.start_value;
         data.psi2 = boundary.before_value;
-    
+
         let mut f3 = Mat::zeros(size, size);
         data.get_g_func(r - 2. * dr, f3.as_mut());
 
@@ -225,12 +252,12 @@ where
         let f2 = data.unit.as_ref() + dr * dr / 12. * f2;
         let f1 = data.unit.as_ref() + dr * dr / 12. * &data.current_g_func;
 
-        let multi_step = MultiRatioNumerovStep { 
-            f1, 
-            f2, 
-            f3, 
-            buffer1: Mat::zeros(size, size), 
-            buffer2: Mat::zeros(size, size)
+        let multi_step = MultiRatioNumerovStep {
+            f1,
+            f2,
+            f3,
+            buffer1: Mat::zeros(size, size),
+            buffer2: Mat::zeros(size, size),
         };
 
         Self {
@@ -241,28 +268,32 @@ where
     }
 }
 
-impl<P> PropagatorData for MultiNumerovData<'_, P> 
-where 
-    P: MatPotential
+impl<P> PropagatorData for MultiNumerovData<'_, P>
+where
+    P: MatPotential,
 {
     fn step_size(&self) -> f64 {
         self.dr
     }
-    
+
     fn current_g_func(&mut self) {
-        self.potential.value_inplace(self.r + self.dr, &mut self.potential_buffer);
+        self.potential
+            .value_inplace(self.r + self.dr, &mut self.potential_buffer);
 
         let centr_prop = self.centrifugal_prop.value(self.r + self.dr);
-        self.potential_buffer.diagonal_mut()
+        self.potential_buffer
+            .diagonal_mut()
             .column_vector_mut()
             .iter_mut()
             .zip(self.asymptotic.centrifugal.iter())
             .for_each(|(x, l)| *x += (l.0 * (l.0 + 1)) as f64 * centr_prop);
 
-        zipped!(self.current_g_func.as_mut(), self.unit.as_ref(), self.potential_buffer.as_ref())
-            .for_each(|unzipped!(c, u, p)| 
-                *c = 2.0 * self.mass * (self.energy * u - p)
-            );
+        zipped!(
+            self.current_g_func.as_mut(),
+            self.unit.as_ref(),
+            self.potential_buffer.as_ref()
+        )
+        .for_each(|unzipped!(c, u, p)| *c = 2.0 * self.mass * (self.energy * u - p));
     }
 
     fn advance(&mut self) {
@@ -275,11 +306,13 @@ where
 }
 
 impl<P> StepRule<MultiNumerovData<'_, P>> for MultiStepRule<MultiNumerovData<'_, P>>
-where 
-    P: MatPotential
+where
+    P: MatPotential,
 {
     fn get_step(&self, data: &MultiNumerovData<P>) -> f64 {
-        let max_g_val = data.current_g_func.diagonal()
+        let max_g_val = data
+            .current_g_func
+            .diagonal()
             .column_vector()
             .iter()
             .max_by(|a, b| a.partial_cmp(b).unwrap())
@@ -289,7 +322,7 @@ where
 
         f64::clamp(lambda / self.wave_step_ratio, self.min_step, self.max_step)
     }
-    
+
     fn assign(&mut self, data: &MultiNumerovData<P>) -> StepAction {
         let prop_step = data.step_size();
         let step = self.get_step(data);
@@ -308,26 +341,50 @@ where
 }
 
 impl<P> MultiStep<MultiNumerovData<'_, P>> for MultiRatioNumerovStep
-where 
-    P: MatPotential
+where
+    P: MatPotential,
 {
     fn step(&mut self, data: &mut MultiNumerovData<P>) {
         data.r += data.dr;
 
-        zipped!(self.buffer1.as_mut(), data.unit.as_ref(), data.current_g_func.as_ref())
-            .for_each(|unzipped!(b1, u, c)| 
-                *b1 = u + data.dr * data.dr / 12. * c
-            );
+        zipped!(
+            self.buffer1.as_mut(),
+            data.unit.as_ref(),
+            data.current_g_func.as_ref()
+        )
+        .for_each(|unzipped!(b1, u, c)| *b1 = u + data.dr * data.dr / 12. * c);
 
-        inverse_inplace(self.buffer1.as_ref(), self.f3.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
+        inverse_inplace(
+            self.buffer1.as_ref(),
+            self.f3.as_mut(),
+            &mut data.perm_buffer,
+            &mut data.perm_inv_buffer,
+        );
 
-        inverse_inplace(data.psi1.as_ref(), data.psi2.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
-        matmul(self.buffer2.as_mut(), self.f2.as_ref(), data.psi2.as_ref(), None, 1., faer::Parallelism::None);
+        inverse_inplace(
+            data.psi1.as_ref(),
+            data.psi2.as_mut(),
+            &mut data.perm_buffer,
+            &mut data.perm_inv_buffer,
+        );
+        matmul(
+            self.buffer2.as_mut(),
+            self.f2.as_ref(),
+            data.psi2.as_ref(),
+            None,
+            1.,
+            faer::Parallelism::None,
+        );
         zipped!(self.buffer2.as_mut(), data.unit.as_ref(), self.f1.as_ref())
-            .for_each(|unzipped!(b2, u, f1)| 
-                *b2 = 12. * u - 10. * f1 - *b2
-            );
-        matmul(data.psi2.as_mut(), self.f3.as_ref(), self.buffer2.as_ref(), None, 1., faer::Parallelism::None);
+            .for_each(|unzipped!(b2, u, f1)| *b2 = 12. * u - 10. * f1 - *b2);
+        matmul(
+            data.psi2.as_mut(),
+            self.f3.as_ref(),
+            self.buffer2.as_ref(),
+            None,
+            1.,
+            faer::Parallelism::None,
+        );
 
         swap(&mut self.f3, &mut self.f2);
         swap(&mut self.f2, &mut self.f1);
@@ -340,35 +397,58 @@ where
         data.dr /= 2.0;
 
         zipped!(self.f2.as_mut(), data.unit.as_ref())
-            .for_each(|unzipped!(f2, u)| 
-                *f2 = *f2 / 4. + 0.75 * u
-            );
+            .for_each(|unzipped!(f2, u)| *f2 = *f2 / 4. + 0.75 * u);
 
         zipped!(self.f1.as_mut(), data.unit.as_ref())
-            .for_each(|unzipped!(f1, u)| 
-                *f1 = *f1 / 4. + 0.75 * u
-            );
+            .for_each(|unzipped!(f1, u)| *f1 = *f1 / 4. + 0.75 * u);
 
         data.get_g_func(data.r - data.dr, self.buffer1.as_mut());
         zipped!(self.buffer1.as_mut(), data.unit.as_ref())
-            .for_each(|unzipped!(b1, u)| 
-                *b1 = 2. * u - data.dr * data.dr * 10. / 12. * *b1
-            );
+            .for_each(|unzipped!(b1, u)| *b1 = 2. * u - data.dr * data.dr * 10. / 12. * *b1);
 
-        inverse_inplace(self.buffer1.as_ref(), self.buffer2.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
+        inverse_inplace(
+            self.buffer1.as_ref(),
+            self.buffer2.as_mut(),
+            &mut data.perm_buffer,
+            &mut data.perm_inv_buffer,
+        );
 
         zipped!(self.f2.as_mut(), data.unit.as_ref(), self.buffer1.as_ref())
-            .for_each(|unzipped!(f2, u, b1)| 
-                *f2 = 1.2 * u - b1 / 10.
-            );
+            .for_each(|unzipped!(f2, u, b1)| *f2 = 1.2 * u - b1 / 10.);
 
-        matmul(self.buffer1.as_mut(), self.f1.as_ref(), data.psi1.as_ref(), None, 1., faer::Parallelism::None);
+        matmul(
+            self.buffer1.as_mut(),
+            self.f1.as_ref(),
+            data.psi1.as_ref(),
+            None,
+            1.,
+            faer::Parallelism::None,
+        );
         self.buffer1 += self.f2.as_ref();
-        matmul(data.psi2.as_mut(), self.buffer2.as_ref(), self.buffer1.as_ref(), None, 1., faer::Parallelism::None);
+        matmul(
+            data.psi2.as_mut(),
+            self.buffer2.as_ref(),
+            self.buffer1.as_ref(),
+            None,
+            1.,
+            faer::Parallelism::None,
+        );
 
-        inverse_inplace(data.psi2.as_ref(), self.buffer1.as_mut(), &mut data.perm_buffer, &mut data.perm_inv_buffer);
+        inverse_inplace(
+            data.psi2.as_ref(),
+            self.buffer1.as_mut(),
+            &mut data.perm_buffer,
+            &mut data.perm_inv_buffer,
+        );
 
-        matmul(self.buffer2.as_mut(), data.psi1.as_ref(), self.buffer1.as_ref(), None, 1., faer::Parallelism::None);
+        matmul(
+            self.buffer2.as_mut(),
+            data.psi1.as_ref(),
+            self.buffer1.as_ref(),
+            None,
+            1.,
+            faer::Parallelism::None,
+        );
         swap(&mut data.psi1, &mut self.buffer2);
     }
 
@@ -376,24 +456,26 @@ where
         data.dr *= 2.;
 
         zipped!(self.f2.as_mut(), data.unit.as_ref(), self.f3.as_ref())
-            .for_each(|unzipped!(f2, u, f3)| 
-                *f2 = 4.0 * f3 - 3. * u
-            );
+            .for_each(|unzipped!(f2, u, f3)| *f2 = 4.0 * f3 - 3. * u);
 
         zipped!(self.f1.as_mut(), data.unit.as_ref())
-            .for_each(|unzipped!(f1, u)| 
-                *f1 = 4.0 * *f1 - 3. * u
-            );
+            .for_each(|unzipped!(f1, u)| *f1 = 4.0 * *f1 - 3. * u);
 
-        matmul(self.buffer1.as_mut(), data.psi1.as_ref(), data.psi2.as_ref(), None, 1., faer::Parallelism::None);
+        matmul(
+            self.buffer1.as_mut(),
+            data.psi1.as_ref(),
+            data.psi2.as_ref(),
+            None,
+            1.,
+            faer::Parallelism::None,
+        );
         swap(&mut self.buffer1, &mut data.psi1);
     }
 }
 
-
-impl<P> PropagatorModifier<MultiNumerovData<'_, P>> for WaveStorage<Mat<f64>> 
-where 
-    P: MatPotential
+impl<P> PropagatorModifier<MultiNumerovData<'_, P>> for WaveStorage<Mat<f64>>
+where
+    P: MatPotential,
 {
     fn before(&mut self, data: &mut MultiNumerovData<'_, P>, r_stop: f64) {
         if let SampleConfig::Step(value) = &mut self.sampling {
@@ -417,33 +499,36 @@ where
                 if self.rs.len() == self.capacity {
                     *sample_each *= 2;
 
-                    self.rs = self.rs.iter()
+                    self.rs = self
+                        .rs
+                        .iter()
                         .enumerate()
                         .filter(|(i, _)| i % 2 == 1)
                         .map(|(_, r)| *r)
                         .collect();
-    
-                    self.waves = self.waves.iter()
+
+                    self.waves = self
+                        .waves
+                        .iter()
                         .enumerate()
                         .filter(|(i, _)| i % 2 == 1)
                         .map(|(_, w)| w.clone())
                         .collect();
                 }
-
-            },
+            }
             SampleConfig::Step(sample_step) => {
                 if (data.r - self.rs.last().unwrap()).abs() > *sample_step {
                     self.rs.push(data.r);
                     self.waves.push(self.last_value.clone());
                 }
-            },
+            }
         }
     }
 }
 
 impl<P> PropagatorModifier<MultiNumerovData<'_, P>> for ScatteringVsDistance<SMatrix>
-where 
-    P: MatPotential
+where
+    P: MatPotential,
 {
     fn before(&mut self, _data: &mut MultiNumerovData<'_, P>, r_stop: f64) {
         self.take_per = (r_stop - self.r_min).abs() / (self.capacity as f64);
@@ -454,7 +539,10 @@ where
             return;
         }
 
-        let append = self.distances.last().is_none_or(|r| (r - data.r).abs() >= self.take_per);
+        let append = self
+            .distances
+            .last()
+            .is_none_or(|r| (r - data.r).abs() >= self.take_per);
 
         if append {
             let s = data.calculate_s_matrix();

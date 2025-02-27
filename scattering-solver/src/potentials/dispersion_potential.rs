@@ -9,7 +9,7 @@ pub struct Dispersion {
 
 impl Dispersion {
     pub fn new(d0: f64, n: i32) -> Self {
-        Self { d0, n, }
+        Self { d0, n }
     }
 }
 
@@ -19,7 +19,7 @@ impl Potential for Dispersion {
     fn value_inplace(&self, r: f64, value: &mut Self::Space) {
         *value = self.d0 * r.powi(self.n);
     }
-    
+
     fn size(&self) -> usize {
         1
     }

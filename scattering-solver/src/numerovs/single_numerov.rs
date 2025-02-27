@@ -1,23 +1,37 @@
 use std::f64::consts::PI;
 
 use num::complex::Complex64;
-use quantum::{params::particles::Particles, units::{energy_units::Energy, mass_units::Mass, Au}, utility::{riccati_j, riccati_n}};
+use quantum::{
+    params::particles::Particles,
+    units::{Au, energy_units::Energy, mass_units::Mass},
+    utility::{riccati_j, riccati_n},
+};
 
-use crate::{boundary::Boundary, observables::s_matrix::SingleSMatrix, potentials::{dispersion_potential::Dispersion, potential::SimplePotential, potential_factory::create_centrifugal}, utility::AngMomentum};
+use crate::{
+    boundary::Boundary,
+    observables::s_matrix::SingleSMatrix,
+    potentials::{
+        dispersion_potential::Dispersion, potential::SimplePotential,
+        potential_factory::create_centrifugal,
+    },
+    utility::AngMomentum,
+};
 
-use super::propagator::{MultiStep, MultiStepRule, Numerov, NumerovResult, PropagatorData, StepAction, StepRule};
+use super::propagator::{
+    MultiStep, MultiStepRule, Numerov, NumerovResult, PropagatorData, StepAction, StepRule,
+};
 
 pub type SingleRatioNumerov<'a, P> = Numerov<
-    SingleNumerovData<'a, P>, 
-    MultiStepRule<SingleNumerovData<'a, P>>, 
-    SingleRatioNumerovStep
+    SingleNumerovData<'a, P>,
+    MultiStepRule<SingleNumerovData<'a, P>>,
+    SingleRatioNumerovStep,
 >;
 
-impl<'a, P, S, M> Numerov<SingleNumerovData<'a, P>, S, M> 
-where 
+impl<'a, P, S, M> Numerov<SingleNumerovData<'a, P>, S, M>
+where
     P: SimplePotential,
     S: StepRule<SingleNumerovData<'a, P>>,
-    M: MultiStep<SingleNumerovData<'a, P>>
+    M: MultiStep<SingleNumerovData<'a, P>>,
 {
     pub fn get_result(&self) -> NumerovResult<f64> {
         NumerovResult {
@@ -28,17 +42,22 @@ where
     }
 }
 
-impl<'a, P, S> Numerov<SingleNumerovData<'a, P>, S, SingleRatioNumerovStep> 
-where 
+impl<'a, P, S> Numerov<SingleNumerovData<'a, P>, S, SingleRatioNumerovStep>
+where
     P: SimplePotential,
     S: StepRule<SingleNumerovData<'a, P>>,
 {
-    pub fn new(potential: &'a P, particles: &Particles, step_rules: S, boundary: Boundary<f64>) -> Self {
+    pub fn new(
+        potential: &'a P,
+        particles: &Particles,
+        step_rules: S,
+        boundary: Boundary<f64>,
+    ) -> Self {
         let mut data = SingleNumerovData::new(potential, particles);
         let r = boundary.r_start;
         data.r = r;
         data.current_g_func();
-        
+
         let dr = match boundary.direction {
             crate::boundary::Direction::Inwards => -step_rules.get_step(&data),
             crate::boundary::Direction::Outwards => step_rules.get_step(&data),
@@ -46,19 +65,15 @@ where
         };
 
         data.dr = dr;
-    
+
         data.psi1 = boundary.start_value;
         data.psi2 = boundary.before_value;
-    
+
         let f3 = 1. + dr * dr / 12. * data.get_g_func(r - 2. * dr);
         let f2 = 1. + dr * dr / 12. * data.get_g_func(r - dr);
         let f1 = 1. + dr * dr / 12. * data.current_g_func;
 
-        let multi_step = SingleRatioNumerovStep {
-            f1,
-            f2,
-            f3,
-        };
+        let multi_step = SingleRatioNumerovStep { f1, f2, f3 };
 
         Self {
             data,
@@ -70,8 +85,8 @@ where
 
 #[derive(Clone)]
 pub struct SingleNumerovData<'a, P>
-where 
-    P: SimplePotential
+where
+    P: SimplePotential,
 {
     pub r: f64,
     pub dr: f64,
@@ -88,15 +103,17 @@ where
     psi2: f64,
 }
 
-impl<'a, P> SingleNumerovData<'a, P> 
-where 
-    P: SimplePotential
+impl<'a, P> SingleNumerovData<'a, P>
+where
+    P: SimplePotential,
 {
     pub fn new(potential: &'a P, particles: &Particles) -> Self {
-        let mass = particles.get::<Mass<Au>>()
+        let mass = particles
+            .get::<Mass<Au>>()
             .expect("no reduced mass parameter Mass<Au> found in particles")
             .to_au();
-        let energy = particles.get::<Energy<Au>>()
+        let energy = particles
+            .get::<Energy<Au>>()
             .expect("no collision energy Energy<Au> found in particles")
             .to_au();
 
@@ -126,7 +143,7 @@ where
 
         let momentum = (2.0 * self.mass * (self.energy - asymptotic)).sqrt();
         if momentum.is_nan() {
-            return Err("closed channel".to_string())
+            return Err("closed channel".to_string());
         }
 
         let j_last = riccati_j(self.l.0, momentum * r_last) / momentum.sqrt();
@@ -156,37 +173,38 @@ where
     }
 }
 
-impl<P> PropagatorData for SingleNumerovData<'_, P> 
-where 
-    P: SimplePotential
+impl<P> PropagatorData for SingleNumerovData<'_, P>
+where
+    P: SimplePotential,
 {
     fn step_size(&self) -> f64 {
         self.dr
     }
-    
+
     fn current_g_func(&mut self) {
-        self.current_g_func = 2.0 * self.mass * (self.energy - self.potential_value(self.r + self.dr));
+        self.current_g_func =
+            2.0 * self.mass * (self.energy - self.potential_value(self.r + self.dr));
     }
 
     fn advance(&mut self) {
         self.r += self.dr;
     }
-    
+
     fn crossed_distance(&self, r: f64) -> bool {
         self.dr.signum() * (r - self.r) <= 0.0
     }
 }
 
 impl<P> StepRule<SingleNumerovData<'_, P>> for MultiStepRule<SingleNumerovData<'_, P>>
-where 
-    P: SimplePotential
+where
+    P: SimplePotential,
 {
     fn get_step(&self, data: &SingleNumerovData<P>) -> f64 {
         let lambda = 2. * PI / data.current_g_func.abs().sqrt();
 
         f64::clamp(lambda / self.wave_step_ratio, self.min_step, self.max_step)
     }
-    
+
     fn assign(&mut self, data: &SingleNumerovData<P>) -> StepAction {
         let prop_step = data.step_size();
         let step = self.get_step(data);
@@ -205,16 +223,15 @@ where
 }
 
 #[derive(Default)]
-pub struct SingleRatioNumerovStep
-{
+pub struct SingleRatioNumerovStep {
     f1: f64,
     f2: f64,
     f3: f64,
 }
 
-impl<P> MultiStep<SingleNumerovData<'_, P>> for SingleRatioNumerovStep 
-where 
-    P: SimplePotential
+impl<P> MultiStep<SingleNumerovData<'_, P>> for SingleRatioNumerovStep
+where
+    P: SimplePotential,
 {
     fn step(&mut self, data: &mut SingleNumerovData<P>) {
         data.r += data.dr;

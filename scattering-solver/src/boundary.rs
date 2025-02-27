@@ -33,5 +33,5 @@ pub struct Asymptotic {
     pub centrifugal: Vec<AngMomentum>,
     pub entrance: usize,
     pub channel_energies: Vec<f64>,
-    pub channel_states: Mat<f64>
+    pub channel_states: Mat<f64>,
 }

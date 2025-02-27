@@ -2,12 +2,31 @@ use core::f64;
 use std::time::Instant;
 
 use num::Complex;
-use quantum::{params::{particle_factory::create_atom, particles::Particles}, problems_impl, units::{distance_units::Distance, energy_units::{Energy, Kelvin}, mass_units::Mass, Au}, utility::linspace};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{numerov_modifier::{Sampling, ScatteringVsDistance, WaveStorage}, propagator::MultiStepRule, single_numerov::SingleRatioNumerov}, potentials::{potential::Potential, potential_factory::create_lj}, utility::{save_data, AngMomentum}};
+use quantum::{
+    params::{particle_factory::create_atom, particles::Particles},
+    problems_impl,
+    units::{
+        Au,
+        distance_units::Distance,
+        energy_units::{Energy, Kelvin},
+        mass_units::Mass,
+    },
+    utility::linspace,
+};
+use scattering_solver::{
+    boundary::{Boundary, Direction},
+    numerovs::{
+        numerov_modifier::{Sampling, ScatteringVsDistance, WaveStorage},
+        propagator::MultiStepRule,
+        single_numerov::SingleRatioNumerov,
+    },
+    potentials::{potential::Potential, potential_factory::create_lj},
+    utility::{AngMomentum, save_data},
+};
 
 pub struct SingleChannel {}
 
-problems_impl!(SingleChannel, "single channel", 
+problems_impl!(SingleChannel, "single channel",
     "wave function" => |_| Self::wave_function(),
     "scattering length" => |_| Self::scattering_length(),
     "propagation distance" => |_| Self::propagation_distance(),
@@ -38,14 +57,20 @@ impl SingleChannel {
         let particles = Self::particles();
         let potential = Self::potential();
 
-        let mut numerov = SingleRatioNumerov::new(&potential, &particles, MultiStepRule::default(), Boundary::new(6.5, Direction::Outwards, (1.001, 1.002)));
+        let mut numerov = SingleRatioNumerov::new(
+            &potential,
+            &particles,
+            MultiStepRule::default(),
+            Boundary::new(6.5, Direction::Outwards, (1.001, 1.002)),
+        );
         let mut wave_storage = WaveStorage::new(Sampling::default(), 1e-50, 500);
-        
+
         let preparation = start.elapsed();
         numerov.propagate_to_with(100., &mut wave_storage);
         let propagation = start.elapsed() - preparation;
 
-        let potential_values: Vec<f64> = wave_storage.rs
+        let potential_values: Vec<f64> = wave_storage
+            .rs
             .iter()
             .map(|&r| numerov.data.potential_value(r))
             .collect();
@@ -62,7 +87,12 @@ impl SingleChannel {
         let particles = Self::particles();
         let potential = Self::potential();
 
-        let mut numerov = SingleRatioNumerov::new(&potential, &particles, MultiStepRule::default(), Boundary::new(6.5, Direction::Outwards, (1.001, 1.002)));
+        let mut numerov = SingleRatioNumerov::new(
+            &potential,
+            &particles,
+            MultiStepRule::default(),
+            Boundary::new(6.5, Direction::Outwards, (1.001, 1.002)),
+        );
 
         let start = Instant::now();
         numerov.propagate_to(1000.0);
@@ -79,12 +109,19 @@ impl SingleChannel {
         let particles = Self::particles();
         let potential = Self::potential();
 
-        let mut numerov = SingleRatioNumerov::new(&potential, &particles, MultiStepRule::default(), Boundary::new(6.5, Direction::Outwards, (1.001, 1.002)));
+        let mut numerov = SingleRatioNumerov::new(
+            &potential,
+            &particles,
+            MultiStepRule::default(),
+            Boundary::new(6.5, Direction::Outwards, (1.001, 1.002)),
+        );
         let mut scatterings = ScatteringVsDistance::new(120., 1000);
 
         numerov.propagate_to_with(10000., &mut scatterings);
 
-        let s_lengths: Vec<Complex<f64>> = scatterings.s_matrices.iter()
+        let s_lengths: Vec<Complex<f64>> = scatterings
+            .s_matrices
+            .iter()
             .map(|s| s.get_scattering_length())
             .collect();
 
@@ -107,13 +144,19 @@ impl SingleChannel {
         let boundary = Boundary::new(6.5, Direction::Outwards, (1.001, 1.002));
         let mass = particles.red_mass();
 
-        let s_lengths: Vec<Complex<f64>> = scalings.iter()
+        let s_lengths: Vec<Complex<f64>> = scalings
+            .iter()
             .map(|scaling| {
                 particles.get_mut::<Mass<Au>>().unwrap().0 = mass * scaling;
-    
-                let mut numerov = SingleRatioNumerov::new(&potential, &particles, MultiStepRule::default(), boundary.clone());
+
+                let mut numerov = SingleRatioNumerov::new(
+                    &potential,
+                    &particles,
+                    MultiStepRule::default(),
+                    boundary.clone(),
+                );
                 numerov.propagate_to(1e4);
-        
+
                 let s_matrix = numerov.data.calculate_s_matrix().unwrap();
                 s_matrix.get_scattering_length()
             })

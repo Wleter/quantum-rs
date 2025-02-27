@@ -27,7 +27,7 @@ impl Potential for GaussianCoupling {
     fn value_inplace(&self, r: f64, value: &mut Self::Space) {
         *value = self.strength * (-((r - self.center) / self.width).powi(2) / 2.0).exp()
     }
-    
+
     fn size(&self) -> usize {
         1
     }

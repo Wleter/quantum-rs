@@ -1,9 +1,13 @@
-
 use faer::Mat;
 
-use crate::{observables::s_matrix::SingleSMatrix, potentials::potential::{MatPotential, SimplePotential}};
+use crate::{
+    observables::s_matrix::SingleSMatrix,
+    potentials::potential::{MatPotential, SimplePotential},
+};
 
-use super::{multi_numerov::MultiNumerovData, propagator::PropagatorData, single_numerov::SingleNumerovData};
+use super::{
+    multi_numerov::MultiNumerovData, propagator::PropagatorData, single_numerov::SingleNumerovData,
+};
 
 pub trait PropagatorModifier<D: PropagatorData> {
     fn before(&mut self, _data: &mut D, _r_stop: f64) {}
@@ -14,7 +18,7 @@ pub trait PropagatorModifier<D: PropagatorData> {
 }
 
 pub struct MultiPropagatorModifier<'a, D: PropagatorData> {
-    modifiers: Vec<&'a mut dyn PropagatorModifier<D>>
+    modifiers: Vec<&'a mut dyn PropagatorModifier<D>>,
 }
 
 impl<'a, D: PropagatorData> MultiPropagatorModifier<'a, D> {
@@ -25,19 +29,19 @@ impl<'a, D: PropagatorData> MultiPropagatorModifier<'a, D> {
 
 impl<D: PropagatorData> PropagatorModifier<D> for MultiPropagatorModifier<'_, D> {
     fn before(&mut self, data: &mut D, r_stop: f64) {
-        for modifier in  self.modifiers.iter_mut() {
+        for modifier in self.modifiers.iter_mut() {
             modifier.before(data, r_stop);
         }
     }
 
     fn after_step(&mut self, data: &mut D) {
-        for modifier in  self.modifiers.iter_mut() {
+        for modifier in self.modifiers.iter_mut() {
             modifier.after_step(data);
         }
     }
 
     fn after_prop(&mut self, data: &mut D) {
-        for modifier in  self.modifiers.iter_mut() {
+        for modifier in self.modifiers.iter_mut() {
             modifier.after_prop(data);
         }
     }
@@ -45,7 +49,7 @@ impl<D: PropagatorData> PropagatorModifier<D> for MultiPropagatorModifier<'_, D>
 
 pub(super) enum SampleConfig {
     Each(usize),
-    Step(f64)
+    Step(f64),
 }
 
 pub struct WaveStorage<T> {
@@ -69,20 +73,20 @@ impl<T: Clone> WaveStorage<T> {
             Sampling::Variable => SampleConfig::Each(1),
         };
 
-        Self { 
+        Self {
             rs,
             waves,
             last_value: wave_init,
             capacity,
             counter: 0,
-            sampling
+            sampling,
         }
     }
 }
 
-impl<P> PropagatorModifier<SingleNumerovData<'_, P>> for WaveStorage<f64> 
-where 
-    P: SimplePotential
+impl<P> PropagatorModifier<SingleNumerovData<'_, P>> for WaveStorage<f64>
+where
+    P: SimplePotential,
 {
     fn before(&mut self, data: &mut SingleNumerovData<'_, P>, r_stop: f64) {
         if let SampleConfig::Step(value) = &mut self.sampling {
@@ -106,26 +110,29 @@ where
                 if self.rs.len() == self.capacity {
                     *sample_each *= 2;
 
-                    self.rs = self.rs.iter()
+                    self.rs = self
+                        .rs
+                        .iter()
                         .enumerate()
                         .filter(|(i, _)| i % 2 == 1)
                         .map(|(_, r)| *r)
                         .collect();
-    
-                    self.waves = self.waves.iter()
+
+                    self.waves = self
+                        .waves
+                        .iter()
                         .enumerate()
                         .filter(|(i, _)| i % 2 == 1)
                         .map(|(_, w)| *w)
                         .collect();
                 }
-
-            },
+            }
             SampleConfig::Step(sample_step) => {
                 if (data.r - self.rs.last().unwrap()).abs() > *sample_step {
                     self.rs.push(data.r);
                     self.waves.push(self.last_value);
                 }
-            },
+            }
         }
     }
 }
@@ -142,9 +149,9 @@ pub struct ScatteringVsDistance<S> {
     pub(super) r_min: f64,
     pub(super) capacity: usize,
     pub(super) take_per: f64,
-    
+
     pub distances: Vec<f64>,
-    pub s_matrices: Vec<S>
+    pub s_matrices: Vec<S>,
 }
 
 impl<S> ScatteringVsDistance<S> {
@@ -154,14 +161,14 @@ impl<S> ScatteringVsDistance<S> {
             capacity,
             take_per: 0.,
             distances: Vec::with_capacity(capacity),
-            s_matrices: Vec::with_capacity(capacity)
+            s_matrices: Vec::with_capacity(capacity),
         }
     }
 }
 
 impl<P> PropagatorModifier<SingleNumerovData<'_, P>> for ScatteringVsDistance<SingleSMatrix>
-where 
-    P: SimplePotential
+where
+    P: SimplePotential,
 {
     fn before(&mut self, _data: &mut SingleNumerovData<'_, P>, r_stop: f64) {
         self.take_per = (r_stop - self.r_min).abs() / (self.capacity as f64);
@@ -172,7 +179,10 @@ where
             return;
         }
 
-        let append = self.distances.last().is_none_or(|r| (r - data.r).abs() >= self.take_per);
+        let append = self
+            .distances
+            .last()
+            .is_none_or(|r| (r - data.r).abs() >= self.take_per);
 
         if append {
             if let Ok(s) = data.calculate_s_matrix() {
@@ -193,8 +203,8 @@ pub struct NumerovLogging<T> {
 }
 
 impl<P> PropagatorModifier<SingleNumerovData<'_, P>> for NumerovLogging<f64>
-where 
-    P: SimplePotential
+where
+    P: SimplePotential,
 {
     fn before(&mut self, data: &mut SingleNumerovData<'_, P>, r_stop: f64) {
         self.r_min = data.r;
@@ -213,8 +223,8 @@ where
 }
 
 impl<P> PropagatorModifier<MultiNumerovData<'_, P>> for NumerovLogging<Mat<f64>>
-where 
-    P: MatPotential
+where
+    P: MatPotential,
 {
     fn before(&mut self, data: &mut MultiNumerovData<'_, P>, r_stop: f64) {
         self.r_min = data.r;

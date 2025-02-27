@@ -1,7 +1,9 @@
-use quantum::units::{energy_units::Energy, Au};
+use quantum::units::{Au, energy_units::Energy};
 
-use super::{dispersion_potential::Dispersion, potential::{Potential, SimplePotential}};
-
+use super::{
+    dispersion_potential::Dispersion,
+    potential::{Potential, SimplePotential},
+};
 
 pub struct MorseLongRangeBuilder {
     d0: f64,
@@ -33,10 +35,7 @@ impl MorseLongRangeBuilder {
     }
 
     pub fn set_betas(self, betas: Vec<f64>) -> Self {
-        Self {
-            betas,
-            ..self
-        }
+        Self { betas, ..self }
     }
 
     pub fn set_params(self, p: i32, q: i32, r_ref: f64, rho: f64) -> Self {
@@ -58,11 +57,14 @@ impl MorseLongRangeBuilder {
         let betas = self.betas;
 
         let tail_re: f64 = if let Some(rho) = rho {
-            self.tail.iter().map(|tail| douketis_damping(r_e, rho, -tail.n) * tail.value(r_e)).sum()
+            self.tail
+                .iter()
+                .map(|tail| douketis_damping(r_e, rho, -tail.n) * tail.value(r_e))
+                .sum()
         } else {
             self.tail.iter().map(|tail| tail.value(r_e)).sum()
         };
-        
+
         let b_inf = (2.0f64 * self.d0 / tail_re).ln();
 
         MorseLongRange {
@@ -75,7 +77,7 @@ impl MorseLongRangeBuilder {
             rho,
             betas,
             b_inf,
-            tail_re
+            tail_re,
         }
     }
 }
@@ -92,27 +94,28 @@ pub struct MorseLongRange {
     betas: Vec<f64>,
     b_inf: f64,
 
-    tail_re: f64
+    tail_re: f64,
 }
 
 impl MorseLongRange {
     fn u_lr(&self, r: f64) -> f64 {
         if let Some(rho) = self.rho {
-            self.tail.iter()
+            self.tail
+                .iter()
                 .map(|tail| douketis_damping(r, rho, -tail.n) * tail.value(r))
                 .sum()
         } else {
-            self.tail.iter()
-                .map(|tail| tail.value(r))
-                .sum()
+            self.tail.iter().map(|tail| tail.value(r)).sum()
         }
     }
-    
+
     fn beta(&self, r: f64) -> f64 {
         let y_p = y_func(r, self.p, self.r_ref);
         let y_q = y_func(r, self.q, self.r_ref);
 
-        let beta_factor = self.betas.iter()
+        let beta_factor = self
+            .betas
+            .iter()
             .enumerate()
             .map(|(i, beta)| beta * y_q.powi(i as i32))
             .sum::<f64>();
@@ -129,7 +132,7 @@ impl Potential for MorseLongRange {
 
         *value = self.d0 * (1. - self.u_lr(r) / self.tail_re * exponent).powi(2) - self.d0
     }
-    
+
     fn size(&self) -> usize {
         1
     }
