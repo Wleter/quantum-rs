@@ -1,5 +1,11 @@
-use clebsch_gordan::{half_integer::{HalfI32, HalfU32}, hi32, hu32, wigner_3j, wigner_6j};
-use quantum::states::{braket::Braket, spins::{Spin, SpinOperators}};
+use clebsch_gordan::{
+    half_integer::{HalfI32, HalfU32},
+    hi32, hu32, wigner_3j, wigner_6j,
+};
+use quantum::states::{
+    braket::Braket,
+    spins::{Spin, SpinOperators},
+};
 
 use crate::alkali_rotor_atom::ParityBlock;
 
@@ -12,15 +18,12 @@ pub struct AnisoHifi(pub f64);
 #[derive(Clone, Copy, PartialEq, Hash, Default)]
 pub struct AngularPair {
     pub l: HalfU32,
-    pub n: HalfU32
+    pub n: HalfU32,
 }
 
 impl AngularPair {
     pub fn new(l: HalfU32, n: HalfU32) -> Self {
-        Self {
-            l,
-            n,
-        }
+        Self { l, n }
     }
 }
 
@@ -30,23 +33,31 @@ impl std::fmt::Debug for AngularPair {
     }
 }
 
-pub fn create_angular_pairs(l_max: u32, n_max: u32, n_tot_max: u32, parity: ParityBlock) -> Vec<AngularPair> {
+pub fn create_angular_pairs(
+    l_max: u32,
+    n_max: u32,
+    n_tot_max: u32,
+    parity: ParityBlock,
+) -> Vec<AngularPair> {
     let ls: Vec<u32> = (0..=l_max).collect();
-        
+
     let mut angular_states = vec![];
     for &l in &ls {
         let n_lower = ((l as i32 - n_tot_max as i32).max(0)).unsigned_abs();
         let n_upper = (l + n_tot_max).min(n_max);
-        
+
         for n in n_lower..=n_upper {
-            // todo! check if that also make sense with n_total != 0
             match parity {
-                ParityBlock::Positive => if (n + l) & 1 == 1 {
-                    continue;
-                },
-                ParityBlock::Negative => if (n + l) & 1 == 0 {
-                    continue;
-                },
+                ParityBlock::Positive => {
+                    if (n + l) & 1 == 1 {
+                        continue;
+                    }
+                }
+                ParityBlock::Negative => {
+                    if (n + l) & 1 == 0 {
+                        continue;
+                    }
+                }
                 ParityBlock::All => (),
             }
 

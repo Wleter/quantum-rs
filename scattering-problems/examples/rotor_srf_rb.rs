@@ -1,13 +1,57 @@
-use std::{f64::consts::PI, fs::File, io::{BufRead, BufReader}, time::Instant};
+use std::{
+    f64::consts::PI,
+    fs::File,
+    io::{BufRead, BufReader},
+    time::Instant,
+};
 
 use abm::{DoubleHifiProblemBuilder, HifiProblemBuilder};
-use clebsch_gordan::{hi32, half_integer::HalfI32, hu32};
+use clebsch_gordan::{half_integer::HalfI32, hi32, hu32};
 use faer::Mat;
 use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
-use quantum::{params::{particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles, Params}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::{Angstrom, Distance}, energy_units::{CmInv, Energy, EnergyUnit, GHz, Kelvin}, mass_units::{Dalton, Mass}, Au, Unit}, utility::{legendre_polynomials, linspace}};
-use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder, TramBasisRecipe, TramStates}, potential_interpolation::{interpolate_potentials, PotentialArray, TransitionedPotential}, rkhs_interpolation::RKHSInterpolation, rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder}, utility::{AnisoHifi, GammaSpinRot}, FieldScatteringProblem};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, numerov_modifier::NumerovLogging, propagator::MultiStepRule}, observables::s_matrix::{ScatteringDependence, ScatteringObservables}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, ScaledPotential, SimplePotential}}, utility::{save_data, save_serialize}};
+use quantum::{
+    params::{
+        Params,
+        particle::Particle,
+        particle_factory::{RotConst, create_atom},
+        particles::Particles,
+    },
+    problem_selector::{ProblemSelector, get_args},
+    problems_impl,
+    units::{
+        Au, Unit,
+        distance_units::{Angstrom, Distance},
+        energy_units::{CmInv, Energy, EnergyUnit, GHz, Kelvin},
+        mass_units::{Dalton, Mass},
+    },
+    utility::{legendre_polynomials, linspace},
+};
+use scattering_problems::{
+    FieldScatteringProblem,
+    alkali_atoms::AlkaliAtomsProblemBuilder,
+    alkali_rotor_atom::{
+        AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder, TramBasisRecipe, TramStates,
+    },
+    potential_interpolation::{PotentialArray, TransitionedPotential, interpolate_potentials},
+    rkhs_interpolation::RKHSInterpolation,
+    rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder},
+    utility::{AnisoHifi, GammaSpinRot},
+};
+use scattering_solver::{
+    boundary::{Boundary, Direction},
+    numerovs::{
+        multi_numerov::MultiRatioNumerov, numerov_modifier::NumerovLogging,
+        propagator::MultiStepRule,
+    },
+    observables::s_matrix::{ScatteringDependence, ScatteringObservables},
+    potentials::{
+        composite_potential::Composite,
+        dispersion_potential::Dispersion,
+        potential::{Potential, ScaledPotential, SimplePotential},
+    },
+    utility::{save_data, save_serialize},
+};
 
 use rayon::prelude::*;
 
@@ -37,42 +81,54 @@ impl Problems {
             data.push(p.clone());
         }
 
-        save_data("SrF_Rb_triplet_dec", "distances\tpotential_decomposition", &data)
-            .unwrap();
+        save_data(
+            "SrF_Rb_triplet_dec",
+            "distances\tpotential_decomposition",
+            &data,
+        )
+        .unwrap();
 
         let mut data = vec![pot_array_singlet.distances.clone()];
         for (_, p) in &pot_array_singlet.potentials {
             data.push(p.clone());
         }
 
-        save_data("SrF_Rb_singlet_dec", "distances\tpotential_decomposition", &data)
-            .unwrap();
+        save_data(
+            "SrF_Rb_singlet_dec",
+            "distances\tpotential_decomposition",
+            &data,
+        )
+        .unwrap();
 
         let [pot_array_singlet, pot_array_triplet] = read_extended(25);
         let interpolated = get_interpolated(&pot_array_triplet);
         let mut data = vec![distances.clone()];
         for (_, p) in &interpolated {
-            let values = distances.iter()
-                .map(|&x| p.value(x))
-                .collect();
+            let values = distances.iter().map(|&x| p.value(x)).collect();
 
             data.push(values);
         }
 
-        save_data("SrF_Rb_triplet_dec_interpolated", "distances\tpotential_decomposition", &data)
-            .unwrap();
+        save_data(
+            "SrF_Rb_triplet_dec_interpolated",
+            "distances\tpotential_decomposition",
+            &data,
+        )
+        .unwrap();
 
         let interpolated = get_interpolated(&pot_array_singlet);
         let mut data = vec![distances.clone()];
         for (_, p) in &interpolated {
-            let values = distances.iter()
-                .map(|&x| p.value(x))
-                .collect();
+            let values = distances.iter().map(|&x| p.value(x)).collect();
             data.push(values);
         }
 
-        save_data("SrF_Rb_singlet_dec_interpolated", "distances\tpotential_decomposition", &data)
-            .unwrap();
+        save_data(
+            "SrF_Rb_singlet_dec_interpolated",
+            "distances\tpotential_decomposition",
+            &data,
+        )
+        .unwrap();
     }
 
     fn single_cross_sections() {
@@ -137,35 +193,39 @@ impl Problems {
         let atoms = get_particles(energy_relative, projection);
         let hifi_problem = atoms.get::<DoubleHifiProblemBuilder>().unwrap();
 
-        let alkali_problem = AlkaliAtomsProblemBuilder::new(hifi_problem.to_owned(), singlet, triplet);
+        let alkali_problem =
+            AlkaliAtomsProblemBuilder::new(hifi_problem.to_owned(), singlet, triplet);
 
         ///////////////////////////////////
 
         let start = Instant::now();
-        let scatterings = mag_fields.par_iter().progress().map_with(atoms, |atoms, &mag_field| {
-            let alkali_problem = alkali_problem.clone().build(mag_field);
-            let mut asymptotic = alkali_problem.asymptotic;
-            asymptotic.entrance = entrance;
-            atoms.insert(asymptotic);
-            let potential = &alkali_problem.potential;
+        let scatterings = mag_fields
+            .par_iter()
+            .progress()
+            .map_with(atoms, |atoms, &mag_field| {
+                let alkali_problem = alkali_problem.clone().build(mag_field);
+                let mut asymptotic = alkali_problem.asymptotic;
+                asymptotic.entrance = entrance;
+                atoms.insert(asymptotic);
+                let potential = &alkali_problem.potential;
 
-            let id = Mat::<f64>::identity(potential.size(), potential.size());
-            let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-            let step_rule = MultiStepRule::new(4e-3, f64::INFINITY, 400.);
-            let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+                let id = Mat::<f64>::identity(potential.size(), potential.size());
+                let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                let step_rule = MultiStepRule::new(4e-3, f64::INFINITY, 400.);
+                let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
 
-            numerov.propagate_to(1500.);
+                numerov.propagate_to(1500.);
 
-            numerov.data.calculate_s_matrix().observables()
-        })
-        .collect::<Vec<ScatteringObservables>>();
+                numerov.data.calculate_s_matrix().observables()
+            })
+            .collect::<Vec<ScatteringObservables>>();
 
         let elapsed = start.elapsed();
         println!("calculated in {}", elapsed.hhmmssxxx());
 
         let data = ScatteringDependence {
             parameters: mag_fields,
-            observables: scatterings
+            observables: scatterings,
         };
 
         save_serialize("SrF_Rb_scatterings_n_0_ground", &data).unwrap()
@@ -189,30 +249,33 @@ impl Problems {
         ///////////////////////////////////
 
         let start = Instant::now();
-        let scatterings = mag_fields.par_iter().progress().map_with(atoms, |atoms, &mag_field| {
-            let alkali_problem = alkali_problem.scattering_for(mag_field);
-            let mut asymptotic = alkali_problem.asymptotic;
-            asymptotic.entrance = entrance;
-            atoms.insert(asymptotic);
-            let potential = &alkali_problem.potential;
+        let scatterings = mag_fields
+            .par_iter()
+            .progress()
+            .map_with(atoms, |atoms, &mag_field| {
+                let alkali_problem = alkali_problem.scattering_for(mag_field);
+                let mut asymptotic = alkali_problem.asymptotic;
+                asymptotic.entrance = entrance;
+                atoms.insert(asymptotic);
+                let potential = &alkali_problem.potential;
 
-            let id = Mat::<f64>::identity(potential.size(), potential.size());
-            let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-            let step_rule = MultiStepRule::new(4e-3, f64::INFINITY, 400.);
-            let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+                let id = Mat::<f64>::identity(potential.size(), potential.size());
+                let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                let step_rule = MultiStepRule::new(4e-3, f64::INFINITY, 400.);
+                let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
 
-            numerov.propagate_to(1500.);
+                numerov.propagate_to(1500.);
 
-            numerov.data.calculate_s_matrix().observables()
-        })
-        .collect::<Vec<ScatteringObservables>>();
+                numerov.data.calculate_s_matrix().observables()
+            })
+            .collect::<Vec<ScatteringObservables>>();
 
         let elapsed = start.elapsed();
         println!("calculated in {}", elapsed.hhmmssxxx());
 
         let data = ScatteringDependence {
             parameters: mag_fields,
-            observables: scatterings
+            observables: scatterings,
         };
 
         save_serialize("SrF_Rb_scatterings_ground", &data).unwrap()
@@ -234,69 +297,87 @@ impl Problems {
         let atoms = get_particles(energy_relative, hi32!(0));
 
         let start = Instant::now();
-        let singlet_scattering = scalings.par_iter().progress().map_with(atoms.clone(), |atoms, &scaling| {
-            let potential = singlets.iter().map(|(lambda, p)| {
-                (*lambda, ScaledPotential {
-                    potential: p.clone(),
-                    scaling
-                })
+        let singlet_scattering = scalings
+            .par_iter()
+            .progress()
+            .map_with(atoms.clone(), |atoms, &scaling| {
+                let potential = singlets
+                    .iter()
+                    .map(|(lambda, p)| {
+                        (
+                            *lambda,
+                            ScaledPotential {
+                                potential: p.clone(),
+                                scaling,
+                            },
+                        )
+                    })
+                    .collect();
+
+                let problem = RotorAtomProblemBuilder::new(potential).build(&atoms, &basis_recipe);
+
+                let asymptotic = problem.asymptotic;
+                atoms.insert(asymptotic);
+                let potential = &problem.potential;
+
+                let id = Mat::<f64>::identity(potential.size(), potential.size());
+                let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                let step_rule = MultiStepRule::new(4e-3, f64::INFINITY, 400.);
+                let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+                numerov.propagate_to(1500.);
+
+                numerov.data.calculate_s_matrix().get_scattering_length().re
             })
             .collect();
-
-            let problem = RotorAtomProblemBuilder::new(potential)
-                .build(&atoms, &basis_recipe);
-
-            let asymptotic = problem.asymptotic;
-            atoms.insert(asymptotic);
-            let potential = &problem.potential;
-
-            let id = Mat::<f64>::identity(potential.size(), potential.size());
-            let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-            let step_rule = MultiStepRule::new(4e-3, f64::INFINITY, 400.);
-            let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
-            numerov.propagate_to(1500.);
-
-            numerov.data.calculate_s_matrix().get_scattering_length().re
-        })
-        .collect(); 
 
         let elapsed = start.elapsed();
         println!("calculated in {}", elapsed.hhmmssxxx());
 
         let start = Instant::now();
-        let triplet_scattering = scalings.par_iter().progress().map_with(atoms, |atoms, &scaling| {
-            let potential = triplets.iter().map(|(lambda, p)| {
-                (*lambda, ScaledPotential {
-                    potential: p.clone(),
-                    scaling
-                })
+        let triplet_scattering = scalings
+            .par_iter()
+            .progress()
+            .map_with(atoms, |atoms, &scaling| {
+                let potential = triplets
+                    .iter()
+                    .map(|(lambda, p)| {
+                        (
+                            *lambda,
+                            ScaledPotential {
+                                potential: p.clone(),
+                                scaling,
+                            },
+                        )
+                    })
+                    .collect();
+
+                let problem = RotorAtomProblemBuilder::new(potential).build(&atoms, &basis_recipe);
+
+                let asymptotic = problem.asymptotic;
+                atoms.insert(asymptotic);
+                let potential = &problem.potential;
+
+                let id = Mat::<f64>::identity(potential.size(), potential.size());
+                let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                let step_rule = MultiStepRule::new(4e-3, f64::INFINITY, 400.);
+                let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+                numerov.propagate_to(1500.);
+
+                numerov.data.calculate_s_matrix().get_scattering_length().re
             })
             .collect();
-
-            let problem = RotorAtomProblemBuilder::new(potential)
-                .build(&atoms, &basis_recipe);
-
-            let asymptotic = problem.asymptotic;
-            atoms.insert(asymptotic);
-            let potential = &problem.potential;
-
-            let id = Mat::<f64>::identity(potential.size(), potential.size());
-            let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-            let step_rule = MultiStepRule::new(4e-3, f64::INFINITY, 400.);
-            let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
-            numerov.propagate_to(1500.);
-
-            numerov.data.calculate_s_matrix().get_scattering_length().re
-        })
-        .collect(); 
 
         let elapsed = start.elapsed();
         println!("calculated in {}", elapsed.hhmmssxxx());
 
         let data = vec![scalings, singlet_scattering, triplet_scattering];
 
-        save_data(&format!("srf_rb_potential_scaling_n_max_{}", basis_recipe.n_max), "scaling\tsinglet\ttriplet", &data)
-            .unwrap();
+        save_data(
+            &format!("srf_rb_potential_scaling_n_max_{}", basis_recipe.n_max),
+            "scaling\tsinglet\ttriplet",
+            &data,
+        )
+        .unwrap();
     }
 
     fn spinless_convergence() {
@@ -310,57 +391,63 @@ impl Problems {
         let atoms = get_particles(energy_relative, hi32!(0));
 
         let start = Instant::now();
-        let singlet_scattering = n_maxes.par_iter().progress().map_with(atoms.clone(), |atoms, &n_max| {
-            let basis_recipe = RotorAtomBasisRecipe {
-                l_max: n_max,
-                n_max: n_max,
-                ..Default::default()
-            };
+        let singlet_scattering = n_maxes
+            .par_iter()
+            .progress()
+            .map_with(atoms.clone(), |atoms, &n_max| {
+                let basis_recipe = RotorAtomBasisRecipe {
+                    l_max: n_max,
+                    n_max: n_max,
+                    ..Default::default()
+                };
 
-            let problem = RotorAtomProblemBuilder::new(singlets.clone())
-                .build(&atoms, &basis_recipe);
+                let problem =
+                    RotorAtomProblemBuilder::new(singlets.clone()).build(&atoms, &basis_recipe);
 
-            let asymptotic = problem.asymptotic;
-            atoms.insert(asymptotic);
-            let potential = &problem.potential;
+                let asymptotic = problem.asymptotic;
+                atoms.insert(asymptotic);
+                let potential = &problem.potential;
 
-            let id = Mat::<f64>::identity(potential.size(), potential.size());
-            let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-            let step_rule = MultiStepRule::new(4e-3, f64::INFINITY, 400.);
-            let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
-            numerov.propagate_to(1500.);
+                let id = Mat::<f64>::identity(potential.size(), potential.size());
+                let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                let step_rule = MultiStepRule::new(4e-3, f64::INFINITY, 400.);
+                let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+                numerov.propagate_to(1500.);
 
-            numerov.data.calculate_s_matrix().get_scattering_length().re
-        })
-        .collect(); 
+                numerov.data.calculate_s_matrix().get_scattering_length().re
+            })
+            .collect();
 
         let elapsed = start.elapsed();
         println!("calculated in {}", elapsed.hhmmssxxx());
         let start = Instant::now();
 
-        let triplet_scattering = n_maxes.par_iter().progress().map_with(atoms, |atoms, &n_max| {
-            let basis_recipe = RotorAtomBasisRecipe {
-                l_max: n_max,
-                n_max: n_max,
-                ..Default::default()
-            };
+        let triplet_scattering = n_maxes
+            .par_iter()
+            .progress()
+            .map_with(atoms, |atoms, &n_max| {
+                let basis_recipe = RotorAtomBasisRecipe {
+                    l_max: n_max,
+                    n_max: n_max,
+                    ..Default::default()
+                };
 
-            let problem = RotorAtomProblemBuilder::new(triplets.clone())
-                .build(&atoms, &basis_recipe);
+                let problem =
+                    RotorAtomProblemBuilder::new(triplets.clone()).build(&atoms, &basis_recipe);
 
-            let asymptotic = problem.asymptotic;
-            atoms.insert(asymptotic);
-            let potential = &problem.potential;
+                let asymptotic = problem.asymptotic;
+                atoms.insert(asymptotic);
+                let potential = &problem.potential;
 
-            let id = Mat::<f64>::identity(potential.size(), potential.size());
-            let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-            let step_rule = MultiStepRule::new(4e-3, f64::INFINITY, 400.);
-            let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
-            numerov.propagate_to(1500.);
+                let id = Mat::<f64>::identity(potential.size(), potential.size());
+                let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                let step_rule = MultiStepRule::new(4e-3, f64::INFINITY, 400.);
+                let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+                numerov.propagate_to(1500.);
 
-            numerov.data.calculate_s_matrix().get_scattering_length().re
-        })
-        .collect(); 
+                numerov.data.calculate_s_matrix().get_scattering_length().re
+            })
+            .collect();
 
         let elapsed = start.elapsed();
         println!("calculated in {}", elapsed.hhmmssxxx());
@@ -368,14 +455,18 @@ impl Problems {
         let n_maxes = n_maxes.into_iter().map(|x| x as f64).collect();
         let data = vec![n_maxes, singlet_scattering, triplet_scattering];
 
-        save_data(&format!("srf_rb_potential_scattering_convergence"), "scaling\tsinglet\ttriplet", &data)
-            .unwrap();
+        save_data(
+            &format!("srf_rb_potential_scattering_convergence"),
+            "scaling\tsinglet\ttriplet",
+            &data,
+        )
+        .unwrap();
     }
 
     fn scattering_scaled() {
         let n_max = 5;
-        let singlet_scaling = 1.0174797334102;  // #1 a_0 = -50 Angstrom,
-        let triplet_scaling = 0.9587806804328;  // #1 a_0 = 0,
+        let singlet_scaling = 1.0174797334102; // #1 a_0 = -50 Angstrom,
+        let triplet_scaling = 0.9587806804328; // #1 a_0 = 0,
 
         // let n_max = 5;
         // let singlet_scaling = 1.0349451752971;   // #2 a_0 = -50 Angstrom,
@@ -400,50 +491,63 @@ impl Problems {
         let singlets = get_interpolated(&singlet);
         let triplets = get_interpolated(&triplet);
 
-        let triplets = triplets.into_iter().map(|(lambda, p)| {
-            (lambda, ScaledPotential {
-                potential: p,
-                scaling: triplet_scaling
+        let triplets = triplets
+            .into_iter()
+            .map(|(lambda, p)| {
+                (
+                    lambda,
+                    ScaledPotential {
+                        potential: p,
+                        scaling: triplet_scaling,
+                    },
+                )
             })
-        })
-        .collect();
+            .collect();
 
-        let singlets = singlets.into_iter().map(|(lambda, p)| {
-            (lambda, ScaledPotential {
-                potential: p,
-                scaling: singlet_scaling
+        let singlets = singlets
+            .into_iter()
+            .map(|(lambda, p)| {
+                (
+                    lambda,
+                    ScaledPotential {
+                        potential: p,
+                        scaling: singlet_scaling,
+                    },
+                )
             })
-        })
-        .collect();
+            .collect();
 
-        let alkali_problem = AlkaliRotorAtomProblemBuilder::new(triplets, singlets)
-            .build(&atoms, &basis_recipe);
+        let alkali_problem =
+            AlkaliRotorAtomProblemBuilder::new(triplets, singlets).build(&atoms, &basis_recipe);
 
         /////////////////////////////////////////////////
 
         let start = Instant::now();
-        let scatterings = mag_fields.par_iter().progress().map_with(atoms, |atoms,&mag_field| {
-            let alkali_problem = alkali_problem.scattering_for(mag_field);
-            atoms.insert(alkali_problem.asymptotic);
-            let potential = &alkali_problem.potential;
+        let scatterings = mag_fields
+            .par_iter()
+            .progress()
+            .map_with(atoms, |atoms, &mag_field| {
+                let alkali_problem = alkali_problem.scattering_for(mag_field);
+                atoms.insert(alkali_problem.asymptotic);
+                let potential = &alkali_problem.potential;
 
-            let id = Mat::<f64>::identity(potential.size(), potential.size());
-            let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-            let step_rule = MultiStepRule::new(4e-3, f64::INFINITY, 400.);
-            let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+                let id = Mat::<f64>::identity(potential.size(), potential.size());
+                let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                let step_rule = MultiStepRule::new(4e-3, f64::INFINITY, 400.);
+                let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
 
-            numerov.propagate_to(1500.);
+                numerov.propagate_to(1500.);
 
-            numerov.data.calculate_s_matrix().observables()
-        })
-        .collect::<Vec<ScatteringObservables>>();
+                numerov.data.calculate_s_matrix().observables()
+            })
+            .collect::<Vec<ScatteringObservables>>();
 
         let elapsed = start.elapsed();
         println!("calculated in {}", elapsed.hhmmssxxx());
 
         let data = ScatteringDependence {
             parameters: mag_fields,
-            observables: scatterings
+            observables: scatterings,
         };
 
         save_serialize(&format!("SrF_Rb_scaled_scattering_n_{n_max}_v4"), &data).unwrap()
@@ -463,27 +567,32 @@ fn get_particles(energy: Energy<impl EnergyUnit>, projection: HalfI32) -> Partic
     particles.insert(GammaSpinRot(Energy(2.4974e-3, CmInv).to_au()));
     particles.insert(AnisoHifi(Energy(1.0096e-3, CmInv).to_au()));
 
-    let hifi_srf = HifiProblemBuilder::new(hu32!(1/2), hu32!(1/2))
+    let hifi_srf = HifiProblemBuilder::new(hu32!(1 / 2), hu32!(1 / 2))
         .with_hyperfine_coupling(Energy(3.2383e-3 + 1.0096e-3 / 3., CmInv).to_au());
 
-    let hifi_rb = HifiProblemBuilder::new(hu32!(1/2), hu32!(3/2))
+    let hifi_rb = HifiProblemBuilder::new(hu32!(1 / 2), hu32!(3 / 2))
         .with_hyperfine_coupling(Energy(6.834682610904290 / 2., GHz).to_au());
 
-    let hifi_problem = DoubleHifiProblemBuilder::new(hifi_srf, hifi_rb)
-        .with_projection(projection);
+    let hifi_problem = DoubleHifiProblemBuilder::new(hifi_srf, hifi_rb).with_projection(projection);
     particles.insert(hifi_problem);
 
     particles
 }
 
-fn get_problem(params: &Params, basis_recipe: &TramBasisRecipe) -> AlkaliRotorAtomProblem<TramStates, impl SimplePotential + Clone + use<>, impl SimplePotential + Clone + use<>> {
+fn get_problem(
+    params: &Params,
+    basis_recipe: &TramBasisRecipe,
+) -> AlkaliRotorAtomProblem<
+    TramStates,
+    impl SimplePotential + Clone + use<>,
+    impl SimplePotential + Clone + use<>,
+> {
     let [singlet, triplet] = read_extended(25);
 
     let singlets = get_interpolated(&singlet);
     let triplets = get_interpolated(&triplet);
 
-    AlkaliRotorAtomProblemBuilder::new(triplets, singlets)
-        .build(params, basis_recipe)
+    AlkaliRotorAtomProblemBuilder::new(triplets, singlets).build(params, basis_recipe)
 }
 
 fn read_potentials(max_degree: u32) -> [PotentialArray; 2] {
@@ -491,14 +600,18 @@ fn read_potentials(max_degree: u32) -> [PotentialArray; 2] {
     let mut path = std::env::current_dir().unwrap();
     path.push("data");
     path.push(filename);
-    let f = File::open(&path).expect(&format!("couldn't find potential in provided path {path:?}"));
+    let f = File::open(&path).expect(&format!(
+        "couldn't find potential in provided path {path:?}"
+    ));
     let f = BufReader::new(f);
 
     let filename = "Rb_SrF/casscf_ex.txt";
     let mut path = std::env::current_dir().unwrap();
     path.push("data");
     path.push(filename);
-    let f2 = File::open(&path).expect(&format!("couldn't find potential in provided path {path:?}"));
+    let f2 = File::open(&path).expect(&format!(
+        "couldn't find potential in provided path {path:?}"
+    ));
     let f2 = BufReader::new(f2);
 
     let angle_count = 1 + 180 / 5;
@@ -506,9 +619,7 @@ fn read_potentials(max_degree: u32) -> [PotentialArray; 2] {
     let mut values_singlet = Mat::zeros(angle_count, r_count);
     let mut values_triplet = Mat::zeros(angle_count, r_count);
     let mut distances = vec![0.; r_count];
-    let angles: Vec<f64> = (0..=180).step_by(5)
-        .map(|x| x as f64 / 180. * PI)
-        .collect();
+    let angles: Vec<f64> = (0..=180).step_by(5).map(|x| x as f64 / 180. * PI).collect();
 
     for ((i, line_triplet), line_diff) in f.lines().skip(1).enumerate().zip(f2.lines().skip(1)) {
         let line_triplet = line_triplet.unwrap();
@@ -540,25 +651,31 @@ fn read_potentials(max_degree: u32) -> [PotentialArray; 2] {
     let filename = "weights.txt";
     path.pop();
     path.push(filename);
-    let f = File::open(&path).expect(&format!("couldn't find potential in provided path {path:?}"));
+    let f = File::open(&path).expect(&format!(
+        "couldn't find potential in provided path {path:?}"
+    ));
     let mut f = BufReader::new(f);
 
     let mut weights = String::new();
     f.read_line(&mut weights).unwrap();
-    let weights: Vec<f64> = weights.trim().split_whitespace()
+    let weights: Vec<f64> = weights
+        .trim()
+        .split_whitespace()
         .map(|s| s.parse().unwrap())
         .collect();
 
     let mut potentials_singlet = Vec::new();
     let mut potentials_triplet = Vec::new();
-    let polynomials: Vec<Vec<f64>> = angles.iter()
+    let polynomials: Vec<Vec<f64>> = angles
+        .iter()
         .map(|x| legendre_polynomials(max_degree, x.cos()))
         .collect();
 
     for lambda in 0..=max_degree {
         let mut lambda_values = Vec::new();
         for values_col in values_triplet.col_iter() {
-            let value: f64 = weights.iter()
+            let value: f64 = weights
+                .iter()
                 .zip(values_col.iter())
                 .zip(polynomials.iter().map(|ps| ps[lambda as usize]))
                 .map(|((w, v), p)| (lambda as f64 + 0.5) * w * v * p)
@@ -569,7 +686,8 @@ fn read_potentials(max_degree: u32) -> [PotentialArray; 2] {
 
         let mut lambda_values = Vec::new();
         for values_col in values_singlet.col_iter() {
-            let value: f64 = weights.iter()
+            let value: f64 = weights
+                .iter()
                 .zip(values_col.iter())
                 .zip(polynomials.iter().map(|ps| ps[lambda as usize]))
                 .map(|((w, v), p)| (lambda as f64 + 0.5) * w * v * p)
@@ -581,12 +699,12 @@ fn read_potentials(max_degree: u32) -> [PotentialArray; 2] {
 
     let singlets = PotentialArray {
         potentials: potentials_singlet,
-        distances: distances.clone()
+        distances: distances.clone(),
     };
 
     let triplets = PotentialArray {
         potentials: potentials_triplet,
-        distances
+        distances,
     };
 
     [singlets, triplets]
@@ -597,14 +715,18 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
     let mut path = std::env::current_dir().unwrap();
     path.push("data");
     path.push(filename);
-    let f = File::open(&path).expect(&format!("couldn't find potential in provided path {path:?}"));
+    let f = File::open(&path).expect(&format!(
+        "couldn't find potential in provided path {path:?}"
+    ));
     let f = BufReader::new(f);
 
     let filename = "Rb_SrF/casscf_ex.txt";
     let mut path = std::env::current_dir().unwrap();
     path.push("data");
     path.push(filename);
-    let f2 = File::open(&path).expect(&format!("couldn't find potential in provided path {path:?}"));
+    let f2 = File::open(&path).expect(&format!(
+        "couldn't find potential in provided path {path:?}"
+    ));
     let f2 = BufReader::new(f2);
 
     let angle_count = 1 + 180 / 5;
@@ -612,9 +734,7 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
     let mut values_triplet = Mat::zeros(r_count, angle_count);
     let mut values_exch = Mat::zeros(r_count, angle_count);
     let mut distances = vec![0.; r_count];
-    let angles: Vec<f64> = (0..=180).step_by(5)
-        .map(|x| x as f64 / 180. * PI)
-        .collect();
+    let angles: Vec<f64> = (0..=180).step_by(5).map(|x| x as f64 / 180. * PI).collect();
 
     for ((i, line_triplet), line_diff) in f.lines().skip(1).enumerate().zip(f2.lines().skip(1)) {
         let line_triplet = line_triplet.unwrap();
@@ -643,23 +763,28 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
         values_exch[(r_index, angle_index)] = Energy(value_diff, CmInv).to_au();
     }
 
-    let rkhs_triplet = values_triplet.col_iter()
+    let rkhs_triplet = values_triplet
+        .col_iter()
         .map(|col| RKHSInterpolation::new(&distances, &col.iter().copied().collect::<Vec<f64>>()))
         .collect::<Vec<RKHSInterpolation>>();
 
-    let rkhs_exch = values_exch.col_iter()
+    let rkhs_exch = values_exch
+        .col_iter()
         .map(|col| RKHSInterpolation::new(&distances, &col.iter().copied().collect::<Vec<f64>>()))
         .collect::<Vec<RKHSInterpolation>>();
 
     let filename = "weights.txt";
     path.pop();
     path.push(filename);
-    let f = File::open(&path).expect(&format!("couldn't find potential in provided path {path:?}"));
+    let f = File::open(&path).expect(&format!(
+        "couldn't find potential in provided path {path:?}"
+    ));
     let mut f = BufReader::new(f);
 
     let mut weights = String::new();
     f.read_line(&mut weights).unwrap();
-    let weights: Vec<f64> = weights.trim()
+    let weights: Vec<f64> = weights
+        .trim()
         .split_whitespace()
         .map(|s| s.parse().unwrap())
         .collect();
@@ -669,15 +794,20 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
         tail_far.push(Composite::new(Dispersion::new(0., 0)));
     }
 
-    tail_far[0].add_potential(Dispersion::new(-3495.30040855597, -6))
+    tail_far[0]
+        .add_potential(Dispersion::new(-3495.30040855597, -6))
         .add_potential(Dispersion::new(-516911.950541056, -8));
-    tail_far[1].add_potential(Dispersion::new(17274.8363457991, -7))
+    tail_far[1]
+        .add_potential(Dispersion::new(17274.8363457991, -7))
         .add_potential(Dispersion::new(4768422.32042577, -9));
-    tail_far[2].add_potential(Dispersion::new(-288.339392609436, -6))
+    tail_far[2]
+        .add_potential(Dispersion::new(-288.339392609436, -6))
         .add_potential(Dispersion::new(-341345.136436851, -8));
-    tail_far[3].add_potential(Dispersion::new(-12287.2175217778, -7))
+    tail_far[3]
+        .add_potential(Dispersion::new(-12287.2175217778, -7))
         .add_potential(Dispersion::new(-1015530.4019772, -9));
-    tail_far[4].add_potential(Dispersion::new(-51933.9885816, -8))
+    tail_far[4]
+        .add_potential(Dispersion::new(-51933.9885816, -8))
         .add_potential(Dispersion::new(-3746260.46991, -10));
 
     let mut exch_far = Vec::new();
@@ -719,7 +849,8 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
     let distances_extended = linspace(distances[0], 50., 500);
     let mut potentials_singlet = Vec::new();
     let mut potentials_triplet = Vec::new();
-    let polynomials: Vec<Vec<f64>> = angles.iter()
+    let polynomials: Vec<Vec<f64>> = angles
+        .iter()
         .map(|x| legendre_polynomials(max_degree, x.cos()))
         .collect();
 
@@ -727,14 +858,14 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
         let tail = &tail_far[lambda as usize];
         let exch = exch_far[lambda as usize];
 
-        let values_triplet = distances_extended.par_iter()
+        let values_triplet = distances_extended
+            .par_iter()
             .map(|x| {
-                let value_rkhs: f64 = weights.iter()
+                let value_rkhs: f64 = weights
+                    .iter()
                     .zip(rkhs_triplet.iter())
                     .zip(polynomials.iter().map(|ps| ps[lambda as usize]))
-                    .map(|((w, rkhs), p)| {
-                        (lambda as f64 + 0.5) * w * p * rkhs.value(*x)
-                    })
+                    .map(|((w, rkhs), p)| (lambda as f64 + 0.5) * w * p * rkhs.value(*x))
                     .sum();
                 let value_far = tail.value(*x);
 
@@ -748,14 +879,14 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
             .collect::<Vec<f64>>();
         potentials_triplet.push((lambda as u32, values_triplet));
 
-        let values_singlet = distances_extended.par_iter()
+        let values_singlet = distances_extended
+            .par_iter()
             .map(|x| {
-                let value_rkhs: f64 = weights.iter()
+                let value_rkhs: f64 = weights
+                    .iter()
                     .zip(rkhs_triplet.iter())
                     .zip(polynomials.iter().map(|ps| ps[lambda as usize]))
-                    .map(|((w, rkhs), p)| {
-                        (lambda as f64 + 0.5) * w * p * rkhs.value(*x)
-                    })
+                    .map(|((w, rkhs), p)| (lambda as f64 + 0.5) * w * p * rkhs.value(*x))
                     .sum();
                 let value_far = tail.value(*x);
 
@@ -765,12 +896,11 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
                 let contrib = transition(*x, r_min, r_max);
                 let triplet_part = contrib * value_rkhs + (1. - contrib) * value_far;
 
-                let exch_rkhs: f64 = weights.iter()
+                let exch_rkhs: f64 = weights
+                    .iter()
                     .zip(rkhs_exch.iter())
                     .zip(polynomials.iter().map(|ps| ps[lambda as usize]))
-                    .map(|((w, rkhs), p)| {
-                        (lambda as f64 + 0.5) * w * p * rkhs.value(*x)
-                    })
+                    .map(|((w, rkhs), p)| (lambda as f64 + 0.5) * w * p * rkhs.value(*x))
                     .sum();
                 let exch_far = exch.0 * f64::exp(exch.1 * x);
 
@@ -794,33 +924,40 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
 
     let singlets = PotentialArray {
         potentials: potentials_singlet,
-        distances: distances_extended.clone()
+        distances: distances_extended.clone(),
     };
 
     let triplets = PotentialArray {
         potentials: potentials_triplet,
-        distances: distances_extended
+        distances: distances_extended,
     };
 
     [singlets, triplets]
 }
 
-fn get_interpolated(pot_array: &PotentialArray) -> Vec<(u32, impl SimplePotential + Clone + use<>)> {
+fn get_interpolated(
+    pot_array: &PotentialArray,
+) -> Vec<(u32, impl SimplePotential + Clone + use<>)> {
     let interp_potentials = interpolate_potentials(pot_array, 3);
-    
+
     let mut potentials_far = Vec::new();
     for _ in &interp_potentials {
         potentials_far.push(Composite::new(Dispersion::new(0., 0)));
     }
-    potentials_far[0].add_potential(Dispersion::new(-3495.30040855597, -6))
+    potentials_far[0]
+        .add_potential(Dispersion::new(-3495.30040855597, -6))
         .add_potential(Dispersion::new(-516911.950541056, -8));
-    potentials_far[1].add_potential(Dispersion::new(17274.8363457991, -7))
+    potentials_far[1]
+        .add_potential(Dispersion::new(17274.8363457991, -7))
         .add_potential(Dispersion::new(4768422.32042577, -9));
-    potentials_far[2].add_potential(Dispersion::new(-288.339392609436, -6))
+    potentials_far[2]
+        .add_potential(Dispersion::new(-288.339392609436, -6))
         .add_potential(Dispersion::new(-341345.136436851, -8));
-    potentials_far[3].add_potential(Dispersion::new(-12287.2175217778, -7))
+    potentials_far[3]
+        .add_potential(Dispersion::new(-12287.2175217778, -7))
         .add_potential(Dispersion::new(-1015530.4019772, -9));
-    potentials_far[4].add_potential(Dispersion::new(-51933.9885816, -8))
+    potentials_far[4]
+        .add_potential(Dispersion::new(-51933.9885816, -8))
         .add_potential(Dispersion::new(-3746260.46991, -10));
 
     let transition = |r| {
@@ -833,7 +970,8 @@ fn get_interpolated(pot_array: &PotentialArray) -> Vec<(u32, impl SimplePotentia
         }
     };
 
-    interp_potentials.into_iter()
+    interp_potentials
+        .into_iter()
         .zip(potentials_far.into_iter())
         .map(|((lambda, near), far)| {
             let combined = TransitionedPotential::new(near, far, transition);

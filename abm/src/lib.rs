@@ -73,9 +73,11 @@ impl HifiProblemBuilder {
     }
 
     pub fn build(self) -> ABMHifiProblem<HifiStates> {
+        use HifiStates::*;
+
         let mut states = States::default();
-        let s = into_variant(get_spin_basis(self.s), HifiStates::ElectronSpin);
-        let i = into_variant(get_spin_basis(self.i), HifiStates::NuclearSpin);
+        let s = into_variant(get_spin_basis(self.s), ElectronSpin);
+        let i = into_variant(get_spin_basis(self.i), NuclearSpin);
 
         states
             .push_state(StateBasis::new(s))
@@ -85,8 +87,8 @@ impl HifiProblemBuilder {
             Some(projection) => states
                 .iter_elements()
                 .filter(|b| {
-                    let s = cast_variant!(b[0], HifiStates::ElectronSpin);
-                    let i = cast_variant!(b[1], HifiStates::NuclearSpin);
+                    let s = cast_variant!(b[0], ElectronSpin);
+                    let i = cast_variant!(b[1], NuclearSpin);
 
                     s.ms + i.ms == projection
                 })
@@ -94,25 +96,24 @@ impl HifiProblemBuilder {
             None => states.get_basis(),
         };
 
-        let mut zeeman_prop = operator_diagonal_mel!(&basis, |[s: HifiStates::ElectronSpin]| {
+        let mut zeeman_prop = operator_diagonal_mel!(&basis, |[s: ElectronSpin]|
             -self.gamma_e * s.ms.value()
-        })
+        )
         .into_backed();
 
         if let Some(gamma_i) = self.gamma_i {
-            zeeman_prop += operator_diagonal_mel!(&basis, |[i: HifiStates::NuclearSpin]| {
+            zeeman_prop += operator_diagonal_mel!(&basis, |[i: NuclearSpin]|
                 -gamma_i * i.ms.value()
-            })
+            )
             .as_ref();
         }
 
         let mut hifi = Mat::zeros(basis.len(), basis.len());
         if let Some(a_hifi) = self.a_hifi {
-            hifi +=
-                operator_mel!(&basis, |[s: HifiStates::ElectronSpin, i: HifiStates::NuclearSpin]| {
-                    a_hifi * SpinOperators::dot(s, i)
-                })
-                .as_ref();
+            hifi += operator_mel!(&basis, |[s: ElectronSpin, i: NuclearSpin]|
+                a_hifi * SpinOperators::dot(s, i)
+            )
+            .as_ref();
         }
 
         ABMHifiProblem {
@@ -158,10 +159,13 @@ impl DoubleHifiProblemBuilder {
     }
 
     pub fn build(self) -> ABMHifiProblem<HifiStates> {
-        let s1 = into_variant(get_spin_basis(self.first.s), HifiStatesSep::ElSpin1);
-        let s2 = into_variant(get_spin_basis(self.second.s), HifiStatesSep::ElSpin2);
-        let i1 = into_variant(get_spin_basis(self.first.i), HifiStatesSep::NuclearSpin1);
-        let i2 = into_variant(get_spin_basis(self.second.i), HifiStatesSep::NuclearSpin2);
+        use HifiStates::*;
+        use HifiStatesSep::*;
+
+        let s1 = into_variant(get_spin_basis(self.first.s), ElSpin1);
+        let s2 = into_variant(get_spin_basis(self.second.s), ElSpin2);
+        let i1 = into_variant(get_spin_basis(self.first.i), NuclearSpin1);
+        let i2 = into_variant(get_spin_basis(self.second.i), NuclearSpin2);
 
         let mut states = States::default();
         states
@@ -174,10 +178,10 @@ impl DoubleHifiProblemBuilder {
             Some(projection) => states
                 .iter_elements()
                 .filter(|b| {
-                    let s1 = cast_variant!(b[0], HifiStatesSep::ElSpin1);
-                    let s2 = cast_variant!(b[1], HifiStatesSep::ElSpin2);
-                    let i1 = cast_variant!(b[2], HifiStatesSep::NuclearSpin1);
-                    let i2 = cast_variant!(b[3], HifiStatesSep::NuclearSpin2);
+                    let s1 = cast_variant!(b[0], ElSpin1);
+                    let s2 = cast_variant!(b[1], ElSpin2);
+                    let i1 = cast_variant!(b[2], NuclearSpin1);
+                    let i2 = cast_variant!(b[3], NuclearSpin2);
 
                     s1.ms + s2.ms + i1.ms + i2.ms == projection
                 })
@@ -187,11 +191,11 @@ impl DoubleHifiProblemBuilder {
 
         let s_tot = into_variant(
             get_summed_spin_basis(self.first.s, self.second.s),
-            HifiStates::ElectronSpin,
+            ElectronSpin,
         );
         let i_tot = into_variant(
             get_summed_spin_basis(self.first.i, self.second.i),
-            HifiStates::NuclearSpin,
+            NuclearSpin,
         );
 
         let mut states = States::default();
@@ -203,8 +207,8 @@ impl DoubleHifiProblemBuilder {
             Some(projection) => states
                 .iter_elements()
                 .filter(|b| {
-                    let s_tot = cast_variant!(b[0], HifiStates::ElectronSpin);
-                    let i_tot = cast_variant!(b[1], HifiStates::NuclearSpin);
+                    let s_tot = cast_variant!(b[0], ElectronSpin);
+                    let i_tot = cast_variant!(b[1], NuclearSpin);
 
                     s_tot.ms + i_tot.ms == projection
                 })
@@ -213,20 +217,20 @@ impl DoubleHifiProblemBuilder {
         };
 
         let mut zeeman_prop = operator_diagonal_mel!(&basis_sep,
-            |[s1: HifiStatesSep::ElSpin1, s2: HifiStatesSep::ElSpin2]| {
+            |[s1: ElSpin1, s2: ElSpin2]| {
                 -self.first.gamma_e * s1.ms.value() - self.second.gamma_e * s2.ms.value()
             }
         )
         .into_backed();
 
         if let Some(gamma_i) = self.first.gamma_i {
-            zeeman_prop += operator_diagonal_mel!(&basis_sep, |[i: HifiStatesSep::NuclearSpin1]| {
+            zeeman_prop += operator_diagonal_mel!(&basis_sep, |[i: NuclearSpin1]| {
                 -gamma_i * i.ms.value()
             })
             .as_ref()
         }
         if let Some(gamma_i) = self.second.gamma_i {
-            zeeman_prop += operator_diagonal_mel!(&basis_sep, |[i: HifiStatesSep::NuclearSpin2]| {
+            zeeman_prop += operator_diagonal_mel!(&basis_sep, |[i: NuclearSpin2]| {
                 -gamma_i * i.ms.value()
             })
             .as_ref()
@@ -235,7 +239,7 @@ impl DoubleHifiProblemBuilder {
         let mut hifi = Mat::zeros(basis_sep.len(), basis_sep.len());
         if let Some(a_hifi) = self.first.a_hifi {
             hifi += operator_mel!(&basis_sep,
-                |[s: HifiStatesSep::ElSpin1, i: HifiStatesSep::NuclearSpin1]| {
+                |[s: ElSpin1, i: NuclearSpin1]| {
                     a_hifi * SpinOperators::dot(s, i)
                 }
             )
@@ -243,7 +247,7 @@ impl DoubleHifiProblemBuilder {
         }
         if let Some(a_hifi) = self.second.a_hifi {
             hifi += operator_mel!(&basis_sep,
-                |[s: HifiStatesSep::ElSpin2, i: HifiStatesSep::NuclearSpin2]| {
+                |[s: ElSpin2, i: NuclearSpin2]| {
                     a_hifi * SpinOperators::dot(s, i)
                 }
             )
@@ -257,8 +261,8 @@ impl DoubleHifiProblemBuilder {
             Symmetry::Fermionic => basis
                 .into_iter()
                 .filter(|s| {
-                    let s_tot = cast_variant!(s[0], HifiStates::ElectronSpin);
-                    let i_tot = cast_variant!(s[1], HifiStates::NuclearSpin);
+                    let s_tot = cast_variant!(s[0], ElectronSpin);
+                    let i_tot = cast_variant!(s[1], NuclearSpin);
 
                     (s_max + i_max).double_value() % 4 != (s_tot.s + i_tot.s).double_value() % 4
                 })
@@ -266,8 +270,8 @@ impl DoubleHifiProblemBuilder {
             Symmetry::Bosonic => basis
                 .into_iter()
                 .filter(|s| {
-                    let s_tot = cast_variant!(s[0], HifiStates::ElectronSpin);
-                    let i_tot = cast_variant!(s[1], HifiStates::NuclearSpin);
+                    let s_tot = cast_variant!(s[0], ElectronSpin);
+                    let i_tot = cast_variant!(s[1], NuclearSpin);
 
                     (s_max + i_max).double_value() % 4 == (s_tot.s + i_tot.s).double_value() % 4
                 })
@@ -332,6 +336,8 @@ impl ABMProblemBuilder {
     }
 
     pub fn build(self) -> ABMHifiProblem<ABMStates> {
+        use ABMStatesSep::*;
+
         assert!(
             self.first.s == hu32!(1 / 2) && self.second.s == hu32!(1 / 2),
             "ABM problem is done under the assumption of s = 1/2"
@@ -343,11 +349,11 @@ impl ABMProblemBuilder {
         );
         let abm_vibrational = self.abm_vibrational.unwrap();
 
-        let s1 = into_variant(get_spin_basis(self.first.s), ABMStatesSep::ElSpin1);
-        let s2 = into_variant(get_spin_basis(self.second.s), ABMStatesSep::ElSpin2);
-        let i1 = into_variant(get_spin_basis(self.first.i), ABMStatesSep::NuclearSpin1);
-        let i2 = into_variant(get_spin_basis(self.second.i), ABMStatesSep::NuclearSpin2);
-        let bounds_sep = into_variant(abm_vibrational.states(), ABMStatesSep::Vibrational);
+        let s1 = into_variant(get_spin_basis(self.first.s), ElSpin1);
+        let s2 = into_variant(get_spin_basis(self.second.s), ElSpin2);
+        let i1 = into_variant(get_spin_basis(self.first.i), NuclearSpin1);
+        let i2 = into_variant(get_spin_basis(self.second.i), NuclearSpin2);
+        let bounds_sep = into_variant(abm_vibrational.states(), Vibrational);
 
         let mut states = States::default();
         states
@@ -361,10 +367,10 @@ impl ABMProblemBuilder {
             Some(projection) => states
                 .iter_elements()
                 .filter(|b| {
-                    let s1 = cast_variant!(b[0], ABMStatesSep::ElSpin1);
-                    let s2 = cast_variant!(b[1], ABMStatesSep::ElSpin2);
-                    let i1 = cast_variant!(b[2], ABMStatesSep::NuclearSpin1);
-                    let i2 = cast_variant!(b[3], ABMStatesSep::NuclearSpin2);
+                    let s1 = cast_variant!(b[0], ElSpin1);
+                    let s2 = cast_variant!(b[1], ElSpin2);
+                    let i1 = cast_variant!(b[2], NuclearSpin1);
+                    let i2 = cast_variant!(b[3], NuclearSpin2);
 
                     s1.ms + s2.ms + i1.ms + i2.ms == projection
                 })
@@ -429,20 +435,20 @@ impl ABMProblemBuilder {
         };
 
         let mut zeeman_prop = operator_diagonal_mel!(&basis_sep,
-            |[s1: ABMStatesSep::ElSpin1, s2: ABMStatesSep::ElSpin2]| {
+            |[s1: ElSpin1, s2: ElSpin2]| {
                 -self.first.gamma_e * s1.ms.value() - self.second.gamma_e * s2.ms.value()
             }
         )
         .into_backed();
 
         if let Some(gamma_i) = self.first.gamma_i {
-            zeeman_prop += operator_diagonal_mel!(&basis_sep, |[i: ABMStatesSep::NuclearSpin1]| {
+            zeeman_prop += operator_diagonal_mel!(&basis_sep, |[i: NuclearSpin1]| {
                 -gamma_i * i.ms.value()
             })
             .as_ref()
         }
         if let Some(gamma_i) = self.second.gamma_i {
-            zeeman_prop += operator_diagonal_mel!(&basis_sep, |[i: ABMStatesSep::NuclearSpin2]| {
+            zeeman_prop += operator_diagonal_mel!(&basis_sep, |[i: NuclearSpin2]| {
                 -gamma_i * i.ms.value()
             })
             .as_ref()
@@ -451,26 +457,25 @@ impl ABMProblemBuilder {
         let mut hifi = Mat::zeros(basis_sep.len(), basis_sep.len());
         if let Some(a_hifi) = self.first.a_hifi {
             hifi += operator_mel!(&basis_sep,
-                |[s: ABMStatesSep::ElSpin1, i: ABMStatesSep::NuclearSpin1, _v: ABMStatesSep::Vibrational]| {
+                |[s: ElSpin1, i: NuclearSpin1, _v: Vibrational]| {
                     a_hifi * SpinOperators::dot(s, i)
                 }
-            ).as_ref()
+            )
+            .as_ref()
         }
         if let Some(a_hifi) = self.second.a_hifi {
             hifi += operator_mel!(&basis_sep,
-                |[s: ABMStatesSep::ElSpin2, i: ABMStatesSep::NuclearSpin2, _v: ABMStatesSep::Vibrational]| {
+                |[s: ElSpin2, i: NuclearSpin2, _v: Vibrational]| {
                     a_hifi * SpinOperators::dot(s, i)
                 }
-            ).as_ref()
+            )
+            .as_ref()
         }
 
         let transf = ABMStatesSep::convert_to_combined(&basis_sep, &basis);
 
         let bound_states = operator_diagonal_mel!(&basis,
-            |[
-                s: ABMStates::ElectronSpin,
-                vib: ABMStates::Vibrational
-            ]| {
+            |[s: ABMStates::ElectronSpin, vib: ABMStates::Vibrational]| {
             if s.s == hu32!(1) {
                 abm_vibrational.triplet_state(vib)
             } else {
@@ -479,11 +484,7 @@ impl ABMProblemBuilder {
         });
 
         let fc_factors = operator_mel!(&basis,
-            |[
-                s: ABMStates::ElectronSpin,
-                _i: ABMStates::NuclearSpin,
-                vib: ABMStates::Vibrational
-            ]| {
+            |[s: ABMStates::ElectronSpin, _i: ABMStates::NuclearSpin, vib: ABMStates::Vibrational]| {
                 if s.bra.s == s.ket.s {
                     kron_delta([vib])
                 } else if s.bra.s == hu32!(1) {

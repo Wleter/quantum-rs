@@ -1,14 +1,31 @@
 use std::time::Instant;
 
 use abm::{DoubleHifiProblemBuilder, HifiProblemBuilder, Symmetry};
-use clebsch_gordan::{hi32, half_integer::HalfI32, hu32};
+use clebsch_gordan::{half_integer::HalfI32, hi32, hu32};
 use faer::Mat;
 use hhmmss::Hhmmss;
 use indicatif::{ParallelProgressIterator, ProgressIterator};
 use num::complex::Complex64;
-use quantum::{params::{particle_factory, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::energy_units::{Energy, Kelvin, MHz}, utility::linspace};
-use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, IndexBasisDescription, ScatteringProblem};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{MatPotential, Potential}}, utility::save_data};
+use quantum::{
+    params::{particle_factory, particles::Particles},
+    problem_selector::{ProblemSelector, get_args},
+    problems_impl,
+    units::energy_units::{Energy, Kelvin, MHz},
+    utility::linspace,
+};
+use scattering_problems::{
+    IndexBasisDescription, ScatteringProblem, alkali_atoms::AlkaliAtomsProblemBuilder,
+};
+use scattering_solver::{
+    boundary::{Boundary, Direction},
+    numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule},
+    potentials::{
+        composite_potential::Composite,
+        dispersion_potential::Dispersion,
+        potential::{MatPotential, Potential},
+    },
+    utility::save_data,
+};
 
 use rayon::prelude::*;
 
@@ -24,21 +41,23 @@ problems_impl!(Problems, "Li2 Feshbach",
 );
 
 impl Problems {
-    fn get_problem(projection: HalfI32, mag_field: f64) -> ScatteringProblem<impl MatPotential, IndexBasisDescription> {
-        let first = HifiProblemBuilder::new(hu32!(1/2), hu32!(1))
+    fn get_problem(
+        projection: HalfI32,
+        mag_field: f64,
+    ) -> ScatteringProblem<impl MatPotential, IndexBasisDescription> {
+        let first = HifiProblemBuilder::new(hu32!(1 / 2), hu32!(1))
             .with_hyperfine_coupling(Energy(228.2 / 1.5, MHz).to_au());
 
         let hifi_problem = DoubleHifiProblemBuilder::new_homo(first, Symmetry::Fermionic)
             .with_projection(projection);
-        
+
         let mut li2_singlet = Composite::new(Dispersion::new(-1381., -6));
         li2_singlet.add_potential(Dispersion::new(1.112e7, -12));
 
         let mut li2_triplet = Composite::new(Dispersion::new(-1381., -6));
         li2_triplet.add_potential(Dispersion::new(2.19348e8, -12));
 
-        AlkaliAtomsProblemBuilder::new(hifi_problem, li2_singlet, li2_triplet)
-            .build(mag_field)
+        AlkaliAtomsProblemBuilder::new(hifi_problem, li2_singlet, li2_triplet).build(mag_field)
     }
 
     fn get_particles() -> Particles {
@@ -72,8 +91,7 @@ impl Problems {
         let header = "mag_field\tptoentials";
         let data = vec![distances, p1, p2, p12, p21];
 
-        save_data("li2_potentials", header, &data)
-            .unwrap()
+        save_data("li2_potentials", header, &data).unwrap()
     }
 
     fn feshbach() {
@@ -88,23 +106,26 @@ impl Problems {
         ///////////////////////////////////
 
         let start = Instant::now();
-        
-        let scatterings = mag_fields.par_iter().progress().map(|&mag_field| {
-            let alkali_problem = Self::get_problem(projection, mag_field);
 
-            let mut li2 = Self::get_particles();
-            let potential = &alkali_problem.potential;
-            li2.insert(alkali_problem.asymptotic);
+        let scatterings = mag_fields
+            .par_iter()
+            .progress()
+            .map(|&mag_field| {
+                let alkali_problem = Self::get_problem(projection, mag_field);
 
-            let id = Mat::<f64>::identity(potential.size(), potential.size());
-            let boundary = Boundary::new(4., Direction::Outwards, (1.001 * &id, 1.002 * &id));
-            let step_rule = MultiStepRule::default();
-            let mut numerov = MultiRatioNumerov::new(potential, &li2, step_rule, boundary);
+                let mut li2 = Self::get_particles();
+                let potential = &alkali_problem.potential;
+                li2.insert(alkali_problem.asymptotic);
 
-            numerov.propagate_to(1.5e3);
-            numerov.data.calculate_s_matrix().get_scattering_length()
-        })
-        .collect::<Vec<Complex64>>();
+                let id = Mat::<f64>::identity(potential.size(), potential.size());
+                let boundary = Boundary::new(4., Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                let step_rule = MultiStepRule::default();
+                let mut numerov = MultiRatioNumerov::new(potential, &li2, step_rule, boundary);
+
+                numerov.propagate_to(1.5e3);
+                numerov.data.calculate_s_matrix().get_scattering_length()
+            })
+            .collect::<Vec<Complex64>>();
 
         let elapsed = start.elapsed();
         println!("calculated in {}", elapsed.hhmmssxxx());
@@ -115,7 +136,6 @@ impl Problems {
         let header = "mag_field\tscattering_re\tscattering_im";
         let data = vec![mag_fields, scatterings_re, scatterings_im];
 
-        save_data("li2_scatterings", header, &data)
-            .unwrap()
+        save_data("li2_scatterings", header, &data).unwrap()
     }
 }

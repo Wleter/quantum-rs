@@ -1,20 +1,23 @@
 use faer::Mat;
-use scattering_solver::{boundary::Asymptotic, potentials::potential::{MatPotential, Potential}};
+use scattering_solver::{
+    boundary::Asymptotic,
+    potentials::potential::{MatPotential, Potential},
+};
 
 pub mod alkali_atoms;
-pub mod alkali_rotor_atom;
-pub mod utility;
-pub mod rotor_atom;
-pub mod potential_interpolation;
 pub mod alkali_rotor;
+pub mod alkali_rotor_atom;
 pub mod angular_block;
-pub mod uncoupled_alkali_rotor_atom;
+pub mod potential_interpolation;
 pub mod rkhs_interpolation;
+pub mod rotor_atom;
+pub mod uncoupled_alkali_rotor_atom;
+pub mod utility;
 
 pub struct ScatteringProblem<P: Potential, B: BasisDescription> {
     pub potential: P,
     pub asymptotic: Asymptotic,
-    pub basis_description: B
+    pub basis_description: B,
 }
 
 pub trait FieldScatteringProblem<B: BasisDescription> {

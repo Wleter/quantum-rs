@@ -1,15 +1,51 @@
 use core::f64;
 use std::time::Instant;
 
-use abm::{utility::save_spectrum, DoubleHifiProblemBuilder, HifiProblemBuilder};
-use clebsch_gordan::{hi32, half_integer::HalfI32, hu32};
+use abm::{DoubleHifiProblemBuilder, HifiProblemBuilder, utility::save_spectrum};
+use clebsch_gordan::{half_integer::HalfI32, hi32, hu32};
 use faer::Mat;
 use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
 use num::complex::Complex64;
-use quantum::{params::{particle::Particle, particle_factory::{self, RotConst}, particles::Particles, Params}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{energy_units::{Energy, EnergyUnit, GHz, Kelvin, MHz}, mass_units::{Dalton, Mass}, Au}, utility::linspace};
-use scattering_problems::{alkali_atoms::AlkaliAtomsProblemBuilder, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder, TramBasisRecipe, TramStates, UncoupledRotorBasisRecipe}, uncoupled_alkali_rotor_atom::UncoupledAlkaliRotorAtomStates, utility::{AnisoHifi, GammaSpinRot}, FieldScatteringProblem, IndexBasisDescription, ScatteringProblem};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule, single_numerov::SingleRatioNumerov}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{MatPotential, Potential, SimplePotential}}, utility::save_data};
+use quantum::{
+    params::{
+        Params,
+        particle::Particle,
+        particle_factory::{self, RotConst},
+        particles::Particles,
+    },
+    problem_selector::{ProblemSelector, get_args},
+    problems_impl,
+    units::{
+        Au,
+        energy_units::{Energy, EnergyUnit, GHz, Kelvin, MHz},
+        mass_units::{Dalton, Mass},
+    },
+    utility::linspace,
+};
+use scattering_problems::{
+    FieldScatteringProblem, IndexBasisDescription, ScatteringProblem,
+    alkali_atoms::AlkaliAtomsProblemBuilder,
+    alkali_rotor_atom::{
+        AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder, TramBasisRecipe, TramStates,
+        UncoupledRotorBasisRecipe,
+    },
+    uncoupled_alkali_rotor_atom::UncoupledAlkaliRotorAtomStates,
+    utility::{AnisoHifi, GammaSpinRot},
+};
+use scattering_solver::{
+    boundary::{Boundary, Direction},
+    numerovs::{
+        multi_numerov::MultiRatioNumerov, propagator::MultiStepRule,
+        single_numerov::SingleRatioNumerov,
+    },
+    potentials::{
+        composite_potential::Composite,
+        dispersion_potential::Dispersion,
+        potential::{MatPotential, Potential, SimplePotential},
+    },
+    utility::save_data,
+};
 
 use rayon::prelude::*;
 
@@ -51,19 +87,36 @@ impl Problems {
             let singlet = singlet_iso(config);
 
             let boundary = Boundary::new(8.5, Direction::Outwards, (1.01, 1.02));
-            let mut numerov = SingleRatioNumerov::new(&triplet, &particles, MultiStepRule::default(), boundary);
+            let mut numerov =
+                SingleRatioNumerov::new(&triplet, &particles, MultiStepRule::default(), boundary);
             numerov.propagate_to(1e4);
-            println!("{:.2}", numerov.data.calculate_s_matrix().unwrap().get_scattering_length().re);
-    
+            println!(
+                "{:.2}",
+                numerov
+                    .data
+                    .calculate_s_matrix()
+                    .unwrap()
+                    .get_scattering_length()
+                    .re
+            );
+
             let boundary = Boundary::new(7.2, Direction::Outwards, (1.01, 1.02));
-            let mut numerov = SingleRatioNumerov::new(&singlet, &particles, MultiStepRule::default(), boundary);
+            let mut numerov =
+                SingleRatioNumerov::new(&singlet, &particles, MultiStepRule::default(), boundary);
             numerov.propagate_to(1e4);
-            println!("{:.2}", numerov.data.calculate_s_matrix().unwrap().get_scattering_length().re);
+            println!(
+                "{:.2}",
+                numerov
+                    .data
+                    .calculate_s_matrix()
+                    .unwrap()
+                    .get_scattering_length()
+                    .re
+            );
         }
 
         let data = vec![distances, triplet_values, singlet_values, aniso_values];
-        save_data("CaF_Rb_iso", "distance\ttriplet\tsinglet\taniso", &data)
-            .unwrap();
+        save_data("CaF_Rb_iso", "distance\ttriplet\tsinglet\taniso", &data).unwrap();
     }
 
     fn single_chan_scatterings() {
@@ -71,36 +124,62 @@ impl Problems {
 
         let factors = linspace(0.95, 1.05, 500);
 
-        let scatterings_triplet = factors.iter()
+        let scatterings_triplet = factors
+            .iter()
             .map(|x| {
                 let mut triplet = Composite::new(Dispersion::new(-3084., -6));
                 triplet.add_potential(Dispersion::new(x * 2e9, -12));
 
                 let boundary = Boundary::new(8.5, Direction::Outwards, (1.01, 1.02));
-                let mut numerov = SingleRatioNumerov::new(&triplet, &particles, MultiStepRule::default(), boundary);
+                let mut numerov = SingleRatioNumerov::new(
+                    &triplet,
+                    &particles,
+                    MultiStepRule::default(),
+                    boundary,
+                );
 
                 numerov.propagate_to(1e4);
-                numerov.data.calculate_s_matrix().unwrap().get_scattering_length().re
+                numerov
+                    .data
+                    .calculate_s_matrix()
+                    .unwrap()
+                    .get_scattering_length()
+                    .re
             })
             .collect();
 
-        let scatterings_singlet = factors.iter()
+        let scatterings_singlet = factors
+            .iter()
             .map(|x| {
                 let mut singlet = Composite::new(Dispersion::new(-3084., -6));
                 singlet.add_potential(Dispersion::new(x * 5e8, -12));
 
                 let boundary = Boundary::new(7.2, Direction::Outwards, (1.01, 1.02));
-                let mut numerov = SingleRatioNumerov::new(&singlet, &particles, MultiStepRule::default(), boundary);
+                let mut numerov = SingleRatioNumerov::new(
+                    &singlet,
+                    &particles,
+                    MultiStepRule::default(),
+                    boundary,
+                );
 
                 numerov.propagate_to(1e4);
-                numerov.data.calculate_s_matrix().unwrap().get_scattering_length().re
+                numerov
+                    .data
+                    .calculate_s_matrix()
+                    .unwrap()
+                    .get_scattering_length()
+                    .re
             })
             .collect();
 
         let data = vec![factors, scatterings_triplet, scatterings_singlet];
 
-        save_data("CaF_Rb_1chan_scatterings", "factors\ttriplet\tsinglet", &data)
-            .unwrap();
+        save_data(
+            "CaF_Rb_1chan_scatterings",
+            "factors\ttriplet\tsinglet",
+            &data,
+        )
+        .unwrap();
     }
 
     fn feshbach_iso() {
@@ -108,39 +187,49 @@ impl Problems {
             let mag_fields = linspace(0., 1000., 4000);
             let projection = hi32!(1);
             let energy = Energy(1e-7, Kelvin);
-    
+
             ///////////////////////////////////
 
             let atoms = get_particles(energy, projection);
-    
+
             let start = Instant::now();
-            let scatterings = mag_fields.par_iter().progress().map_with(atoms, |atoms, &mag_field| {
-                let alkali_problem = get_potential_iso(config_triplet, config_singlet, projection, mag_field);
-    
-                atoms.insert(alkali_problem.asymptotic);
-                let potential = &alkali_problem.potential;
-    
-                let id = Mat::<f64>::identity(potential.size(), potential.size());
-                let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
-    
-                numerov.propagate_to(1.5e3);
-                numerov.data.calculate_s_matrix().get_scattering_length()
-            })
-            .collect::<Vec<Complex64>>();
-    
+            let scatterings = mag_fields
+                .par_iter()
+                .progress()
+                .map_with(atoms, |atoms, &mag_field| {
+                    let alkali_problem =
+                        get_potential_iso(config_triplet, config_singlet, projection, mag_field);
+
+                    atoms.insert(alkali_problem.asymptotic);
+                    let potential = &alkali_problem.potential;
+
+                    let id = Mat::<f64>::identity(potential.size(), potential.size());
+                    let boundary =
+                        Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
+                    let mut numerov =
+                        MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+
+                    numerov.propagate_to(1.5e3);
+                    numerov.data.calculate_s_matrix().get_scattering_length()
+                })
+                .collect::<Vec<Complex64>>();
+
             let elapsed = start.elapsed();
             println!("calculated in {}", elapsed.hhmmssxxx());
-    
+
             let scatterings_re = scatterings.iter().map(|x| x.re).collect();
             let scatterings_im = scatterings.iter().map(|x| x.im).collect();
-    
+
             let header = "mag_field\tscattering_re\tscattering_im";
             let data = vec![mag_fields, scatterings_re, scatterings_im];
-    
-            save_data(&format!("CaF_Rb_iso_scatterings_{config_triplet}_{config_singlet}"), header, &data)
-                .unwrap()
+
+            save_data(
+                &format!("CaF_Rb_iso_scatterings_{config_triplet}_{config_singlet}"),
+                header,
+                &data,
+            )
+            .unwrap()
         }
     }
 
@@ -163,31 +252,40 @@ impl Problems {
 
         let mag_fields = linspace(0., 200., 200);
 
-        let energies: Vec<Vec<f64>> = mag_fields.par_iter()
+        let energies: Vec<Vec<f64>> = mag_fields
+            .par_iter()
             .map(|mag_field| {
                 let (levels, _) = alkali_problem.levels(*mag_field, Some(0));
 
-                levels.iter().map(|x| Energy(*x, Au).to(GHz).value()).collect()
+                levels
+                    .iter()
+                    .map(|x| Energy(*x, Au).to(GHz).value())
+                    .collect()
             })
             .collect();
-        
-        let header = "magnetic field [G]\tEnergies [GHz]";
-        save_spectrum(header, "caf_rb_levels", &mag_fields, &energies).expect("error while saving abm");
 
+        let header = "magnetic field [G]\tEnergies [GHz]";
+        save_spectrum(header, "caf_rb_levels", &mag_fields, &energies)
+            .expect("error while saving abm");
 
         let atoms = get_particles(Energy(1e-7, Kelvin), projection);
         let alkali_problem = get_problem_uncoupled(0, 0, &atoms, &basis_recipe_uncoupled);
 
-        let energies: Vec<Vec<f64>> = mag_fields.par_iter()
+        let energies: Vec<Vec<f64>> = mag_fields
+            .par_iter()
             .map(|mag_field| {
                 let (levels, _) = alkali_problem.levels(*mag_field, Some(0));
 
-                levels.iter().map(|x| Energy(*x, Au).to(GHz).value()).collect()
+                levels
+                    .iter()
+                    .map(|x| Energy(*x, Au).to(GHz).value())
+                    .collect()
             })
             .collect();
-    
+
         let header = "magnetic field [G]\tEnergies [GHz]";
-        save_spectrum(header, "caf_rb_levels_uncoupled", &mag_fields, &energies).expect("error while saving abm");
+        save_spectrum(header, "caf_rb_levels_uncoupled", &mag_fields, &energies)
+            .expect("error while saving abm");
     }
 
     fn rotor_potentials() {
@@ -200,23 +298,26 @@ impl Problems {
                 l_max: 5,
                 ..Default::default()
             };
-    
+
             ///////////////////////////////////
-    
+
             let caf_rb = get_particles(energy_relative, projection);
-            let alkali_problem = get_problem(config_triplet, config_singlet, &caf_rb, &basis_recipe);
-    
+            let alkali_problem =
+                get_problem(config_triplet, config_singlet, &caf_rb, &basis_recipe);
+
             let alkali_problem = alkali_problem.scattering_for(100.);
             let potential = &alkali_problem.potential;
-    
+
             let mut mat = Mat::zeros(potential.size(), potential.size());
-            let potentials: Vec<Mat<f64>> = distances.iter().map(|&x| {
+            let potentials: Vec<Mat<f64>> = distances
+                .iter()
+                .map(|&x| {
                     potential.value_inplace(x, &mut mat);
-    
+
                     mat.to_owned()
                 })
                 .collect();
-    
+
             let header = "distances\tpotentials";
             let mut data = vec![distances];
             for i in 0..potential.size() {
@@ -224,9 +325,13 @@ impl Problems {
                     data.push(potentials.iter().map(|p| p[(i, j)]).collect());
                 }
             }
-    
-            save_data(&format!("CaF_Rb_potentials_{config_triplet}_{config_singlet}"), header, &data)
-                .unwrap()
+
+            save_data(
+                &format!("CaF_Rb_potentials_{config_triplet}_{config_singlet}"),
+                header,
+                &data,
+            )
+            .unwrap()
         }
     }
 
@@ -243,37 +348,46 @@ impl Problems {
 
             let atoms = get_particles(energy_relative, projection);
             let alkali_problem = get_problem(config_triplet, config_singlet, &atoms, &basis_recipe);
-    
+
             ///////////////////////////////////
-    
+
             let start = Instant::now();
-            let scatterings = mag_fields.par_iter().progress().map_with(atoms, |atoms, &mag_field| {
-                let alkali_problem = alkali_problem.scattering_for(mag_field);
-                
-                atoms.insert(alkali_problem.asymptotic);
-                let potential = &alkali_problem.potential;
-    
-                let id = Mat::<f64>::identity(potential.size(), potential.size());
-                let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
-    
-                numerov.propagate_to(1.5e3);
-                numerov.data.calculate_s_matrix().get_scattering_length()
-            })
-            .collect::<Vec<Complex64>>();
-    
+            let scatterings = mag_fields
+                .par_iter()
+                .progress()
+                .map_with(atoms, |atoms, &mag_field| {
+                    let alkali_problem = alkali_problem.scattering_for(mag_field);
+
+                    atoms.insert(alkali_problem.asymptotic);
+                    let potential = &alkali_problem.potential;
+
+                    let id = Mat::<f64>::identity(potential.size(), potential.size());
+                    let boundary =
+                        Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
+                    let mut numerov =
+                        MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+
+                    numerov.propagate_to(1.5e3);
+                    numerov.data.calculate_s_matrix().get_scattering_length()
+                })
+                .collect::<Vec<Complex64>>();
+
             let elapsed = start.elapsed();
             println!("calculated in {}", elapsed.hhmmssxxx());
-    
+
             let scatterings_re = scatterings.iter().map(|x| x.re).collect();
             let scatterings_im = scatterings.iter().map(|x| x.im).collect();
-    
+
             let header = "mag_field\tscattering_re\tscattering_im";
             let data = vec![mag_fields, scatterings_re, scatterings_im];
-    
-            save_data(&format!("CaF_Rb_scatterings_{config_triplet}_{config_singlet}"), header, &data)
-                .unwrap()
+
+            save_data(
+                &format!("CaF_Rb_scatterings_{config_triplet}_{config_singlet}"),
+                header,
+                &data,
+            )
+            .unwrap()
         }
     }
 
@@ -281,49 +395,59 @@ impl Problems {
         for (config_triplet, config_singlet) in Self::POTENTIAL_CONFIGS {
             let projection = hi32!(1);
             let n_maxes: Vec<u32> = (0..20).collect();
-    
+
             let energy_relative = Energy(1e-7, Kelvin);
             let mag_field = 500.;
 
             let atoms = get_particles(energy_relative, projection);
-    
+
             ///////////////////////////////////
-    
+
             let start = Instant::now();
-            let scatterings = n_maxes.par_iter().progress().map_with(atoms, |atoms, &n_max| {
-                let basis_recipe = TramBasisRecipe {
-                    n_max: n_max,
-                    l_max: n_max,
-                    ..Default::default()
-                };
-                
-                let alkali_problem = get_problem(config_triplet, config_singlet, &atoms, &basis_recipe);
-                let alkali_problem = alkali_problem.scattering_for(mag_field);
-                atoms.insert(alkali_problem.asymptotic);
-                let potential = &alkali_problem.potential;
-    
-                let id = Mat::<f64>::identity(potential.size(), potential.size());
-                let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
-    
-                numerov.propagate_to(1.5e3);
-                numerov.data.calculate_s_matrix().get_scattering_length()
-            })
-            .collect::<Vec<Complex64>>();
-    
+            let scatterings = n_maxes
+                .par_iter()
+                .progress()
+                .map_with(atoms, |atoms, &n_max| {
+                    let basis_recipe = TramBasisRecipe {
+                        n_max: n_max,
+                        l_max: n_max,
+                        ..Default::default()
+                    };
+
+                    let alkali_problem =
+                        get_problem(config_triplet, config_singlet, &atoms, &basis_recipe);
+                    let alkali_problem = alkali_problem.scattering_for(mag_field);
+                    atoms.insert(alkali_problem.asymptotic);
+                    let potential = &alkali_problem.potential;
+
+                    let id = Mat::<f64>::identity(potential.size(), potential.size());
+                    let boundary =
+                        Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
+                    let mut numerov =
+                        MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+
+                    numerov.propagate_to(1.5e3);
+                    numerov.data.calculate_s_matrix().get_scattering_length()
+                })
+                .collect::<Vec<Complex64>>();
+
             let elapsed = start.elapsed();
             println!("calculated in {}", elapsed.hhmmssxxx());
-    
+
             let n_maxes = n_maxes.iter().map(|&x| x as f64).collect();
             let scatterings_re = scatterings.iter().map(|x| x.re).collect();
             let scatterings_im = scatterings.iter().map(|x| x.im).collect();
-    
+
             let header = "mag_field\tscattering_re\tscattering_im";
             let data = vec![n_maxes, scatterings_re, scatterings_im];
-    
-            save_data(&format!("CaF_Rb_n_max_{config_triplet}_{config_singlet}"), header, &data)
-                .unwrap()
+
+            save_data(
+                &format!("CaF_Rb_n_max_{config_triplet}_{config_singlet}"),
+                header,
+                &data,
+            )
+            .unwrap()
         }
     }
 
@@ -331,56 +455,70 @@ impl Problems {
         for (config_triplet, config_singlet) in Self::POTENTIAL_CONFIGS {
             let projection = hi32!(1);
             let n_maxes: Vec<u32> = (0..=3).collect();
-    
+
             let energy_relative = Energy(1e-7, Kelvin);
             let mag_field = 500.;
 
             let atoms = get_particles(energy_relative, projection);
 
             ///////////////////////////////////
-    
+
             let start = Instant::now();
-            let scatterings = n_maxes.par_iter().progress().map_with(atoms, |atoms, &n_max| {
-                let basis_recipe = UncoupledRotorBasisRecipe {
-                    n_max: n_max,
-                    l_max: n_max,
-                    ..Default::default()
-                };
-                
-                let alkali_problem = get_problem_uncoupled(config_triplet, config_singlet, &atoms, &basis_recipe);
-                let alkali_problem = alkali_problem.scattering_for(mag_field);
-                atoms.insert(alkali_problem.asymptotic.clone());
-                let potential = &alkali_problem.potential;
-    
-                let id = Mat::<f64>::identity(potential.size(), potential.size());
-                let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
-    
-                numerov.propagate_to(1.5e3);
-                numerov.data.calculate_s_matrix().get_scattering_length()
-            })
-            .collect::<Vec<Complex64>>();
-    
+            let scatterings = n_maxes
+                .par_iter()
+                .progress()
+                .map_with(atoms, |atoms, &n_max| {
+                    let basis_recipe = UncoupledRotorBasisRecipe {
+                        n_max: n_max,
+                        l_max: n_max,
+                        ..Default::default()
+                    };
+
+                    let alkali_problem = get_problem_uncoupled(
+                        config_triplet,
+                        config_singlet,
+                        &atoms,
+                        &basis_recipe,
+                    );
+                    let alkali_problem = alkali_problem.scattering_for(mag_field);
+                    atoms.insert(alkali_problem.asymptotic.clone());
+                    let potential = &alkali_problem.potential;
+
+                    let id = Mat::<f64>::identity(potential.size(), potential.size());
+                    let boundary =
+                        Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
+                    let mut numerov =
+                        MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+
+                    numerov.propagate_to(1.5e3);
+                    numerov.data.calculate_s_matrix().get_scattering_length()
+                })
+                .collect::<Vec<Complex64>>();
+
             let elapsed = start.elapsed();
             println!("calculated in {}", elapsed.hhmmssxxx());
-    
+
             let n_maxes = n_maxes.iter().map(|&x| x as f64).collect();
             let scatterings_re = scatterings.iter().map(|x| x.re).collect();
             let scatterings_im = scatterings.iter().map(|x| x.im).collect();
-    
+
             let header = "mag_field\tscattering_re\tscattering_im";
             let data = vec![n_maxes, scatterings_re, scatterings_im];
-    
-            save_data(&format!("CaF_Rb_n_max_uncoupled_{config_triplet}_{config_singlet}"), header, &data)
-                .unwrap()
+
+            save_data(
+                &format!("CaF_Rb_n_max_uncoupled_{config_triplet}_{config_singlet}"),
+                header,
+                &data,
+            )
+            .unwrap()
         }
     }
 
     fn uncoupled_feshbach_rotor() {
         for (config_triplet, config_singlet) in Self::POTENTIAL_CONFIGS {
             let projection = hi32!(1);
-    
+
             let energy_relative = Energy(1e-7, Kelvin);
             let mag_fields = linspace(0., 1000., 4000);
 
@@ -391,38 +529,48 @@ impl Problems {
             };
 
             let atoms = get_particles(energy_relative, projection);
-            let alkali_problem = get_problem_uncoupled(config_triplet, config_singlet, &atoms, &basis_recipe);
-    
-            ///////////////////////////////////
-    
-            let start = Instant::now();
-            let scatterings = mag_fields.par_iter().progress().map_with(atoms, |atoms, &mag_field| {
-                let alkali_problem = alkali_problem.scattering_for(mag_field);
+            let alkali_problem =
+                get_problem_uncoupled(config_triplet, config_singlet, &atoms, &basis_recipe);
 
-                atoms.insert(alkali_problem.asymptotic);
-                let potential = &alkali_problem.potential;
-    
-                let id = Mat::<f64>::identity(potential.size(), potential.size());
-                let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
-    
-                numerov.propagate_to(1.5e3);
-                numerov.data.calculate_s_matrix().get_scattering_length()
-            })
-            .collect::<Vec<Complex64>>();
-    
+            ///////////////////////////////////
+
+            let start = Instant::now();
+            let scatterings = mag_fields
+                .par_iter()
+                .progress()
+                .map_with(atoms, |atoms, &mag_field| {
+                    let alkali_problem = alkali_problem.scattering_for(mag_field);
+
+                    atoms.insert(alkali_problem.asymptotic);
+                    let potential = &alkali_problem.potential;
+
+                    let id = Mat::<f64>::identity(potential.size(), potential.size());
+                    let boundary =
+                        Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
+                    let mut numerov =
+                        MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+
+                    numerov.propagate_to(1.5e3);
+                    numerov.data.calculate_s_matrix().get_scattering_length()
+                })
+                .collect::<Vec<Complex64>>();
+
             let elapsed = start.elapsed();
             println!("calculated in {}", elapsed.hhmmssxxx());
-    
+
             let scatterings_re = scatterings.iter().map(|x| x.re).collect();
             let scatterings_im = scatterings.iter().map(|x| x.im).collect();
-    
+
             let header = "mag_field\tscattering_re\tscattering_im";
             let data = vec![mag_fields, scatterings_re, scatterings_im];
-    
-            save_data(&format!("CaF_Rb_uncoupled_scatterings_{config_triplet}_{config_singlet}"), header, &data)
-                .unwrap()
+
+            save_data(
+                &format!("CaF_Rb_uncoupled_scatterings_{config_triplet}_{config_singlet}"),
+                header,
+                &data,
+            )
+            .unwrap()
         }
     }
 }
@@ -450,11 +598,16 @@ fn potential_aniso() -> Composite<Dispersion> {
     singlet
 }
 
-fn get_potential_iso(config_triplet: usize, config_singlet: usize, projection: HalfI32, mag_field: f64) -> ScatteringProblem<impl MatPotential, IndexBasisDescription> {
-    let hifi_caf = HifiProblemBuilder::new(hu32!(1/2), hu32!(1/2))
+fn get_potential_iso(
+    config_triplet: usize,
+    config_singlet: usize,
+    projection: HalfI32,
+    mag_field: f64,
+) -> ScatteringProblem<impl MatPotential, IndexBasisDescription> {
+    let hifi_caf = HifiProblemBuilder::new(hu32!(1 / 2), hu32!(1 / 2))
         .with_hyperfine_coupling(Energy(120., MHz).to_au());
 
-    let hifi_rb = HifiProblemBuilder::new(hu32!(1/2), hu32!(3/2))
+    let hifi_rb = HifiProblemBuilder::new(hu32!(1 / 2), hu32!(3 / 2))
         .with_hyperfine_coupling(Energy(6.83 / 2., GHz).to_au());
 
     let hifi_problem = DoubleHifiProblemBuilder::new(hifi_caf, hifi_rb).with_projection(projection);
@@ -462,8 +615,7 @@ fn get_potential_iso(config_triplet: usize, config_singlet: usize, projection: H
     let triplet = triplet_iso(config_triplet);
     let singlet = singlet_iso(config_singlet);
 
-    AlkaliAtomsProblemBuilder::new(hifi_problem, triplet, singlet)
-        .build(mag_field)
+    AlkaliAtomsProblemBuilder::new(hifi_problem, triplet, singlet).build(mag_field)
 }
 
 fn get_particles(energy: Energy<impl EnergyUnit>, projection: HalfI32) -> Particles {
@@ -475,25 +627,28 @@ fn get_particles(energy: Energy<impl EnergyUnit>, projection: HalfI32) -> Partic
     particles.insert(GammaSpinRot(Energy(40., MHz).to_au()));
     particles.insert(AnisoHifi(Energy(3. * 14., MHz).to_au()));
 
-    let hifi_caf = HifiProblemBuilder::new(hu32!(1/2), hu32!(1/2))
+    let hifi_caf = HifiProblemBuilder::new(hu32!(1 / 2), hu32!(1 / 2))
         .with_hyperfine_coupling(Energy(120., MHz).to_au());
-    let hifi_rb = HifiProblemBuilder::new(hu32!(1/2), hu32!(3/2))
+    let hifi_rb = HifiProblemBuilder::new(hu32!(1 / 2), hu32!(3 / 2))
         .with_hyperfine_coupling(Energy(6.83 / 2., GHz).to_au());
 
-    let hifi_problem = DoubleHifiProblemBuilder::new(hifi_caf, hifi_rb)
-        .with_projection(projection);
+    let hifi_problem = DoubleHifiProblemBuilder::new(hifi_caf, hifi_rb).with_projection(projection);
 
     particles.insert(hifi_problem);
-    
+
     particles
 }
 
 fn get_problem(
-    config_triplet: usize, 
-    config_singlet: usize, 
+    config_triplet: usize,
+    config_singlet: usize,
     params: &Params,
-    basis_recipe: &TramBasisRecipe
-) -> AlkaliRotorAtomProblem<TramStates, impl SimplePotential + Clone + use<>, impl SimplePotential + Clone + use<>> {
+    basis_recipe: &TramBasisRecipe,
+) -> AlkaliRotorAtomProblem<
+    TramStates,
+    impl SimplePotential + Clone + use<>,
+    impl SimplePotential + Clone + use<>,
+> {
     let triplet = triplet_iso(config_triplet);
     let singlet = singlet_iso(config_singlet);
     let aniso = potential_aniso();
@@ -501,16 +656,19 @@ fn get_problem(
     let triplets = vec![(0, triplet), (2, aniso.clone())];
     let singlets = vec![(0, singlet), (2, aniso)];
 
-    AlkaliRotorAtomProblemBuilder::new(triplets, singlets)
-        .build(params, basis_recipe)
+    AlkaliRotorAtomProblemBuilder::new(triplets, singlets).build(params, basis_recipe)
 }
 
 fn get_problem_uncoupled(
-    config_triplet: usize, 
+    config_triplet: usize,
     config_singlet: usize,
     params: &Params,
-    basis_recipe: &UncoupledRotorBasisRecipe
-) -> AlkaliRotorAtomProblem<UncoupledAlkaliRotorAtomStates, impl SimplePotential + Clone + use<>, impl SimplePotential + Clone + use<>> {
+    basis_recipe: &UncoupledRotorBasisRecipe,
+) -> AlkaliRotorAtomProblem<
+    UncoupledAlkaliRotorAtomStates,
+    impl SimplePotential + Clone + use<>,
+    impl SimplePotential + Clone + use<>,
+> {
     let triplet = triplet_iso(config_triplet);
     let singlet = singlet_iso(config_singlet);
     let aniso = potential_aniso();
@@ -518,6 +676,5 @@ fn get_problem_uncoupled(
     let triplets = vec![(0, triplet), (2, aniso.clone())];
     let singlets = vec![(0, singlet), (2, aniso)];
 
-    AlkaliRotorAtomProblemBuilder::new(triplets, singlets)
-        .build_uncoupled(params, basis_recipe)
+    AlkaliRotorAtomProblemBuilder::new(triplets, singlets).build_uncoupled(params, basis_recipe)
 }

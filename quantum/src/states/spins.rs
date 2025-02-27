@@ -22,7 +22,7 @@ impl Spin {
     pub fn zero() -> Self {
         Self {
             s: 0.into(),
-            ms: 0.into()
+            ms: 0.into(),
         }
     }
 

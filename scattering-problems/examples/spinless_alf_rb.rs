@@ -1,12 +1,47 @@
-use std::{f64::consts::PI, fs::File, io::{BufRead, BufReader}, time::Instant};
+use std::{
+    f64::consts::PI,
+    fs::File,
+    io::{BufRead, BufReader},
+    time::Instant,
+};
 
 use faer::Mat;
 use gauss_quad::GaussLegendre;
 use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
-use quantum::{params::{particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles, Params}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{distance_units::Angstrom, energy_units::{CmInv, Energy, Kelvin}, mass_units::{Dalton, Mass}, Au, Unit}, utility::{legendre_polynomials, linspace, logspace}};
-use scattering_problems::{potential_interpolation::{interpolate_potentials, PotentialArray, TransitionedPotential}, rotor_atom::{RotorAtomBasisDescription, RotorAtomBasisRecipe, RotorAtomProblemBuilder}, utility::AngularPair, BasisDescription, ScatteringProblem};
-use scattering_solver::{boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, observables::s_matrix::ScatteringDependence, potentials::{dispersion_potential::Dispersion, potential::{MatPotential, Potential, SimplePotential}}, utility::{save_data, save_serialize}};
+use quantum::{
+    params::{
+        Params,
+        particle::Particle,
+        particle_factory::{RotConst, create_atom},
+        particles::Particles,
+    },
+    problem_selector::{ProblemSelector, get_args},
+    problems_impl,
+    units::{
+        Au, Unit,
+        distance_units::Angstrom,
+        energy_units::{CmInv, Energy, Kelvin},
+        mass_units::{Dalton, Mass},
+    },
+    utility::{legendre_polynomials, linspace, logspace},
+};
+use scattering_problems::{
+    BasisDescription, ScatteringProblem,
+    potential_interpolation::{PotentialArray, TransitionedPotential, interpolate_potentials},
+    rotor_atom::{RotorAtomBasisDescription, RotorAtomBasisRecipe, RotorAtomProblemBuilder},
+    utility::AngularPair,
+};
+use scattering_solver::{
+    boundary::{Boundary, Direction},
+    numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule},
+    observables::s_matrix::ScatteringDependence,
+    potentials::{
+        dispersion_potential::Dispersion,
+        potential::{MatPotential, Potential, SimplePotential},
+    },
+    utility::{save_data, save_serialize},
+};
 
 use rayon::prelude::*;
 
@@ -32,22 +67,21 @@ impl Problems {
             data.push(p.clone());
         }
 
-        save_data("potential_dec_AlF_Rb", "", &data)
-            .unwrap();
+        save_data("potential_dec_AlF_Rb", "", &data).unwrap();
 
         let interp_potentials = interpolate_potentials(&mut pot_array, 3);
         let distances = linspace(4., 50., 1000);
 
         let mut data = vec![distances.clone()];
         for (_, p) in &interp_potentials {
-            let values = distances.iter()
+            let values = distances
+                .iter()
                 .map(|&x| Energy(p.value(x), Au).to(CmInv).value())
                 .collect();
             data.push(values);
         }
 
-        save_data("interpolated_dec_AlF_Rb", "", &data)
-            .unwrap();
+        save_data("interpolated_dec_AlF_Rb", "", &data).unwrap();
     }
 
     fn elastic_cross_section_1chan() {
@@ -63,11 +97,11 @@ impl Problems {
         let basis_recipe = RotorAtomBasisRecipe {
             l_max: 80,
             n_max: 80,
-            n_tot: 0
+            n_tot: 0,
         };
 
         ///////////////////////////////
-        
+
         let start = Instant::now();
 
         let mut particles = get_particles(is_rb_87, energy_relative.to(Au));
@@ -85,7 +119,7 @@ impl Problems {
 
         numerov.propagate_to(200.);
         let cross_section = numerov.data.calculate_s_matrix().get_elastic_cross_sect();
-        
+
         let elapsed = start.elapsed();
         println!("calculated in {}", elapsed.hhmmssxxx());
         if is_rb_87 {
@@ -111,8 +145,9 @@ impl Problems {
         for is_rb_87 in [true, false] {
             let start = Instant::now();
             let rot_maxes: Vec<u32> = (0..=rot_max).collect();
-    
-            let cross_sections: Vec<f64> = rot_maxes.par_iter()
+
+            let cross_sections: Vec<f64> = rot_maxes
+                .par_iter()
                 .progress()
                 .map(|x| {
                     let mut particles = get_particles(is_rb_87, energy.to(Au));
@@ -120,36 +155,38 @@ impl Problems {
                     let basis_recipe = RotorAtomBasisRecipe {
                         l_max: *x,
                         n_max: *x,
-                        n_tot: 0
+                        n_tot: 0,
                     };
-    
-                    let scattering_problem = get_scattering_problem(&pot_array, &particles, &basis_recipe);
+
+                    let scattering_problem =
+                        get_scattering_problem(&pot_array, &particles, &basis_recipe);
                     let potential = scattering_problem.potential;
                     let mut asymptotic = scattering_problem.asymptotic;
                     asymptotic.entrance = scattering_problem.basis_description.index_for(&entrance);
                     particles.insert(asymptotic);
-        
+
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
-                    let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let boundary =
+                        Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
                     let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                    let mut numerov = MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
-        
+                    let mut numerov =
+                        MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
+
                     numerov.propagate_to(200.);
                     let cross_section = numerov.data.calculate_s_matrix().get_elastic_cross_sect();
-    
+
                     cross_section / Angstrom::TO_AU_MUL.powi(2)
                 })
                 .collect();
-    
+
             let elapsed = start.elapsed();
             println!("calculated in {}", elapsed.hhmmssxxx());
             let rot_maxes = (0..=rot_max).map(|x| x as f64).collect();
-    
+
             let header = "mag_field\telastic_cross_section";
             let data = vec![rot_maxes, cross_sections];
-    
-            save_data(&format!("AlF_Rb_elastic_section_{is_rb_87}"), header, &data)
-                .unwrap()
+
+            save_data(&format!("AlF_Rb_elastic_section_{is_rb_87}"), header, &data).unwrap()
         }
     }
 
@@ -166,45 +203,49 @@ impl Problems {
         let basis_recipe = RotorAtomBasisRecipe {
             l_max: 64,
             n_max: 64,
-            n_tot: 0
+            n_tot: 0,
         };
 
         let pot_array = read_potential();
 
         for is_rb_87 in [true, false] {
             let start = Instant::now();
-    
-            let scatterings = energies.par_iter()
+
+            let scatterings = energies
+                .par_iter()
                 .progress()
                 .map(|x| {
                     let energy = Energy(*x, Kelvin);
 
                     let mut particles = get_particles(is_rb_87, energy.to(Au));
-    
-                    let scattering_problem = get_scattering_problem(&pot_array, &particles, &basis_recipe);
+
+                    let scattering_problem =
+                        get_scattering_problem(&pot_array, &particles, &basis_recipe);
                     let potential = scattering_problem.potential;
                     let mut asymptotic = scattering_problem.asymptotic;
                     asymptotic.entrance = scattering_problem.basis_description.index_for(&entrance);
                     particles.insert(asymptotic);
-        
+
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
-                    let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let boundary =
+                        Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
                     let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                    let mut numerov = MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
-        
+                    let mut numerov =
+                        MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
+
                     numerov.propagate_to(200.);
                     numerov.data.calculate_s_matrix().observables()
                 })
                 .collect();
-    
+
             let elapsed = start.elapsed();
             println!("calculated in {}", elapsed.hhmmssxxx());
 
             let data = ScatteringDependence {
                 parameters: energies.clone(),
-                observables: scatterings
+                observables: scatterings,
             };
-    
+
             save_serialize("AlF_Rb_scatterings_1_1", &data).unwrap()
         }
     }
@@ -221,63 +262,77 @@ impl Problems {
         ///////////////////////////////
 
         let pot_array = read_potential();
-        
+
         for is_rb_87 in [true, false] {
             let mut data = vec![energies.clone()];
 
             for n_tot in 0..=j_tot_max {
                 let start = Instant::now();
-        
-                let cross_sections: Vec<f64> = energies.par_iter()
+
+                let cross_sections: Vec<f64> = energies
+                    .par_iter()
                     .progress()
                     .map(|x| {
                         let energy = Energy(*x, Kelvin);
 
                         let mut particles = get_particles(is_rb_87, energy.to(Au));
-                
+
                         let basis_recipe = RotorAtomBasisRecipe {
                             l_max: 64,
                             n_max: 64,
-                            n_tot
+                            n_tot,
                         };
-        
-                        let scattering_problem = get_scattering_problem(&pot_array, &particles, &basis_recipe);
+
+                        let scattering_problem =
+                            get_scattering_problem(&pot_array, &particles, &basis_recipe);
                         let potential = scattering_problem.potential;
                         let mut asymptotic = scattering_problem.asymptotic;
-                        asymptotic.entrance = scattering_problem.basis_description.index_for(&entrance);
+                        asymptotic.entrance =
+                            scattering_problem.basis_description.index_for(&entrance);
                         particles.insert(asymptotic);
-            
+
                         let id = Mat::<f64>::identity(potential.size(), potential.size());
-                        let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                        let boundary =
+                            Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
                         let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                        let mut numerov = MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
-            
+                        let mut numerov =
+                            MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
+
                         numerov.propagate_to(200.);
                         let s_matrix = numerov.data.calculate_s_matrix();
 
-                        let inel_cross_section = s_matrix.get_inelastic_cross_sect() / Angstrom::TO_AU_MUL.powi(2);
-        
+                        let inel_cross_section =
+                            s_matrix.get_inelastic_cross_sect() / Angstrom::TO_AU_MUL.powi(2);
+
                         inel_cross_section
                     })
                     .collect();
 
                 let elapsed = start.elapsed();
                 println!("calculated in {}", elapsed.hhmmssxxx());
-                
+
                 data.push(cross_sections);
             }
 
             let header = "energies\tcross_sections";
-    
-            save_data(&format!("AlF_Rb_inelastic_section_{is_rb_87}_j_tots"), header, &data)
-                .unwrap()
+
+            save_data(
+                &format!("AlF_Rb_inelastic_section_{is_rb_87}_j_tots"),
+                header,
+                &data,
+            )
+            .unwrap()
         }
     }
 }
 
-fn get_scattering_problem(pot_array: &PotentialArray, params: &Params, basis_recipe: &RotorAtomBasisRecipe) -> ScatteringProblem<impl MatPotential + use<>, RotorAtomBasisDescription> {
+fn get_scattering_problem(
+    pot_array: &PotentialArray,
+    params: &Params,
+    basis_recipe: &RotorAtomBasisRecipe,
+) -> ScatteringProblem<impl MatPotential + use<>, RotorAtomBasisDescription> {
     let interp_potentials = interpolate_potentials(pot_array, 3);
-    
+
     let mut potentials_far = Vec::new();
     for _ in &interp_potentials {
         potentials_far.push(Dispersion::new(0., 0));
@@ -295,7 +350,8 @@ fn get_scattering_problem(pot_array: &PotentialArray, params: &Params, basis_rec
         }
     };
 
-    let potentials = interp_potentials.into_iter()
+    let potentials = interp_potentials
+        .into_iter()
         .zip(potentials_far.into_iter())
         .map(|((lambda, near), far)| {
             let combined = TransitionedPotential::new(near, far, transition);
@@ -304,12 +360,15 @@ fn get_scattering_problem(pot_array: &PotentialArray, params: &Params, basis_rec
         })
         .collect();
 
-    RotorAtomProblemBuilder::new(potentials)
-        .build(params, basis_recipe)
+    RotorAtomProblemBuilder::new(potentials).build(params, basis_recipe)
 }
 
 fn get_particles(is_rb_87: bool, energy: Energy<Au>) -> Particles {
-    let rb = if is_rb_87 { create_atom("Rb87").unwrap() } else { create_atom("Rb85").unwrap() };
+    let rb = if is_rb_87 {
+        create_atom("Rb87").unwrap()
+    } else {
+        create_atom("Rb85").unwrap()
+    };
     let alf = Particle::new("AlF", Mass(27. + 19., Dalton));
 
     let mut particles = Particles::new_pair(rb, alf, energy);
@@ -331,7 +390,9 @@ fn read_potential() -> PotentialArray {
     path.push("data");
     path.push(filename);
     path.set_extension("txt");
-    let f = File::open(&path).expect(&format!("couldn't find potential in provided path {path:?}"));
+    let f = File::open(&path).expect(&format!(
+        "couldn't find potential in provided path {path:?}"
+    ));
     let f = BufReader::new(f);
 
     let angle_count = 11;
@@ -370,14 +431,16 @@ fn read_potential() -> PotentialArray {
     }
 
     let mut potentials = Vec::new();
-    let polynomials: Vec<Vec<f64>> = quad.nodes()
+    let polynomials: Vec<Vec<f64>> = quad
+        .nodes()
         .map(|x| legendre_polynomials(angle_count as u32 - 1, *x))
         .collect();
 
     for lambda in 0..=(angle_count - 1) {
         let mut lambda_values = Vec::new();
         for values_col in values.col_iter() {
-            let value: f64 = quad.weights()
+            let value: f64 = quad
+                .weights()
                 .zip(values_col.iter())
                 .zip(polynomials.iter().map(|ps| ps[lambda as usize]))
                 .map(|((w, v), p)| (lambda as f64 + 0.5) * w * v * p)

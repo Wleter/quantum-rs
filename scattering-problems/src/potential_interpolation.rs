@@ -1,7 +1,6 @@
 use scattering_solver::potentials::potential::{Potential, SimplePotential, SubPotential};
 use spline_interpolation::{SplineBuilder, UniformSpline};
 
-
 #[derive(Debug)]
 pub struct PotentialArray {
     pub distances: Vec<f64>,
@@ -17,7 +16,10 @@ impl PotentialArray {
     }
 }
 
-pub fn interpolate_potentials(pot_array: &PotentialArray, degree: u32) -> Vec<(u32, InterpolatedPotential)> {
+pub fn interpolate_potentials(
+    pot_array: &PotentialArray,
+    degree: u32,
+) -> Vec<(u32, InterpolatedPotential)> {
     let mut interpolated = Vec::new();
 
     for (lambda, potential) in &pot_array.potentials {
@@ -59,18 +61,18 @@ pub struct TransitionedPotential<P, V, F>
 where
     P: SimplePotential,
     V: SimplePotential,
-    F: Fn(f64) -> f64
+    F: Fn(f64) -> f64,
 {
     near: P,
     far: V,
-    transition: F
+    transition: F,
 }
 
-impl<P, V, F> TransitionedPotential<P, V, F> 
+impl<P, V, F> TransitionedPotential<P, V, F>
 where
     P: SimplePotential,
     V: SimplePotential,
-    F: Fn(f64) -> f64
+    F: Fn(f64) -> f64,
 {
     pub fn new(near: P, far: V, transition: F) -> Self {
         Self {
@@ -81,17 +83,17 @@ where
     }
 }
 
-impl<P, V, F> Potential for TransitionedPotential<P, V, F> 
+impl<P, V, F> Potential for TransitionedPotential<P, V, F>
 where
     P: SimplePotential,
     V: SimplePotential,
-    F: Fn(f64) -> f64
+    F: Fn(f64) -> f64,
 {
     type Space = f64;
 
     fn value_inplace(&self, r: f64, value: &mut Self::Space) {
         let a = (self.transition)(r);
-        assert!((0. ..= 1.).contains(&a));
+        assert!((0. ..=1.).contains(&a));
 
         if a == 0. {
             self.far.value_inplace(r, value);
@@ -107,15 +109,15 @@ where
     }
 }
 
-impl<P, V, F> SubPotential for TransitionedPotential<P, V, F> 
+impl<P, V, F> SubPotential for TransitionedPotential<P, V, F>
 where
     P: SimplePotential,
     V: SimplePotential,
-    F: Fn(f64) -> f64
+    F: Fn(f64) -> f64,
 {
     fn value_add(&self, r: f64, value: &mut Self::Space) {
         let a = (self.transition)(r);
-        assert!((0. ..= 1.).contains(&a));
+        assert!((0. ..=1.).contains(&a));
 
         if a == 0. {
             *value += self.far.value(r);
