@@ -184,6 +184,33 @@ pub fn aniso_hifi_tram_mel(ang: Braket<AngularPair>, n_tot: Braket<Spin>, s: Bra
 }
 
 #[rustfmt::skip]
+pub fn dipole_dipole_tram_mel(ang: Braket<AngularPair>, n_tot: Braket<Spin>, s_r: Braket<Spin>, s_a: Braket<Spin>) -> f64 {
+    if ang.bra.n == ang.ket.n && s_r.bra.s == s_r.ket.s && s_a.bra.s == s_a.ket.s {
+        let factor = p1_factor(n_tot.bra.s) * p1_factor(n_tot.ket.s)
+            * p1_factor(ang.bra.l) * p1_factor(ang.ket.l)
+            * p3_factor(s_r.bra.s) * p3_factor(s_a.bra.s);
+
+        let sign = (-1f64).powi((n_tot.bra.s + ang.bra.l + ang.ket.l + ang.bra.n).double_value() as i32 / 2)
+            * spin_phase_factor(n_tot.bra)
+            * spin_phase_factor(s_r.bra) 
+            * spin_phase_factor(s_a.bra);
+
+
+        let wigner = clebsch_gordan::wigner_6j(ang.bra.l, hu32!(2), ang.ket.l, n_tot.ket.s, ang.bra.n, n_tot.bra.s)
+            * clebsch_gordan::wigner_3j(hu32!(1), hu32!(1), hu32!(2), 
+                                        s_r.bra.ms - s_r.ket.ms, s_a.bra.ms - s_a.ket.ms, n_tot.bra.ms - n_tot.ket.ms)
+            * clebsch_gordan::wigner_3j(ang.bra.l, hu32!(2), ang.ket.l, hi32!(0), hi32!(0), hi32!(0))
+            * clebsch_gordan::wigner_3j(n_tot.bra.s, hu32!(2), n_tot.bra.s, -n_tot.bra.ms, n_tot.bra.ms - n_tot.ket.ms, n_tot.ket.ms)
+            * clebsch_gordan::wigner_3j(s_a.bra.s, hu32!(1), s_a.bra.s, -s_a.bra.ms, s_a.bra.ms - s_a.ket.ms, s_a.ket.ms)
+            * clebsch_gordan::wigner_3j(s_r.bra.s, hu32!(1), s_r.bra.s, -s_r.bra.ms, s_r.bra.ms - s_r.ket.ms, s_r.ket.ms);
+
+        -f64::sqrt(30.) * sign * factor * wigner
+    } else {
+        0.
+    }
+}
+
+#[rustfmt::skip]
 pub fn percival_coef_uncoupled_mel(lambda: u32, n: Braket<Spin>, l: Braket<Spin>) -> f64 {    
     let factor = p1_factor(n.bra.s) * p1_factor(n.ket.s)
         * p1_factor(l.bra.s) * p1_factor(l.ket.s);
