@@ -4,7 +4,8 @@ members = [
     "abm",
     "pyo3-crates/abm-py",
     "scattering-solver",
-    "scattering-problems",
+    "scattering-problems", 
+    "distribute",
 ]
 exclude = ["benches"]
 resolver = "2"

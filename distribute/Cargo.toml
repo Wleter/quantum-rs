@@ -1,0 +1,10 @@
+[package]
+name = "distribute"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+timely-hpc = { git = "https://github.com/Wleter/timely-hpc" }
+scattering-problems = { path = "../scattering-problems" }
+scattering-solver = { path = "../scattering-solver" }
+quantum = { path = "../quantum" }

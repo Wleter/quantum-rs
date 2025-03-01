@@ -14,6 +14,8 @@ pub mod rotor_atom;
 pub mod uncoupled_alkali_rotor_atom;
 pub mod utility;
 
+pub extern crate abm;
+
 pub struct ScatteringProblem<P: Potential, B: BasisDescription> {
     pub potential: P,
     pub asymptotic: Asymptotic,

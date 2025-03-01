@@ -65,6 +65,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4cbbc9d0964165b47557570cce6c952866c2678457aca742aafc9fb771d30270"
 
 [[package]]
+name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -167,6 +176,41 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e8f1e641542c07631228b1e0dc04b69ae3c1d58ef65d5691a439711d805c698"
 
 [[package]]
+name = "columnar"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12f6f48b6441462dc29aa45c037dd94d83b48ab712b4497291afbb90c9d1a70f"
+dependencies = [
+ "bincode",
+ "bytemuck",
+ "columnar_derive",
+ "rmp-serde",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "columnar_derive"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "087b1ac5c4ecad28348b6a9957e3dbd44ac7d041d267370acfdbbfa66b514c7d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn 2.0.90",
+]
+
+[[package]]
+name = "columnation"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21ca68e419cae36821f2e1c9d62a25de900aad72e96b79c6f76eb47c65816d25"
+dependencies = [
+ "paste",
+]
+
+[[package]]
 name = "console"
 version = "0.15.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -198,6 +242,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16b80225097f2e5ae4e7179dd2266824648f3e2f49d9134d584b76389d31c4c3"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "crossbeam-channel"
+version = "0.5.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06ba6d68e24814cb8de6bb986db8222d3a027d15872cabc0d18817bc3c0e4471"
+dependencies = [
+ "crossbeam-utils",
 ]
 
 [[package]]
@@ -262,6 +315,16 @@ name = "discard"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "212d0f5754cb6769937f4501cc0e67f4f4483c8d2c3e1e922ee9edbe4ab4c7c0"
+
+[[package]]
+name = "distribute"
+version = "0.1.0"
+dependencies = [
+ "quantum",
+ "scattering-problems",
+ "scattering-solver",
+ "timely-hpc",
+]
 
 [[package]]
 name = "downcast-rs"
@@ -555,6 +618,15 @@ checksum = "85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a"
 dependencies = [
  "typenum",
  "version_check",
+]
+
+[[package]]
+name = "getopts"
+version = "0.2.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14dbbfd5c71d70241ecf9e6f13737f7b5ce823821063188d7e46c41d371eebd5"
+dependencies = [
+ "unicode-width 0.1.14",
 ]
 
 [[package]]
@@ -1289,6 +1361,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmp"
+version = "0.8.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "228ed7c16fa39782c3b3468e974aec2795e9089153cd08ee2e9aefb3613334c4"
+dependencies = [
+ "byteorder",
+ "num-traits",
+ "paste",
+]
+
+[[package]]
+name = "rmp-serde"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52e599a477cf9840e92f2cde9a7189e67b42c57532749bf90aea6ec10facd4db"
+dependencies = [
+ "byteorder",
+ "rmp",
+ "serde",
+]
+
+[[package]]
 name = "rustc_version"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1460,6 +1554,9 @@ name = "smallvec"
 version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "spline-interpolation"
@@ -1625,6 +1722,72 @@ dependencies = [
  "quote",
  "standback",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "timely"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a714a3fed9aeacf63d9c5c574523c18972b788fa0414011b590af73acad30b09"
+dependencies = [
+ "bincode",
+ "byteorder",
+ "columnar",
+ "columnation",
+ "crossbeam-channel",
+ "getopts",
+ "serde",
+ "smallvec",
+ "timely_bytes",
+ "timely_communication",
+ "timely_container",
+ "timely_logging",
+]
+
+[[package]]
+name = "timely-hpc"
+version = "0.1.0"
+source = "git+https://github.com/Wleter/timely-hpc#eeb89eb774a65fe5a816650634ebdb16297e96df"
+dependencies = [
+ "serde",
+ "timely",
+]
+
+[[package]]
+name = "timely_bytes"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46e1275de95b4a2713f0850c458d3a550dc323fffda65ce3e075f62545e0484b"
+
+[[package]]
+name = "timely_communication"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3cdbfc7739e6a8ed95cd591ec0e862f294c681796c6121e6b3fa1ab946473e1"
+dependencies = [
+ "byteorder",
+ "columnar",
+ "crossbeam-channel",
+ "getopts",
+ "serde",
+ "timely_bytes",
+ "timely_container",
+ "timely_logging",
+]
+
+[[package]]
+name = "timely_container"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c951c468b95e2070be7f48a9d8350b6e8e5ecb23e0d13fd7f6155893bb1297d"
+
+[[package]]
+name = "timely_logging"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10d46d6e2fbf5831ff8345f92723e46f778ce157cf8b74448fdcaac9efb9b9a2"
+dependencies = [
+ "timely_container",
 ]
 
 [[package]]
