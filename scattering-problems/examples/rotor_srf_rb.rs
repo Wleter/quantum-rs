@@ -9,7 +9,7 @@ use abm::{DoubleHifiProblemBuilder, HifiProblemBuilder};
 use clebsch_gordan::{half_integer::HalfI32, hi32, hu32};
 use faer::Mat;
 use hhmmss::Hhmmss;
-use indicatif::ParallelProgressIterator;
+use indicatif::{ParallelProgressIterator, ProgressIterator};
 use quantum::{
     params::{
         Params,
@@ -41,7 +41,7 @@ use scattering_problems::{
 use scattering_solver::{
     boundary::{Boundary, Direction},
     numerovs::{
-        multi_numerov::MultiRatioNumerov, numerov_modifier::NumerovLogging,
+        multi_numerov::MultiRatioNumerov,
         propagator::MultiStepRule,
     },
     observables::s_matrix::{ScatteringDependence, ScatteringObservables},
@@ -141,6 +141,7 @@ impl Problems {
         let basis_recipe = TramBasisRecipe {
             l_max: 10,
             n_max: 10,
+            n_tot_max: 1,
             ..Default::default()
         };
 
@@ -164,7 +165,14 @@ impl Problems {
         let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
         let step_rule = MultiStepRule::new(4e-3, f64::INFINITY, 400.);
         let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
-        numerov.propagate_to_with(1500., &mut NumerovLogging::default());
+
+        let r_end = 1500.;
+
+        let mut dummy = numerov.as_dummy();
+        let (duration, steps_no) = dummy.estimate_propagation_duration(r_end);
+        println!("estimated duration of propagation {} with {steps_no} steps", duration.hhmmssxxx());
+
+        numerov.propagate_to(r_end);
 
         let scattering = numerov.data.calculate_s_matrix().observables();
 
@@ -236,10 +244,11 @@ impl Problems {
 
         let projection = hi32!(1);
         let energy_relative = Energy(1e-7, Kelvin);
-        let mag_fields = linspace(0., 2000., 1000);
+        let mag_fields = linspace(0., 1000., 500);
         let basis_recipe = TramBasisRecipe {
             l_max: 10,
             n_max: 10,
+            n_tot_max: 1,
             ..Default::default()
         };
 
@@ -250,9 +259,11 @@ impl Problems {
 
         let start = Instant::now();
         let scatterings = mag_fields
-            .par_iter()
+            .iter()
             .progress()
-            .map_with(atoms, |atoms, &mag_field| {
+            .map(|&mag_field| {
+                let mut atoms = atoms.clone();
+
                 let alkali_problem = alkali_problem.scattering_for(mag_field);
                 let mut asymptotic = alkali_problem.asymptotic;
                 asymptotic.entrance = entrance;
@@ -278,7 +289,12 @@ impl Problems {
             observables: scatterings,
         };
 
-        save_serialize("SrF_Rb_scatterings_ground", &data).unwrap()
+        let filename = format!("SrF_Rb_scatterings_ground_n_max_{}_n_tot_max_{}", 
+            basis_recipe.n_max, 
+            basis_recipe.n_tot_max
+        );
+
+        save_serialize(&filename, &data).unwrap()
     }
 
     fn potential_scaling_propagation() {

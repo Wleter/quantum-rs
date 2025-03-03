@@ -78,7 +78,7 @@ fn get_particles(energy: Energy<impl EnergyUnit>, projection: HalfI32) -> Partic
         .with_hyperfine_coupling(Energy(3.2383e-3 + 1.0096e-3 / 3., CmInv).to_au());
 
     let hifi_rb = HifiProblemBuilder::new(hu32!(1 / 2), hu32!(3 / 2))
-        .with_hyperfine_coupling(Energy(6.834682610904290 / 2., GHz).to_au());
+        .with_hyperfine_coupling(Energy(6.83468261090429 / 2., GHz).to_au());
 
     let hifi_problem = DoubleHifiProblemBuilder::new(hifi_srf, hifi_rb).with_projection(projection);
     particles.insert(hifi_problem);
@@ -107,7 +107,7 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
     let mut path = std::env::current_dir().unwrap();
     path.push("data");
     path.push(filename);
-    let f = File::open(&path).expect(&format!(
+    let f = File::open(&path).unwrap_or_else(|_| panic!(
         "couldn't find potential in provided path {path:?}"
     ));
     let f = BufReader::new(f);
@@ -116,7 +116,7 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
     let mut path = std::env::current_dir().unwrap();
     path.push("data");
     path.push(filename);
-    let f2 = File::open(&path).expect(&format!(
+    let f2 = File::open(&path).unwrap_or_else(|_| panic!(
         "couldn't find potential in provided path {path:?}"
     ));
     let f2 = BufReader::new(f2);
@@ -130,7 +130,7 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
 
     for ((i, line_triplet), line_diff) in f.lines().skip(1).enumerate().zip(f2.lines().skip(1)) {
         let line_triplet = line_triplet.unwrap();
-        let splitted_triplet: Vec<&str> = line_triplet.trim().split_whitespace().collect();
+        let splitted_triplet: Vec<&str> = line_triplet.split_whitespace().collect();
 
         let r: f64 = splitted_triplet[0].parse().unwrap();
         let value: f64 = splitted_triplet[1].parse().unwrap();
@@ -143,7 +143,7 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
         }
 
         let line_diff = line_diff.unwrap();
-        let splitted_diff: Vec<&str> = line_diff.trim().split_whitespace().collect();
+        let splitted_diff: Vec<&str> = line_diff.split_whitespace().collect();
 
         let r_diff: f64 = splitted_diff[0].parse().unwrap();
         let value_diff: f64 = splitted_diff[1].parse().unwrap();
@@ -168,7 +168,7 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
     let filename = "weights.txt";
     path.pop();
     path.push(filename);
-    let f = File::open(&path).expect(&format!(
+    let f = File::open(&path).unwrap_or_else(|_| panic!(
         "couldn't find potential in provided path {path:?}"
     ));
     let mut f = BufReader::new(f);
@@ -176,7 +176,6 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
     let mut weights = String::new();
     f.read_line(&mut weights).unwrap();
     let weights: Vec<f64> = weights
-        .trim()
         .split_whitespace()
         .map(|s| s.parse().unwrap())
         .collect();
@@ -269,7 +268,7 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
                 x * value_rkhs + (1. - x) * value_far
             })
             .collect::<Vec<f64>>();
-        potentials_triplet.push((lambda as u32, values_triplet));
+        potentials_triplet.push((lambda, values_triplet));
 
         let values_singlet = distances_extended
             .iter()
@@ -311,7 +310,7 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
                 triplet_part - exch_contrib
             })
             .collect::<Vec<f64>>();
-        potentials_singlet.push((lambda as u32, values_singlet));
+        potentials_singlet.push((lambda, values_singlet));
     }
 
     let singlets = PotentialArray {
@@ -364,7 +363,7 @@ fn get_interpolated(
 
     interp_potentials
         .into_iter()
-        .zip(potentials_far.into_iter())
+        .zip(potentials_far)
         .map(|((lambda, near), far)| {
             let combined = TransitionedPotential::new(near, far, transition);
 

@@ -67,8 +67,7 @@ impl AlkaliRotorProblemBuilder {
         let angular_states = into_variant(angular_states, Angular);
 
         let total_angular = (0..=n_tot_max)
-            .map(|n_tot| into_variant(get_spin_basis(n_tot.into()), NTot))
-            .flatten()
+            .flat_map(|n_tot| into_variant(get_spin_basis(n_tot.into()), NTot))
             .collect();
 
         let s_rotor = into_variant(get_spin_basis(self.hifi_problem.s), RotorS);
@@ -158,8 +157,7 @@ impl AlkaliRotorProblemBuilder {
         let aniso_hifi = params.get::<AnisoHifi>().unwrap_or(&AnisoHifi(0.)).0;
 
         let n_rotor = (0..=n_max)
-            .map(|n_tot| into_variant(get_spin_basis(n_tot.into()), RotorN))
-            .flatten()
+            .flat_map(|n_tot| into_variant(get_spin_basis(n_tot.into()), RotorN))
             .collect();
 
         let s_rotor = into_variant(get_spin_basis(self.hifi_problem.s), RotorS);

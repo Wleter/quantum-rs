@@ -52,11 +52,10 @@ pub fn get_summed_spin_basis(dspin1: HalfU32, dspin2: HalfU32) -> Vec<Spin> {
 
     (dspin_min..=dspin_max)
         .step_by(2)
-        .map(|s| {
+        .flat_map(|s| {
             let s = HalfU32::from_doubled(s);
             get_spin_basis(s)
         })
-        .flatten()
         .collect()
 }
 

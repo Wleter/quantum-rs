@@ -8,8 +8,6 @@ pub trait PropagatorData {
     fn step_size(&self) -> f64;
 
     fn current_g_func(&mut self);
-
-    fn advance(&mut self);
 }
 
 pub trait MultiStep<D: PropagatorData> {
@@ -35,6 +33,7 @@ pub trait StepRule<D: PropagatorData> {
     fn assign(&mut self, data: &D) -> StepAction;
 }
 
+#[derive(Clone)]
 pub struct SingleStepRule {
     pub step: f64,
 }
@@ -57,6 +56,7 @@ impl<D: PropagatorData> StepRule<D> for SingleStepRule {
     }
 }
 
+#[derive(Clone)]
 pub struct MultiStepRule<D> {
     pub(super) wave_step_ratio: f64,
 

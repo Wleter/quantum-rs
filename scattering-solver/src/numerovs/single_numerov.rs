@@ -17,9 +17,9 @@ use crate::{
     utility::AngMomentum,
 };
 
-use super::propagator::{
+use super::{dummy_numerov::DummyMultiStep, propagator::{
     MultiStep, MultiStepRule, Numerov, NumerovResult, PropagatorData, StepAction, StepRule,
-};
+}};
 
 pub type SingleRatioNumerov<'a, P> = Numerov<
     SingleNumerovData<'a, P>,
@@ -83,7 +83,20 @@ where
     }
 }
 
-#[derive(Clone)]
+impl<'a, P, S> Numerov<SingleNumerovData<'a, P>, S, SingleRatioNumerovStep>
+where
+    P: SimplePotential,
+    S: StepRule<SingleNumerovData<'a, P>> + Clone,
+{
+    pub fn as_dummy(&self) -> Numerov<SingleNumerovData<'a, P>, S, DummyMultiStep<SingleNumerovData<'a, P>>> {
+        Numerov {
+            data: self.data.clone(),
+            step_rules: self.step_rules.clone(),
+            multi_step: DummyMultiStep::default(),
+        }
+    }
+}
+
 pub struct SingleNumerovData<'a, P>
 where
     P: SimplePotential,
@@ -101,6 +114,26 @@ where
 
     pub psi1: f64,
     psi2: f64,
+}
+
+impl<P> Clone for SingleNumerovData<'_, P>
+where
+    P: SimplePotential,
+{
+    fn clone(&self) -> Self {
+        Self { 
+            r: self.r, 
+            dr: self.dr, 
+            potential: self.potential, 
+            mass: self.mass, 
+            energy: self.energy, 
+            l: self.l, 
+            centrifugal: self.centrifugal.clone(), 
+            current_g_func: self.current_g_func, 
+            psi1: self.psi1, 
+            psi2: self.psi2 
+        }
+    }
 }
 
 impl<'a, P> SingleNumerovData<'a, P>
@@ -184,10 +217,6 @@ where
     fn current_g_func(&mut self) {
         self.current_g_func =
             2.0 * self.mass * (self.energy - self.potential_value(self.r + self.dr));
-    }
-
-    fn advance(&mut self) {
-        self.r += self.dr;
     }
 
     fn crossed_distance(&self, r: f64) -> bool {

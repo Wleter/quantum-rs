@@ -198,8 +198,14 @@ pub struct NumerovLogging<T> {
     r_min: f64,
     r_stop: f64,
     current: f64,
-    steps_no: usize,
+    steps_no: u64,
     _psi1: Option<T>,
+}
+
+impl<T> NumerovLogging<T> {
+    pub fn steps_no(&self) -> u64 {
+        self.steps_no
+    }
 }
 
 impl<P> PropagatorModifier<SingleNumerovData<'_, P>> for NumerovLogging<f64>
@@ -215,10 +221,6 @@ where
     fn after_step(&mut self, data: &mut SingleNumerovData<'_, P>) {
         self.current = data.r;
         self.steps_no += 1;
-    }
-
-    fn after_prop(&mut self, _data: &mut SingleNumerovData<'_, P>) {
-        println!("propagated solution after {} steps", self.steps_no)
     }
 }
 
@@ -236,8 +238,37 @@ where
         self.current = data.r;
         self.steps_no += 1;
     }
+}
 
-    fn after_prop(&mut self, _data: &mut MultiNumerovData<'_, P>) {
-        println!("propagated solution after {} steps", self.steps_no)
+#[derive(Default)]
+pub struct NumerovNodeCount {
+    count: u32
+}
+
+impl NumerovNodeCount {
+    pub fn count(&self) -> u32 {
+        self.count
+    }
+}
+
+impl<P> PropagatorModifier<SingleNumerovData<'_, P>> for NumerovNodeCount
+where
+    P: SimplePotential,
+{
+    fn after_step(&mut self, data: &mut SingleNumerovData<'_, P>) {
+        if data.psi1 < 0. {
+            self.count += 1;
+        }
+    }
+}
+
+impl<P> PropagatorModifier<MultiNumerovData<'_, P>> for NumerovNodeCount
+where
+    P: MatPotential,
+{
+    fn after_step(&mut self, data: &mut MultiNumerovData<'_, P>) {
+        if data.psi2_det < 0. {
+            self.count += 1
+        }
     }
 }

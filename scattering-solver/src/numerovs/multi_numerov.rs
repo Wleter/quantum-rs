@@ -11,7 +11,7 @@ use crate::{
         dispersion_potential::Dispersion,
         potential::{MatPotential, SimplePotential},
     },
-    utility::inverse_inplace,
+    utility::{inverse_inplace, inverse_inplace_det},
 };
 use faer::{
     Mat, MatMut,
@@ -28,7 +28,7 @@ use quantum::{
 use core::f64;
 use std::{f64::consts::PI, mem::swap};
 
-use super::numerov_modifier::ScatteringVsDistance;
+use super::{dummy_numerov::DummyMultiStep, numerov_modifier::ScatteringVsDistance};
 
 pub type MultiRatioNumerov<'a, P, S> = Numerov<MultiNumerovData<'a, P>, S, MultiRatioNumerovStep>;
 
@@ -41,7 +41,6 @@ pub struct MultiRatioNumerovStep {
     buffer2: Mat<f64>,
 }
 
-#[derive(Clone)]
 pub struct MultiNumerovData<'a, P>
 where
     P: MatPotential,
@@ -60,12 +59,38 @@ where
     pub(super) potential_buffer: Mat<f64>,
     pub(super) unit: Mat<f64>,
     pub(super) current_g_func: Mat<f64>,
+    pub(super) psi2_det: f64,
 
     pub psi1: Mat<f64>,
     pub(super) psi2: Mat<f64>,
 
     pub(super) perm_buffer: Vec<usize>,
     pub(super) perm_inv_buffer: Vec<usize>,
+}
+
+impl<P> Clone for MultiNumerovData<'_, P>
+where
+    P: MatPotential,
+{
+    fn clone(&self) -> Self {
+        Self { 
+            r: self.r, 
+            dr: self.dr, 
+            potential: self.potential, 
+            mass: self.mass, 
+            energy: self.energy, 
+            asymptotic: self.asymptotic, 
+            centrifugal_prop: self.centrifugal_prop.clone(), 
+            potential_buffer: self.potential_buffer.clone(), 
+            unit: self.unit.clone(), 
+            current_g_func: self.current_g_func.clone(), 
+            psi2_det: self.psi2_det, 
+            psi1: self.psi1.clone(), 
+            psi2: self.psi2.clone(), 
+            perm_buffer: self.perm_buffer.clone(), 
+            perm_inv_buffer: self.perm_inv_buffer.clone() 
+        }
+    }
 }
 
 impl<P> MultiNumerovData<'_, P>
@@ -228,6 +253,7 @@ where
             psi2: Mat::zeros(size, size),
             perm_buffer: vec![0; size],
             perm_inv_buffer: vec![0; size],
+            psi2_det: 0.0,
         };
 
         data.current_g_func();
@@ -268,6 +294,20 @@ where
     }
 }
 
+impl<'a, P, S> Numerov<MultiNumerovData<'a, P>, S, MultiRatioNumerovStep>
+where
+    P: MatPotential,
+    S: StepRule<MultiNumerovData<'a, P>> + Clone,
+{
+    pub fn as_dummy(&self) -> Numerov<MultiNumerovData<'a, P>, S, DummyMultiStep<MultiNumerovData<'a, P>>> {
+        Numerov {
+            data: self.data.clone(),
+            step_rules: self.step_rules.clone(),
+            multi_step: DummyMultiStep::default(),
+        }
+    }
+}
+
 impl<P> PropagatorData for MultiNumerovData<'_, P>
 where
     P: MatPotential,
@@ -294,10 +334,6 @@ where
             self.potential_buffer.as_ref()
         )
         .for_each(|unzipped!(c, u, p)| *c = 2.0 * self.mass * (self.energy * u - p));
-    }
-
-    fn advance(&mut self) {
-        self.r += self.dr;
     }
 
     fn crossed_distance(&self, r: f64) -> bool {
@@ -361,7 +397,7 @@ where
             &mut data.perm_inv_buffer,
         );
 
-        inverse_inplace(
+        data.psi2_det = inverse_inplace_det(
             data.psi1.as_ref(),
             data.psi2.as_mut(),
             &mut data.perm_buffer,

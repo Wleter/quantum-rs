@@ -183,13 +183,11 @@ where
         let parity = basis_recipe.parity;
 
         let l_system = (0..=l_max)
-            .map(|n_tot| into_variant(get_spin_basis(n_tot.into()), SystemL))
-            .flatten()
+            .flat_map(|n_tot| into_variant(get_spin_basis(n_tot.into()), SystemL))
             .collect();
 
         let n_rotor = (0..=n_max)
-            .map(|n_tot| into_variant(get_spin_basis(n_tot.into()), RotorN))
-            .flatten()
+            .flat_map(|n_tot| into_variant(get_spin_basis(n_tot.into()), RotorN))
             .collect();
 
         let s_rotor = into_variant(get_spin_basis(hifi_problem.first.s), RotorS);
