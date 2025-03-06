@@ -354,13 +354,18 @@ where
             .max_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap();
 
-        let lambda = 2. * PI / max_g_val.abs().sqrt();
+        let mut lambda = 2. * PI / max_g_val.abs().sqrt();
+        // for only closed channels the step can be longer
+        // todo! check if the value lambda is correct
+        if *max_g_val < 0. { 
+            lambda *= 100.;
+        }
 
         f64::clamp(lambda / self.wave_step_ratio, self.min_step, self.max_step)
     }
 
     fn assign(&mut self, data: &MultiNumerovData<P>) -> StepAction {
-        let prop_step = data.step_size();
+        let prop_step = data.step_size().abs();
         let step = self.get_step(data);
 
         if prop_step > 1.2 * step {

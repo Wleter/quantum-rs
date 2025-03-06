@@ -19,9 +19,13 @@ where
     S: StepRule<MultiNumerovData<'a, P>>,
 {
     pub fn estimate_propagation_duration(&mut self, r_end: f64) -> (Duration, u64) {
+        let start = Instant::now();
+
         let mut logging = NumerovLogging::default();
         self.propagate_to_with(r_end, &mut logging);
         let steps_no = logging.steps_no();
+
+        let dummy_propagation = start.elapsed();
 
         let start = Instant::now();
         for _ in 0..10 { 
@@ -34,7 +38,8 @@ where
         }
         let end = start.elapsed();
 
-        let full_duration = 2 * (steps_no as f32 / 10.) as u32 * end;
+        // todo! assuming numerov that have 2 inverses
+        let full_duration = 2 * (steps_no as f32 / 10.) as u32 * end + dummy_propagation;
 
         (full_duration, steps_no)
     }

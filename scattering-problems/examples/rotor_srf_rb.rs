@@ -41,8 +41,7 @@ use scattering_problems::{
 use scattering_solver::{
     boundary::{Boundary, Direction},
     numerovs::{
-        multi_numerov::MultiRatioNumerov,
-        propagator::MultiStepRule,
+        multi_numerov::MultiRatioNumerov, propagator::MultiStepRule
     },
     observables::s_matrix::{ScatteringDependence, ScatteringObservables},
     potentials::{
@@ -139,9 +138,9 @@ impl Problems {
         let energy_relative = Energy(1e-7, Kelvin);
 
         let basis_recipe = TramBasisRecipe {
-            l_max: 10,
-            n_max: 10,
-            n_tot_max: 1,
+            l_max: 175,
+            n_max: 175,
+            n_tot_max: 0,
             ..Default::default()
         };
 
@@ -170,7 +169,7 @@ impl Problems {
 
         let mut dummy = numerov.as_dummy();
         let (duration, steps_no) = dummy.estimate_propagation_duration(r_end);
-        println!("estimated duration of propagation {} with {steps_no} steps", duration.hhmmssxxx());
+        println!("estimated duration of propagation > {} with {steps_no} steps", duration.hhmmssxxx());
 
         numerov.propagate_to(r_end);
 

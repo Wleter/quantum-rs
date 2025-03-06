@@ -335,6 +335,18 @@ macro_rules! assert_approx_eq {
     };
 }
 
+#[macro_export]
+/// Check for approximate error |x - y| < x * err
+///
+/// # Syntax
+///
+/// - `approx_eq!(x, y, err)`
+macro_rules! approx_eq {
+    ($x:expr, $y:expr, $err:expr) => {
+        ($x - $y).abs() < $x.abs() * $err
+    };
+}
+
 #[cfg(test)]
 mod test {
     use std::{

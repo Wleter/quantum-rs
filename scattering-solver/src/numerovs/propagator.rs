@@ -21,6 +21,7 @@ pub trait MultiStep<D: PropagatorData> {
     fn double_step(&mut self, data: &mut D);
 }
 
+#[derive(Clone, Copy, Debug)]
 pub enum StepAction {
     Keep,
     Double,

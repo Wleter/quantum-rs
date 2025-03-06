@@ -242,11 +242,11 @@ where
 
 #[derive(Default)]
 pub struct NumerovNodeCount {
-    count: u32
+    count: u64
 }
 
 impl NumerovNodeCount {
-    pub fn count(&self) -> u32 {
+    pub fn count(&self) -> u64 {
         self.count
     }
 }

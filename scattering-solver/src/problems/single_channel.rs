@@ -6,22 +6,17 @@ use quantum::{
     params::{particle_factory::create_atom, particles::Particles},
     problems_impl,
     units::{
-        Au,
-        distance_units::Distance,
-        energy_units::{Energy, Kelvin},
-        mass_units::Mass,
+        distance_units::Distance, energy_units::{Energy, GHz, Kelvin}, mass_units::Mass, Au
     },
     utility::linspace,
 };
 use scattering_solver::{
     boundary::{Boundary, Direction},
     numerovs::{
-        numerov_modifier::{Sampling, ScatteringVsDistance, WaveStorage},
-        propagator::MultiStepRule,
-        single_numerov::SingleRatioNumerov,
+        bound_numerov::{BoundDiff, SingleBoundRatioNumerov}, numerov_modifier::{Sampling, ScatteringVsDistance, WaveStorage}, propagator::MultiStepRule, single_numerov::SingleRatioNumerov
     },
     potentials::{potential::Potential, potential_factory::create_lj},
-    utility::{AngMomentum, save_data},
+    utility::{save_data, AngMomentum},
 };
 
 pub struct SingleChannel {}
@@ -30,9 +25,9 @@ problems_impl!(SingleChannel, "single channel",
     "wave function" => |_| Self::wave_function(),
     "scattering length" => |_| Self::scattering_length(),
     "propagation distance" => |_| Self::propagation_distance(),
-    "mass scaling" => |_| Self::mass_scaling()
+    "mass scaling" => |_| Self::mass_scaling(),
+    "bound states" => |_| Self::bound_states(),
 );
-// "bound states" => |_| Self::bound_states()
 
 impl SingleChannel {
     fn particles() -> Particles {
@@ -173,34 +168,40 @@ impl SingleChannel {
         save_data("single_chan/mass_scaling", header, &data).unwrap();
     }
 
-    // fn bound_states() {
-    //     let mut collision_params = Self::create_collision_params();
-    //     let mut bounds = SingleBounds::new(&mut collision_params, (6.5, 1000.0));
+    fn bound_states() {
+        let particles = Self::particles();
+        let potential = Self::potential();
 
-    //     let energies = unit_linspace(Energy(-200.0, CmInv), Energy(0.0, CmInv), 5000);
-    //     let (bound_diffs, node_counts) =  bounds.bound_diff_dependence(&energies);
+        let energies = linspace(Energy(-100.0, GHz).to_au(), Energy(0.0, GHz).to_au(), 1000);
+        let data: Vec<BoundDiff> = energies.iter()
+            .map(|&energy| {
+                let mut particles = particles.clone();
+                particles.insert(Energy(energy, Au));
 
-    //     let energies = energies.iter().map(|e| e.value()).collect();
-    //     let node_counts = node_counts.into_iter().map(|n| n as f64).collect();
-    //     let header = vec![
-    //         "energy",
-    //         "bound difference",
-    //         "node count",
-    //     ];
-    //     let data = vec![energies, bound_diffs, node_counts];
+                SingleBoundRatioNumerov::new(MultiStepRule::new(4e-3, 10., 400.))
+                    .bound_diff(&potential, &particles, (6.5, 1000.))
+            })
+            .collect();
 
-    //     save_data("single_chan", "bound_diffs", header, data).unwrap();
+        let bound_diffs = data.iter().map(|n| n.diff as f64).collect();
+        let node_counts = data.iter().map(|n| n.nodes as f64).collect();
+        let energies = energies.into_iter().map(|x| Energy(x, Au).to(GHz).value()).collect();
 
-    //     let bound_states = vec![0, 1, 3, -1, -2, -5];
-    //     for n in bound_states {
-    //         let bound_energy = bounds.n_bound_energy(n, Energy(0.1, CmInv));
-    //         println!("n = {}, bound energy: {:.4e} cm^-1", n, bound_energy.to(CmInv).value());
+        let header = "energy\tbound_diff\tnode_count";
+        let data = vec![energies, bound_diffs, node_counts];
 
-    //         let (rs, wave) = bounds.bound_wave(Sampling::Variable(1000));
+        save_data("single_chan/bound_diffs", header, &data).unwrap();
 
-    //         let header = vec!["position", "wave function"];
-    //         let data = vec![rs, wave];
-    //         save_data("single_chan", &format!("bound_wave_{}", n), header, data).unwrap();
-    //     }
-    // }
+        // let bound_states = vec![0, 1, 3, -1, -2, -5];
+        // for n in bound_states {
+        //     let bound_energy = bounds.n_bound_energy(n, Energy(0.1, CmInv));
+        //     println!("n = {}, bound energy: {:.4e} cm^-1", n, bound_energy.to(CmInv).value());
+
+        //     let (rs, wave) = bounds.bound_wave(Sampling::Variable(1000));
+
+        //     let header = vec!["position", "wave function"];
+        //     let data = vec![rs, wave];
+        //     save_data("single_chan", &format!("bound_wave_{}", n), header, data).unwrap();
+        // }
+    }
 }

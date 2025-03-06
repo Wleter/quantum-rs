@@ -229,13 +229,19 @@ where
     P: SimplePotential,
 {
     fn get_step(&self, data: &SingleNumerovData<P>) -> f64 {
-        let lambda = 2. * PI / data.current_g_func.abs().sqrt();
+        let mut lambda = 2. * PI / data.current_g_func.abs().sqrt();
 
+        // for closed channel the step can be longer than in open 
+        // todo! check if the value lambda is correct
+        if data.current_g_func < 0. { 
+            lambda *= 10.;
+        }
+        
         f64::clamp(lambda / self.wave_step_ratio, self.min_step, self.max_step)
     }
 
     fn assign(&mut self, data: &SingleNumerovData<P>) -> StepAction {
-        let prop_step = data.step_size();
+        let prop_step = data.step_size().abs();
         let step = self.get_step(data);
 
         if prop_step > 1.2 * step {
