@@ -53,7 +53,7 @@ class ParameterType(Enum):
     Field = 5
     FieldWithScaling = 6
 
-def read_molscat_field_dependence(filename: str, parameter: ParameterType = ParameterType.Field) -> npt.NDArray[np.float64]:
+def read_molscat_field_dependence(filename: str, parameter: ParameterType = ParameterType.FieldWithScaling) -> npt.NDArray[np.float64]:
     with open(filename, "r") as file:
         data = file.readlines()
 
