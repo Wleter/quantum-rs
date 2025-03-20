@@ -114,6 +114,7 @@ where
 
     pub psi1: f64,
     psi2: f64,
+    pub nodes: u64
 }
 
 impl<P> Clone for SingleNumerovData<'_, P>
@@ -131,7 +132,8 @@ where
             centrifugal: self.centrifugal.clone(), 
             current_g_func: self.current_g_func, 
             psi1: self.psi1, 
-            psi2: self.psi2 
+            psi2: self.psi2,
+            nodes: self.nodes
         }
     }
 }
@@ -164,6 +166,7 @@ where
             current_g_func: 0.,
             psi1: 0.,
             psi2: 0.,
+            nodes: 0
         }
     }
 
@@ -229,14 +232,8 @@ where
     P: SimplePotential,
 {
     fn get_step(&self, data: &SingleNumerovData<P>) -> f64 {
-        let mut lambda = 2. * PI / data.current_g_func.abs().sqrt();
+        let lambda = 2. * PI / data.current_g_func.abs().sqrt();
 
-        // for closed channel the step can be longer than in open 
-        // todo! check if the value lambda is correct
-        if data.current_g_func < 0. { 
-            lambda *= 10.;
-        }
-        
         f64::clamp(lambda / self.wave_step_ratio, self.min_step, self.max_step)
     }
 
@@ -277,6 +274,10 @@ where
         self.f3 = self.f2;
         self.f2 = self.f1;
         self.f1 = f;
+
+        if psi < 0. {
+            data.nodes += 1
+        }
 
         data.psi2 = data.psi1;
         data.psi1 = psi;

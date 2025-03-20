@@ -178,7 +178,7 @@ impl SingleChannel {
                 let mut particles = particles.clone();
                 particles.insert(Energy(energy, Au));
 
-                SingleBoundRatioNumerov::new(MultiStepRule::new(4e-3, 10., 400.))
+                SingleBoundRatioNumerov::new(MultiStepRule::new(1e-4, 10., 500.))
                     .bound_diff(&potential, &particles, (6.5, 1000.))
             })
             .collect();

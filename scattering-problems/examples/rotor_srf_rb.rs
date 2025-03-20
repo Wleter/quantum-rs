@@ -9,7 +9,10 @@ use abm::{DoubleHifiProblemBuilder, HifiProblemBuilder};
 use clebsch_gordan::{half_integer::HalfI32, hi32, hu32};
 use faer::Mat;
 use hhmmss::Hhmmss;
+
+#[allow(unused)]
 use indicatif::{ParallelProgressIterator, ProgressIterator};
+
 use quantum::{
     params::{
         Params,
@@ -138,8 +141,8 @@ impl Problems {
         let energy_relative = Energy(1e-7, Kelvin);
 
         let basis_recipe = TramBasisRecipe {
-            l_max: 175,
-            n_max: 175,
+            l_max: 40,
+            n_max: 40,
             n_tot_max: 0,
             ..Default::default()
         };
@@ -245,9 +248,9 @@ impl Problems {
         let energy_relative = Energy(1e-7, Kelvin);
         let mag_fields = linspace(0., 1000., 500);
         let basis_recipe = TramBasisRecipe {
-            l_max: 10,
-            n_max: 10,
-            n_tot_max: 1,
+            l_max: 40,
+            n_max: 40,
+            n_tot_max: 0,
             ..Default::default()
         };
 
@@ -258,7 +261,7 @@ impl Problems {
 
         let start = Instant::now();
         let scatterings = mag_fields
-            .iter()
+            .par_iter()
             .progress()
             .map(|&mag_field| {
                 let mut atoms = atoms.clone();

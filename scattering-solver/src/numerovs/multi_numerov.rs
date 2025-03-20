@@ -354,12 +354,7 @@ where
             .max_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap();
 
-        let mut lambda = 2. * PI / max_g_val.abs().sqrt();
-        // for only closed channels the step can be longer
-        // todo! check if the value lambda is correct
-        if *max_g_val < 0. { 
-            lambda *= 100.;
-        }
+        let lambda = 2. * PI / max_g_val.abs().sqrt();
 
         f64::clamp(lambda / self.wave_step_ratio, self.min_step, self.max_step)
     }

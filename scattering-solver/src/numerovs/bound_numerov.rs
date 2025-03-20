@@ -86,22 +86,19 @@ where
     P: MatPotential,
     S: StepRule<MultiNumerovData<'a, P>> + Clone,
 {
-    pub fn bound_diff(&self, potential: &'a P, particles: &'a Particles, matching: (f64, f64)) -> BoundDiff {
+    pub fn bound_diff(&self, potential: &'a P, particles: &'a Particles, matching: (f64, f64, f64)) -> BoundDiff {
         let id = Mat::<f64>::identity(potential.size(), potential.size());
-
-        let r_match = todo!();
-
 
         let boundary = Boundary::new(matching.0, Direction::Outwards, (1e3 * &id, 1e5 * &id));
         let mut numerov = Numerov::<_, _, MultiRatioNumerovStep>::new(potential, particles, self.step_rule.clone(), boundary);
         let mut node_counting_out = NumerovNodeCount::default();
-        numerov.propagate_to_with(r_match, &mut node_counting_out);
+        numerov.propagate_to_with(matching.1, &mut node_counting_out);
 
         let r_match = numerov.data.r;
         let dr_match = numerov.data.dr;
         let psi_match = numerov.data.psi1;
 
-        let r_start = r_match + f64::round((matching.1 - r_match) / dr_match) * dr_match;
+        let r_start = r_match + f64::round((matching.2 - r_match) / dr_match) * dr_match;
 
         let boundary = Boundary::new(r_start, Direction::Step(-dr_match), (1e3 * &id, 1e5 * &id));
         let step_rules = MatchPointStepRule::new(self.step_rule.clone(), r_match, dr_match);
