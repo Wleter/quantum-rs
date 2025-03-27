@@ -33,14 +33,10 @@ use scattering_problems::{
     utility::AngularPair,
 };
 use scattering_solver::{
-    boundary::{Boundary, Direction},
-    numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule},
-    observables::s_matrix::ScatteringDependence,
-    potentials::{
+    boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRNumerov, LocalWavelengthStepRule}, observables::s_matrix::ScatteringDependence, potentials::{
         dispersion_potential::Dispersion,
         potential::{MatPotential, Potential, SimplePotential},
-    },
-    utility::{save_data, save_serialize},
+    }, propagator::{CoupledEquation, Propagator}, utility::{save_data, save_serialize}
 };
 
 use rayon::prelude::*;
@@ -114,11 +110,12 @@ impl Problems {
 
         let id = Mat::<f64>::identity(potential.size(), potential.size());
         let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
-        let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-        let mut numerov = MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
+        let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
+        let eq = CoupledEquation::from_particles(&potential, &particles);
+        let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
 
         numerov.propagate_to(200.);
-        let cross_section = numerov.data.calculate_s_matrix().get_elastic_cross_sect();
+        let cross_section = numerov.s_matrix().get_elastic_cross_sect();
 
         let elapsed = start.elapsed();
         println!("calculated in {}", elapsed.hhmmssxxx());
@@ -166,14 +163,13 @@ impl Problems {
                     particles.insert(asymptotic);
 
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
-                    let boundary =
-                        Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                    let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                    let mut numerov =
-                        MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
+                    let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
+                    let eq = CoupledEquation::from_particles(&potential, &particles);
+                    let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
 
                     numerov.propagate_to(200.);
-                    let cross_section = numerov.data.calculate_s_matrix().get_elastic_cross_sect();
+                    let cross_section = numerov.s_matrix().get_elastic_cross_sect();
 
                     cross_section / Angstrom::TO_AU_MUL.powi(2)
                 })
@@ -227,14 +223,13 @@ impl Problems {
                     particles.insert(asymptotic);
 
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
-                    let boundary =
-                        Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                    let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                    let mut numerov =
-                        MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
+                    let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
+                    let eq = CoupledEquation::from_particles(&potential, &particles);
+                    let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
 
                     numerov.propagate_to(200.);
-                    numerov.data.calculate_s_matrix().observables()
+                    numerov.s_matrix().observables()
                 })
                 .collect();
 
@@ -292,14 +287,13 @@ impl Problems {
                         particles.insert(asymptotic);
 
                         let id = Mat::<f64>::identity(potential.size(), potential.size());
-                        let boundary =
-                            Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                        let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                        let mut numerov =
-                            MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
+                        let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                        let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
+                        let eq = CoupledEquation::from_particles(&potential, &particles);
+                        let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
 
                         numerov.propagate_to(200.);
-                        let s_matrix = numerov.data.calculate_s_matrix();
+                        let s_matrix = numerov.s_matrix();
 
                         let inel_cross_section =
                             s_matrix.get_inelastic_cross_sect() / Angstrom::TO_AU_MUL.powi(2);

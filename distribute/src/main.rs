@@ -2,7 +2,7 @@ use std::{f64::consts::PI, fs::File, io::{BufRead, BufReader}, time::Instant};
 
 use quantum::{params::{particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles, Params}, states::spins::clebsch_gordan::{half_integer::HalfI32, hi32, hu32}, units::{distance_units::{Angstrom, Distance}, energy_units::{CmInv, Energy, EnergyUnit, GHz, Kelvin}, mass_units::{Dalton, Mass}, Au, Unit}, utility::{legendre_polynomials, linspace}};
 use scattering_problems::{abm::{DoubleHifiProblemBuilder, HifiProblemBuilder}, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder, TramBasisRecipe, TramStates}, potential_interpolation::{interpolate_potentials, PotentialArray, TransitionedPotential}, rkhs_interpolation::RKHSInterpolation, utility::{AnisoHifi, GammaSpinRot}, FieldScatteringProblem};
-use scattering_solver::{boundary::{Boundary, Direction}, faer::Mat, numerovs::{multi_numerov::MultiRatioNumerov, propagator::MultiStepRule}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, utility::save_data};
+use scattering_solver::{boundary::{Boundary, Direction}, faer::Mat, numerovs::{multi_numerov::MultiRNumerov, LocalWavelengthStepRule}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, propagator::{CoupledEquation, Propagator}, utility::save_data};
 use timely_hpc::{distribute, timely};
 
 fn main() {
@@ -33,12 +33,14 @@ fn main() {
 
             let id = Mat::<f64>::identity(potential.size(), potential.size());
             let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-            let step_rule = MultiStepRule::new(4e-3, f64::INFINITY, 400.);
-            let mut numerov = MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+
+            let eq = CoupledEquation::from_particles(potential, &atoms);
+            let step_rule = LocalWavelengthStepRule::new(4e-3, f64::INFINITY, 400.);
+            let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
 
             numerov.propagate_to(1500.);
 
-            let scattering = numerov.data.calculate_s_matrix().get_scattering_length().re;
+            let scattering = numerov.s_matrix().get_scattering_length().re;
 
             let elapsed = start.elapsed();
             println!("magnetic field {mag_field:.1}, done in: {:.2}", elapsed.as_secs_f64());

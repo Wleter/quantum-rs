@@ -298,7 +298,6 @@ impl<T, R: Repr<T>> PropagatorWatcher<T, R> for NumerovLogging {
     fn before(&mut self, sol: &Solution<R>, _eq: &Equation<T>, r_stop: f64) {
         self.r_min = sol.r;
         self.r_stop = r_stop;
-        self.current = sol.r;
 
         self.timer = Instant::now();
         self.progress = ProgressBar::new((r_stop * 1000.0) as u64)

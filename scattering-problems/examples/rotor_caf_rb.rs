@@ -34,17 +34,11 @@ use scattering_problems::{
     utility::{AnisoHifi, GammaSpinRot},
 };
 use scattering_solver::{
-    boundary::{Boundary, Direction},
-    numerovs::{
-        multi_numerov::MultiRatioNumerov, propagator::MultiStepRule,
-        single_numerov::SingleRatioNumerov,
-    },
-    potentials::{
+    boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRNumerov, single_numerov::SingleRNumerov, LocalWavelengthStepRule}, potentials::{
         composite_potential::Composite,
         dispersion_potential::Dispersion,
         potential::{MatPotential, Potential, SimplePotential},
-    },
-    utility::save_data,
+    }, propagator::{CoupledEquation, Propagator, SingleEquation}, utility::save_data
 };
 
 use rayon::prelude::*;
@@ -87,32 +81,21 @@ impl Problems {
             let singlet = singlet_iso(config);
 
             let boundary = Boundary::new(8.5, Direction::Outwards, (1.01, 1.02));
-            let mut numerov =
-                SingleRatioNumerov::new(&triplet, &particles, MultiStepRule::default(), boundary);
+            let eq = SingleEquation::from_particles(&triplet, &particles);
+            let step_rule = LocalWavelengthStepRule::default();
+            let mut numerov = SingleRNumerov::new(eq, boundary, step_rule);
+
             numerov.propagate_to(1e4);
-            println!(
-                "{:.2}",
-                numerov
-                    .data
-                    .calculate_s_matrix()
-                    .unwrap()
-                    .get_scattering_length()
-                    .re
-            );
+            println!("{:.2}", numerov.s_matrix().get_scattering_length().re);
 
             let boundary = Boundary::new(7.2, Direction::Outwards, (1.01, 1.02));
-            let mut numerov =
-                SingleRatioNumerov::new(&singlet, &particles, MultiStepRule::default(), boundary);
+            let eq = SingleEquation::from_particles(&singlet, &particles);
+            let step_rule = LocalWavelengthStepRule::default();
+
+            let mut numerov = SingleRNumerov::new(eq, boundary, step_rule);
             numerov.propagate_to(1e4);
-            println!(
-                "{:.2}",
-                numerov
-                    .data
-                    .calculate_s_matrix()
-                    .unwrap()
-                    .get_scattering_length()
-                    .re
-            );
+
+            println!("{:.2}", numerov.s_matrix().get_scattering_length().re);
         }
 
         let data = vec![distances, triplet_values, singlet_values, aniso_values];
@@ -131,20 +114,12 @@ impl Problems {
                 triplet.add_potential(Dispersion::new(x * 2e9, -12));
 
                 let boundary = Boundary::new(8.5, Direction::Outwards, (1.01, 1.02));
-                let mut numerov = SingleRatioNumerov::new(
-                    &triplet,
-                    &particles,
-                    MultiStepRule::default(),
-                    boundary,
-                );
+                let eq = SingleEquation::from_particles(&triplet, &particles);
+                let step_rule = LocalWavelengthStepRule::default();
+                let mut numerov = SingleRNumerov::new(eq, boundary, step_rule);
 
                 numerov.propagate_to(1e4);
-                numerov
-                    .data
-                    .calculate_s_matrix()
-                    .unwrap()
-                    .get_scattering_length()
-                    .re
+                numerov.s_matrix().get_scattering_length().re
             })
             .collect();
 
@@ -155,20 +130,12 @@ impl Problems {
                 singlet.add_potential(Dispersion::new(x * 5e8, -12));
 
                 let boundary = Boundary::new(7.2, Direction::Outwards, (1.01, 1.02));
-                let mut numerov = SingleRatioNumerov::new(
-                    &singlet,
-                    &particles,
-                    MultiStepRule::default(),
-                    boundary,
-                );
+                let eq = SingleEquation::from_particles(&singlet, &particles);
+                let step_rule = LocalWavelengthStepRule::default();
+                let mut numerov = SingleRNumerov::new(eq, boundary, step_rule);
 
                 numerov.propagate_to(1e4);
-                numerov
-                    .data
-                    .calculate_s_matrix()
-                    .unwrap()
-                    .get_scattering_length()
-                    .re
+                numerov.s_matrix().get_scattering_length().re
             })
             .collect();
 
@@ -204,14 +171,13 @@ impl Problems {
                     let potential = &alkali_problem.potential;
 
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
-                    let boundary =
-                        Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                    let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                    let mut numerov =
-                        MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+                    let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
+                    let eq = CoupledEquation::from_particles(potential, &atoms);
+                    let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
 
                     numerov.propagate_to(1.5e3);
-                    numerov.data.calculate_s_matrix().get_scattering_length()
+                    numerov.s_matrix().get_scattering_length()
                 })
                 .collect::<Vec<Complex64>>();
 
@@ -362,14 +328,13 @@ impl Problems {
                     let potential = &alkali_problem.potential;
 
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
-                    let boundary =
-                        Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                    let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                    let mut numerov =
-                        MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+                    let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
+                    let eq = CoupledEquation::from_particles(potential, &atoms);
+                    let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
 
                     numerov.propagate_to(1.5e3);
-                    numerov.data.calculate_s_matrix().get_scattering_length()
+                    numerov.s_matrix().get_scattering_length()
                 })
                 .collect::<Vec<Complex64>>();
 
@@ -421,14 +386,13 @@ impl Problems {
                     let potential = &alkali_problem.potential;
 
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
-                    let boundary =
-                        Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                    let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                    let mut numerov =
-                        MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+                    let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
+                    let eq = CoupledEquation::from_particles(potential, &atoms);
+                    let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
 
                     numerov.propagate_to(1.5e3);
-                    numerov.data.calculate_s_matrix().get_scattering_length()
+                    numerov.s_matrix().get_scattering_length()
                 })
                 .collect::<Vec<Complex64>>();
 
@@ -485,14 +449,13 @@ impl Problems {
                     let potential = &alkali_problem.potential;
 
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
-                    let boundary =
-                        Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                    let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                    let mut numerov =
-                        MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+                    let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
+                    let eq = CoupledEquation::from_particles(potential, &atoms);
+                    let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
 
                     numerov.propagate_to(1.5e3);
-                    numerov.data.calculate_s_matrix().get_scattering_length()
+                    numerov.s_matrix().get_scattering_length()
                 })
                 .collect::<Vec<Complex64>>();
 
@@ -545,14 +508,13 @@ impl Problems {
                     let potential = &alkali_problem.potential;
 
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
-                    let boundary =
-                        Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                    let step_rule = MultiStepRule::new(1e-4, f64::INFINITY, 500.);
-                    let mut numerov =
-                        MultiRatioNumerov::new(potential, &atoms, step_rule, boundary);
+                    let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
+                    let eq = CoupledEquation::from_particles(potential, &atoms);
+                    let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
 
                     numerov.propagate_to(1.5e3);
-                    numerov.data.calculate_s_matrix().get_scattering_length()
+                    numerov.s_matrix().get_scattering_length()
                 })
                 .collect::<Vec<Complex64>>();
 
