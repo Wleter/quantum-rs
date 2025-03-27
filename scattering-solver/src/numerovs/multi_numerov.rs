@@ -587,3 +587,70 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use faer::Mat;
+    use quantum::{assert_approx_eq, params::{particle_factory::create_atom, particles::Particles}, units::{distance_units::Distance, energy_units::{Energy, Kelvin}, Au}};
+
+    use crate::{boundary::{Asymptotic, Boundary, Direction}, numerovs::propagator::MultiStepRule, potentials::{dispersion_potential::Dispersion, gaussian_coupling::GaussianCoupling, multi_coupling::MultiCoupling, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{MatPotential, Potential}, potential_factory::create_lj}, utility::AngMomentum};
+
+    use super::MultiRatioNumerov;
+
+    fn potential() -> impl MatPotential {
+        let potential_lj1 = create_lj(Energy(0.002, Au), Distance(9., Au));
+        let mut potential_lj2 = create_lj(Energy(0.0021, Au), Distance(8.9, Au));
+        potential_lj2.add_potential(Dispersion::new(Energy(1., Kelvin).to_au(), 0));
+
+        let coupling = GaussianCoupling::new(Energy(10.0, Kelvin), 11.0, 2.0);
+
+        let potential = Diagonal::<Mat<f64>, _>::from_vec(vec![potential_lj1, potential_lj2]);
+        let coupling = MultiCoupling::<Mat<f64>, _>::new_neighboring(vec![coupling]);
+
+        PairPotential::new(potential, coupling)
+    }
+
+    fn particles() -> Particles {
+        let particle1 = create_atom("Li6").unwrap();
+        let particle2 = create_atom("Li7").unwrap();
+        let energy = Energy(1e-7, Kelvin);
+
+        let mut particles = Particles::new_pair(particle1, particle2, energy);
+        particles.insert(Asymptotic {
+            centrifugal: vec![AngMomentum(0); 2],
+            entrance: 0,
+            channel_energies: vec![0., Energy(0.0021, Kelvin).to_au()],
+            channel_states: Mat::identity(2, 2),
+        });
+
+        particles
+    }
+
+    #[test]
+    fn test_numerov() {
+        let particles = particles();
+        let potential = potential();
+
+        let id: Mat<f64> = Mat::identity(potential.size(), potential.size());
+        let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+
+        let mut numerov = MultiRatioNumerov::new(&potential, &particles, MultiStepRule::default(), boundary);
+
+        assert_approx_eq!(numerov.data.dr, 4.58881145e-4, 1e-6);
+
+        assert_approx_eq!(numerov.data.psi1[(0, 0)], 1.001, 1e-6);
+        assert_approx_eq!(numerov.data.psi2[(0, 0)], 1.002, 1e-6);
+
+        numerov.variable_step();
+
+        assert_approx_eq!(numerov.data.psi1[(0, 0)], 1.001175827, 1e-6);
+        assert_approx_eq!(numerov.data.psi1[(1, 0)], 6.264251e-9, 1e-6);
+        
+        numerov.variable_step();
+        numerov.variable_step();
+        numerov.variable_step();
+
+        assert_approx_eq!(numerov.data.psi1[(0, 0)], 1.0016997, 1e-6);
+        assert_approx_eq!(numerov.data.psi1[(1, 0)], 2.49725e-8, 1e-6);
+    }
+}

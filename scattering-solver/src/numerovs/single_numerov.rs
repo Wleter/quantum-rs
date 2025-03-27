@@ -306,3 +306,45 @@ where
         data.psi1 *= data.psi2;
     }
 }
+
+#[cfg(test)]
+mod test {
+    use quantum::{assert_approx_eq, params::{particle_factory::create_atom, particles::Particles}, units::{distance_units::Distance, energy_units::{Energy, Kelvin}, Au}};
+
+    use crate::{boundary::{Boundary, Direction}, numerovs::{propagator::MultiStepRule, single_numerov::SingleRatioNumerov}, potentials::{potential::SimplePotential, potential_factory::create_lj}};
+
+    fn potential() -> impl SimplePotential {
+        create_lj(Energy(0.002, Au), Distance(9., Au))
+    }
+
+    fn particles() -> Particles {
+        let particle1 = create_atom("Li6").unwrap();
+        let particle2 = create_atom("Li7").unwrap();
+        let energy = Energy(1e-7, Kelvin);
+
+        Particles::new_pair(particle1, particle2, energy)
+    }
+
+    #[test]
+    fn test_numerov() {
+        let particles = particles();
+        let potential = potential();
+
+        let boundary = Boundary::new(6.5, Direction::Outwards, (1.001, 1.002));
+
+        let mut numerov = SingleRatioNumerov::new(&potential, &particles, MultiStepRule::default(), boundary);
+
+        assert_approx_eq!(numerov.data.dr, 4.336507e-4, 1e-6);
+
+        assert_approx_eq!(numerov.data.psi1, 1.001, 1e-6);
+        assert_approx_eq!(numerov.data.psi2, 1.002, 1e-6);
+
+        numerov.variable_step();
+        assert_approx_eq!(numerov.data.psi1, 1.0011569, 1e-6);
+
+        numerov.variable_step();
+        numerov.variable_step();
+        numerov.variable_step();
+        assert_approx_eq!(numerov.data.psi1, 1.00162454, 1e-6);
+    }
+}
