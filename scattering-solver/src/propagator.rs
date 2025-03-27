@@ -1,7 +1,7 @@
-use faer::{unzipped, zipped, Mat};
+use faer::{Mat, unzipped, zipped};
 use quantum::{
     params::particles::Particles,
-    units::{energy_units::Energy, mass_units::Mass, Au},
+    units::{Au, energy_units::Energy, mass_units::Mass},
 };
 
 use crate::{
@@ -49,7 +49,7 @@ impl<'a> Equation<'a, Mat<f64>> {
             asymptotic,
 
             buffered_w_matrix: Mat::zeros(potential.size(), potential.size()),
-            unit: Mat::zeros(potential.size(), potential.size()),
+            unit: Mat::identity(potential.size(), potential.size()),
         }
     }
 
@@ -80,7 +80,7 @@ impl<'a> Equation<'a, Mat<f64>> {
             asymptotic,
 
             buffered_w_matrix: Mat::zeros(potential.size(), potential.size()),
-            unit: Mat::zeros(potential.size(), potential.size()),
+            unit: Mat::identity(potential.size(), potential.size()),
         }
     }
 
@@ -124,7 +124,7 @@ impl<'a> Equation<'a, f64> {
         asymptotic: Asymptotic,
     ) -> Self {
         energy += asymptotic.channel_energies[asymptotic.entrance];
-        
+
         Self {
             potential,
             energy,

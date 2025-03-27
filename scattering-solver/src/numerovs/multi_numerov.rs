@@ -1,9 +1,10 @@
 use std::{marker::PhantomData, mem::swap};
 
 use faer::{
+    Mat,
     linalg::matmul::matmul,
-    prelude::{c64, SolverCore},
-    unzipped, zipped, Mat,
+    prelude::{SolverCore, c64},
+    unzipped, zipped,
 };
 use quantum::utility::{ratio_riccati_i, ratio_riccati_k, riccati_j, riccati_n};
 
@@ -14,7 +15,7 @@ use crate::{
     utility::{inverse_inplace, inverse_inplace_nodes},
 };
 
-use super::{numerov_modifier::PropagatorWatcher, Numerov, Ratio, StepAction, StepRule};
+use super::{Numerov, Ratio, StepAction, StepRule, numerov_modifier::PropagatorWatcher};
 
 pub type MultiRNumerov<'a, S> = Numerov<'a, Mat<f64>, Ratio<Mat<f64>>, MultiRNumerovStep, S>;
 
@@ -196,6 +197,7 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
 
         zipped!(self.buffer2.as_mut(), eq.unit.as_ref(), self.f1.as_ref())
             .for_each(|unzipped!(b2, u, f1)| *b2 = 12. * u - 10. * f1 - *b2);
+
         matmul(
             self.sol_last.0.as_mut(),
             self.f3.as_ref(),
@@ -377,11 +379,31 @@ impl Solution<Ratio<Mat<f64>>> {
 #[cfg(test)]
 mod test {
     use faer::Mat;
-    use quantum::{assert_approx_eq, params::{particle_factory::create_atom, particles::Particles}, units::{distance_units::Distance, energy_units::{Energy, Kelvin}, Au}};
+    use quantum::{
+        assert_approx_eq,
+        params::{particle_factory::create_atom, particles::Particles},
+        units::{
+            Au,
+            distance_units::Distance,
+            energy_units::{Energy, Kelvin},
+        },
+    };
 
-    use crate::{boundary::{Asymptotic, Boundary, Direction}, numerovs::propagator::MultiStepRule, potentials::{dispersion_potential::Dispersion, gaussian_coupling::GaussianCoupling, multi_coupling::MultiCoupling, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{MatPotential, Potential}, potential_factory::create_lj}, utility::AngMomentum};
-
-    use super::MultiRatioNumerov;
+    use crate::{
+        boundary::{Asymptotic, Boundary, Direction},
+        numerovs::{LocalWavelengthStepRule, multi_numerov::MultiRNumerov},
+        potentials::{
+            dispersion_potential::Dispersion,
+            gaussian_coupling::GaussianCoupling,
+            multi_coupling::MultiCoupling,
+            multi_diag_potential::Diagonal,
+            pair_potential::PairPotential,
+            potential::{MatPotential, Potential},
+            potential_factory::create_lj,
+        },
+        propagator::{CoupledEquation, Propagator},
+        utility::AngMomentum,
+    };
 
     fn potential() -> impl MatPotential {
         let potential_lj1 = create_lj(Energy(0.002, Au), Distance(9., Au));
@@ -420,23 +442,25 @@ mod test {
         let id: Mat<f64> = Mat::identity(potential.size(), potential.size());
         let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
 
-        let mut numerov = MultiRatioNumerov::new(&potential, &particles, MultiStepRule::default(), boundary);
+        let eq = CoupledEquation::from_particles(&potential, &particles);
 
-        assert_approx_eq!(numerov.data.dr, 4.58881145e-4, 1e-6);
+        let mut numerov = MultiRNumerov::new(eq, boundary, LocalWavelengthStepRule::default());
 
-        assert_approx_eq!(numerov.data.psi1[(0, 0)], 1.001, 1e-6);
-        assert_approx_eq!(numerov.data.psi2[(0, 0)], 1.002, 1e-6);
+        assert_approx_eq!(numerov.solution.dr, 4.58881145e-4, 1e-6);
 
-        numerov.variable_step();
+        assert_approx_eq!(numerov.solution.sol.0[(0, 0)], 1.001, 1e-6);
+        assert_approx_eq!(numerov.multi_step.sol_last.0[(0, 0)], 1.002, 1e-6);
 
-        assert_approx_eq!(numerov.data.psi1[(0, 0)], 1.001175827, 1e-6);
-        assert_approx_eq!(numerov.data.psi1[(1, 0)], 6.264251e-9, 1e-6);
-        
-        numerov.variable_step();
-        numerov.variable_step();
-        numerov.variable_step();
+        numerov.step();
 
-        assert_approx_eq!(numerov.data.psi1[(0, 0)], 1.0016997, 1e-6);
-        assert_approx_eq!(numerov.data.psi1[(1, 0)], 2.49725e-8, 1e-6);
+        assert_approx_eq!(numerov.solution.sol.0[(0, 0)], 1.001175827, 1e-6);
+        assert_approx_eq!(numerov.solution.sol.0[(1, 0)], 6.264251e-9, 1e-6);
+
+        numerov.step();
+        numerov.step();
+        numerov.step();
+
+        assert_approx_eq!(numerov.solution.sol.0[(0, 0)], 1.0016997, 1e-6);
+        assert_approx_eq!(numerov.solution.sol.0[(1, 0)], 2.49725e-8, 1e-6);
     }
 }

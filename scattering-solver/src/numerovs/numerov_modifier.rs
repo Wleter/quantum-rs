@@ -302,7 +302,10 @@ impl<T, R: Repr<T>> PropagatorWatcher<T, R> for NumerovLogging {
 
         self.timer = Instant::now();
         self.progress = ProgressBar::new((r_stop * 1000.0) as u64)
-            .with_style(ProgressStyle::with_template("{bar:100.cyan/blue} {pos:>7} / {len:7} {msg}").unwrap())
+            .with_style(
+                ProgressStyle::with_template("{bar:100.cyan/blue} {pos:>7} / {len:7} {msg}")
+                    .unwrap(),
+            )
             .with_message("mili bohr");
     }
 

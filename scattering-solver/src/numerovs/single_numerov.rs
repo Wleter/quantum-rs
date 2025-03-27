@@ -9,7 +9,7 @@ use crate::{
     propagator::{Equation, MultiStep, Propagator, Repr, Solution},
 };
 
-use super::{numerov_modifier::PropagatorWatcher, Numerov, Ratio, StepAction, StepRule};
+use super::{Numerov, Ratio, StepAction, StepRule, numerov_modifier::PropagatorWatcher};
 
 pub type SingleRNumerov<'a, S> = Numerov<'a, f64, Ratio<f64>, SingleRNumerovStep, S>;
 
@@ -213,9 +213,22 @@ impl Solution<Ratio<f64>> {
 
 #[cfg(test)]
 mod test {
-    use quantum::{assert_approx_eq, params::{particle_factory::create_atom, particles::Particles}, units::{distance_units::Distance, energy_units::{Energy, Kelvin}, Au}};
+    use quantum::{
+        assert_approx_eq,
+        params::{particle_factory::create_atom, particles::Particles},
+        units::{
+            Au,
+            distance_units::Distance,
+            energy_units::{Energy, Kelvin},
+        },
+    };
 
-    use crate::{boundary::{Boundary, Direction}, numerovs::{propagator::MultiStepRule, single_numerov::SingleRatioNumerov}, potentials::{potential::SimplePotential, potential_factory::create_lj}};
+    use crate::{
+        boundary::{Boundary, Direction},
+        numerovs::{LocalWavelengthStepRule, single_numerov::SingleRNumerov},
+        potentials::{potential::SimplePotential, potential_factory::create_lj},
+        propagator::{Propagator, SingleEquation},
+    };
 
     fn potential() -> impl SimplePotential {
         create_lj(Energy(0.002, Au), Distance(9., Au))
@@ -236,19 +249,21 @@ mod test {
 
         let boundary = Boundary::new(6.5, Direction::Outwards, (1.001, 1.002));
 
-        let mut numerov = SingleRatioNumerov::new(&potential, &particles, MultiStepRule::default(), boundary);
+        let eq = SingleEquation::from_particles(&potential, &particles);
 
-        assert_approx_eq!(numerov.data.dr, 4.336507e-4, 1e-6);
+        let mut numerov = SingleRNumerov::new(eq, boundary, LocalWavelengthStepRule::default());
 
-        assert_approx_eq!(numerov.data.psi1, 1.001, 1e-6);
-        assert_approx_eq!(numerov.data.psi2, 1.002, 1e-6);
+        assert_approx_eq!(numerov.solution.dr, 4.336507e-4, 1e-6);
 
-        numerov.variable_step();
-        assert_approx_eq!(numerov.data.psi1, 1.0011569, 1e-6);
+        assert_approx_eq!(numerov.solution.sol.0, 1.001, 1e-6);
+        assert_approx_eq!(numerov.multi_step.sol_last.0, 1.002, 1e-6);
 
-        numerov.variable_step();
-        numerov.variable_step();
-        numerov.variable_step();
-        assert_approx_eq!(numerov.data.psi1, 1.00162454, 1e-6);
+        numerov.step();
+        assert_approx_eq!(numerov.solution.sol.0, 1.0011569, 1e-6);
+
+        numerov.step();
+        numerov.step();
+        numerov.step();
+        assert_approx_eq!(numerov.solution.sol.0, 1.00162454, 1e-6);
     }
 }

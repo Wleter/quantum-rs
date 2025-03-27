@@ -6,12 +6,28 @@ use quantum::{
     params::{particle_factory::create_atom, particles::Particles},
     problems_impl,
     units::{
-        distance_units::Distance, energy_units::{Energy, Kelvin}, mass_units::Mass, Au
+        Au,
+        distance_units::Distance,
+        energy_units::{Energy, Kelvin},
+        mass_units::Mass,
     },
     utility::linspace,
 };
 use scattering_solver::{
-    boundary::{Boundary, Direction}, numerovs::{numerov_modifier::{ManyPropagatorWatcher, NumerovLogging, Sampling, ScatteringVsDistance, WaveStorage}, single_numerov::SingleRNumerov, LocalWavelengthStepRule}, potentials::{potential::{Potential, SimplePotential}, potential_factory::create_lj}, propagator::{Propagator, SingleEquation}, utility::{save_data, AngMomentum}
+    boundary::{Boundary, Direction},
+    numerovs::{
+        LocalWavelengthStepRule,
+        numerov_modifier::{
+            ManyPropagatorWatcher, NumerovLogging, Sampling, ScatteringVsDistance, WaveStorage,
+        },
+        single_numerov::SingleRNumerov,
+    },
+    potentials::{
+        potential::{Potential, SimplePotential},
+        potential_factory::create_lj,
+    },
+    propagator::{Propagator, SingleEquation},
+    utility::{AngMomentum, save_data},
 };
 
 pub struct SingleChannel {}
@@ -55,10 +71,8 @@ impl SingleChannel {
         let mut wave_storage = WaveStorage::new(Sampling::default(), 1e-50, 500);
         let mut numerov_logging = NumerovLogging::default();
 
-        let mut watchers = ManyPropagatorWatcher::new(vec![
-            &mut wave_storage, 
-            &mut numerov_logging,
-        ]);
+        let mut watchers =
+            ManyPropagatorWatcher::new(vec![&mut wave_storage, &mut numerov_logging]);
 
         numerov.propagate_to_with(100., &mut watchers);
 
@@ -141,11 +155,8 @@ impl SingleChannel {
                 particles.get_mut::<Mass<Au>>().unwrap().0 = mass * scaling;
 
                 let eq = SingleEquation::from_particles(&potential, &particles);
-                let mut numerov = SingleRNumerov::new(
-                    eq,
-                    boundary.clone(),
-                    LocalWavelengthStepRule::default(),
-                );
+                let mut numerov =
+                    SingleRNumerov::new(eq, boundary.clone(), LocalWavelengthStepRule::default());
 
                 numerov.propagate_to(1e4);
 

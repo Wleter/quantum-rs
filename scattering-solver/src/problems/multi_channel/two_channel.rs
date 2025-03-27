@@ -6,12 +6,21 @@ use quantum::{
     params::{particle_factory::create_atom, particles::Particles},
     problems_impl,
     units::{
-        distance_units::Distance, energy_units::{Energy, Kelvin}, mass_units::Mass, Au
+        Au,
+        distance_units::Distance,
+        energy_units::{Energy, Kelvin},
+        mass_units::Mass,
     },
     utility::linspace,
 };
 use scattering_solver::{
-    boundary::{Asymptotic, Boundary, Direction}, numerovs::{multi_numerov::MultiRNumerov, numerov_modifier::{Sampling, WaveStorage}, LocalWavelengthStepRule}, potentials::{
+    boundary::{Asymptotic, Boundary, Direction},
+    numerovs::{
+        LocalWavelengthStepRule,
+        multi_numerov::MultiRNumerov,
+        numerov_modifier::{Sampling, WaveStorage},
+    },
+    potentials::{
         dispersion_potential::Dispersion,
         gaussian_coupling::GaussianCoupling,
         multi_coupling::MultiCoupling,
@@ -19,7 +28,9 @@ use scattering_solver::{
         pair_potential::PairPotential,
         potential::{MatPotential, Potential},
         potential_factory::create_lj,
-    }, propagator::{CoupledEquation, Propagator}, utility::{save_data, AngMomentum}
+    },
+    propagator::{CoupledEquation, Propagator},
+    utility::{AngMomentum, save_data},
 };
 
 pub struct TwoChannel;
@@ -129,7 +140,8 @@ impl TwoChannel {
                 particles.get_mut::<Mass<Au>>().unwrap().0 = mass * scaling;
 
                 let eq = CoupledEquation::from_particles(&potential, &particles);
-                let mut numerov = MultiRNumerov::new(eq, boundary.clone(), LocalWavelengthStepRule::default());
+                let mut numerov =
+                    MultiRNumerov::new(eq, boundary.clone(), LocalWavelengthStepRule::default());
 
                 numerov.propagate_to(1e3);
 
@@ -152,7 +164,7 @@ impl TwoChannel {
     fn bound_states() {
         // let particles = Self::particles();
         // let potential = Self::potential();
-        
+
         // let energies = linspace(Energy(-1.0, GHz).to_au(), Energy(0.0, GHz).to_au(), 1000);
         // let data: Vec<BoundDiff> = energies.iter()
         //     .map(|&energy| {
@@ -167,7 +179,7 @@ impl TwoChannel {
         //     let bound_diffs = data.iter().map(|n| n.diff as f64).collect();
         //     let node_counts = data.iter().map(|n| n.nodes as f64).collect();
         //     let energies = energies.into_iter().map(|x| Energy(x, Au).to(GHz).value()).collect();
-    
+
         //     let header = "energy\tbound_diff\tnode_count";
         //     let data = vec![energies, bound_diffs, node_counts];
 

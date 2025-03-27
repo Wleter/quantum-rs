@@ -5,19 +5,27 @@ use quantum::{
     params::{particle_factory::create_atom, particles::Particles},
     problems_impl,
     units::{
-        distance_units::Distance, energy_units::{Energy, Kelvin}, Au
+        Au,
+        distance_units::Distance,
+        energy_units::{Energy, Kelvin},
     },
     utility::linspace,
 };
 use scattering_solver::{
-    boundary::{Asymptotic, Boundary, Direction}, numerovs::{multi_numerov::MultiRNumerov, numerov_modifier::NumerovLogging, LocalWavelengthStepRule}, potentials::{
+    boundary::{Asymptotic, Boundary, Direction},
+    numerovs::{
+        LocalWavelengthStepRule, multi_numerov::MultiRNumerov, numerov_modifier::NumerovLogging,
+    },
+    potentials::{
         dispersion_potential::Dispersion,
         multi_coupling::MultiCoupling,
         multi_diag_potential::Diagonal,
         pair_potential::PairPotential,
         potential::{MatPotential, Potential},
         potential_factory::create_lj,
-    }, propagator::{CoupledEquation, Propagator}, utility::AngMomentum
+    },
+    propagator::{CoupledEquation, Propagator},
+    utility::AngMomentum,
 };
 pub struct ManyChannels;
 
@@ -108,7 +116,7 @@ impl ManyChannels {
     fn bound_states() {
         // let particles = Self::particles();
         // let potential = Self::potential();
-        
+
         // let energies = linspace(Energy(-100.0, GHz).to_au(), Energy(0.0, GHz).to_au(), 100);
         // let data: Vec<BoundDiff> = energies.iter()
         //     .map(|&energy| {
@@ -123,7 +131,7 @@ impl ManyChannels {
         //     let bound_diffs = data.iter().map(|n| n.diff as f64).collect();
         //     let node_counts = data.iter().map(|n| n.nodes as f64).collect();
         //     let energies = energies.into_iter().map(|x| Energy(x, Au).to(GHz).value()).collect();
-    
+
         //     let header = "energy\tbound_diff\tnode_count";
         //     let data = vec![energies, bound_diffs, node_counts];
 

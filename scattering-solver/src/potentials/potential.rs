@@ -47,7 +47,6 @@ pub trait MatPotential: Potential<Space = Mat<f64>> {}
 impl<P: Potential<Space = Mat<f64>>> MatPotential for P {}
 // impl SimplePotential for &dyn Potential<Space = f64> {}
 
-
 #[derive(Clone)]
 pub struct ScaledPotential<P: SimplePotential> {
     pub potential: P,
