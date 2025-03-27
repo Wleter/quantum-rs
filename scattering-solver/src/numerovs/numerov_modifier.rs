@@ -143,6 +143,7 @@ impl PropagatorWatcher<Mat<f64>, Ratio<Mat<f64>>> for WaveStorage<Mat<f64>> {
         }
 
         self.rs.push(sol.r);
+        self.waves.push(self.last_value.clone());
     }
 
     fn after_step(&mut self, sol: &Solution<Ratio<Mat<f64>>>, _eq: &Equation<Mat<f64>>) {
