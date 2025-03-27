@@ -54,6 +54,17 @@ impl SMatrix {
         }
     }
 
+    pub fn new_single(s_matrix: Complex64, momentum: f64) -> Self {
+        let mut s_mat = Mat::zeros(1, 1);
+        s_mat.fill(s_matrix.into());
+
+        Self {
+            s_matrix: s_mat,
+            momentum,
+            entrance: 0,
+        }
+    }
+
     pub fn s_matrix(&self) -> MatRef<c64> {
         self.s_matrix.as_ref()
     }

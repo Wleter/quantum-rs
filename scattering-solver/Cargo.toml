@@ -10,3 +10,6 @@ rayon = { workspace = true }
 quantum = { path = "../quantum", features = ["faer"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+hhmmss = { workspace = true }
+indicatif = { workspace = true }

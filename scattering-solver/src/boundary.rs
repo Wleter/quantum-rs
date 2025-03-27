@@ -35,3 +35,14 @@ pub struct Asymptotic {
     pub channel_energies: Vec<f64>,
     pub channel_states: Mat<f64>,
 }
+
+impl Asymptotic {
+    pub fn single_default() -> Self {
+        Self {
+            centrifugal: vec![AngMomentum(0)],
+            entrance: 0,
+            channel_energies: vec![0.],
+            channel_states: Mat::ones(1, 1),
+        }
+    }
+}

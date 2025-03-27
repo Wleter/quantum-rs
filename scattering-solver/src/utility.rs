@@ -153,6 +153,48 @@ pub fn inverse_inplace_det(
     }
 }
 
+pub fn inverse_inplace_nodes(
+    mat: MatRef<f64>,
+    mut out: MatMut<f64>,
+    perm: &mut [usize],
+    perm_inv: &mut [usize],
+) -> u64 {
+    zipped!(out.as_mut(), mat).for_each(|unzipped!(o, m)| *o = *m);
+
+    let dim: usize = mat.nrows();
+
+    lu::partial_pivoting::compute::lu_in_place(
+        out.as_mut(),
+        perm,
+        perm_inv,
+        faer::Parallelism::None,
+        PodStack::new(&mut GlobalPodBuffer::new(
+            lu_in_place_req::<usize, f64>(dim, dim, Parallelism::None, Default::default()).unwrap(),
+        )),
+        Default::default(),
+    );
+
+    let mut nodes = 0;
+    for diag in out.as_ref().diagonal().column_vector().iter() {
+        if *diag < 0.0 {
+            nodes += 1
+        }
+    }
+
+    let perm_ref = unsafe { PermRef::new_unchecked(perm, perm_inv, dim) };
+
+    lu::partial_pivoting::inverse::invert_in_place(
+        out.as_mut(),
+        perm_ref,
+        faer::Parallelism::None,
+        PodStack::new(&mut GlobalPodBuffer::new(
+            invert_req::<usize, f64>(dim, dim, Parallelism::None).unwrap(),
+        )),
+    );
+
+    nodes
+}
+
 /// Should be faster for symmetric matrices but did not observed that.
 pub fn inverse_symmetric_inplace(
     mat: MatRef<f64>,

@@ -1,309 +1,213 @@
-use std::f64::consts::PI;
+use std::marker::PhantomData;
 
 use num::complex::Complex64;
-use quantum::{
-    params::particles::Particles,
-    units::{Au, energy_units::Energy, mass_units::Mass},
-    utility::{riccati_j, riccati_n},
-};
+use quantum::utility::{riccati_j, riccati_n};
 
 use crate::{
-    boundary::Boundary,
-    observables::s_matrix::SingleSMatrix,
-    potentials::{
-        dispersion_potential::Dispersion, potential::SimplePotential,
-        potential_factory::create_centrifugal,
-    },
-    utility::AngMomentum,
+    boundary::{Boundary, Direction},
+    observables::s_matrix::SMatrix,
+    propagator::{Equation, MultiStep, Propagator, Repr, Solution},
 };
 
-use super::{dummy_numerov::DummyMultiStep, propagator::{
-    MultiStep, MultiStepRule, Numerov, NumerovResult, PropagatorData, StepAction, StepRule,
-}};
+use super::{numerov_modifier::PropagatorWatcher, Numerov, Ratio, StepAction, StepRule};
 
-pub type SingleRatioNumerov<'a, P> = Numerov<
-    SingleNumerovData<'a, P>,
-    MultiStepRule<SingleNumerovData<'a, P>>,
-    SingleRatioNumerovStep,
->;
+pub type SingleRNumerov<'a, S> = Numerov<'a, f64, Ratio<f64>, SingleRNumerovStep, S>;
 
-impl<'a, P, S, M> Numerov<SingleNumerovData<'a, P>, S, M>
-where
-    P: SimplePotential,
-    S: StepRule<SingleNumerovData<'a, P>>,
-    M: MultiStep<SingleNumerovData<'a, P>>,
-{
-    pub fn get_result(&self) -> NumerovResult<f64> {
-        NumerovResult {
-            r_last: self.data.r,
-            dr: self.data.dr,
-            wave_ratio: self.data.psi1,
-        }
-    }
-}
-
-impl<'a, P, S> Numerov<SingleNumerovData<'a, P>, S, SingleRatioNumerovStep>
-where
-    P: SimplePotential,
-    S: StepRule<SingleNumerovData<'a, P>>,
-{
-    pub fn new(
-        potential: &'a P,
-        particles: &Particles,
-        step_rules: S,
-        boundary: Boundary<f64>,
-    ) -> Self {
-        let mut data = SingleNumerovData::new(potential, particles);
+impl<'a, S: StepRule<f64>> SingleRNumerov<'a, S> {
+    pub fn new(mut eq: Equation<'a, f64>, boundary: Boundary<f64>, step_rule: S) -> Self {
         let r = boundary.r_start;
-        data.r = r;
-        data.current_g_func();
 
+        eq.buffer_w_matrix(r);
         let dr = match boundary.direction {
-            crate::boundary::Direction::Inwards => -step_rules.get_step(&data),
-            crate::boundary::Direction::Outwards => step_rules.get_step(&data),
-            crate::boundary::Direction::Step(dr) => dr,
+            Direction::Inwards => -step_rule.get_step(&eq.buffered_w_matrix()),
+            Direction::Outwards => step_rule.get_step(&eq.buffered_w_matrix()),
+            Direction::Step(dr) => dr,
         };
 
-        data.dr = dr;
+        let sol = Solution {
+            r,
+            dr,
+            sol: Ratio(boundary.start_value),
+            ..Default::default()
+        };
 
-        data.psi1 = boundary.start_value;
-        data.psi2 = boundary.before_value;
+        let f3 = 1. + dr * dr / 12. * eq.w_matrix(r - 2. * dr);
+        let f2 = 1. + dr * dr / 12. * eq.w_matrix(r - dr);
+        let f1 = 1. + dr * dr / 12. * eq.buffered_w_matrix();
 
-        let f3 = 1. + dr * dr / 12. * data.get_g_func(r - 2. * dr);
-        let f2 = 1. + dr * dr / 12. * data.get_g_func(r - dr);
-        let f1 = 1. + dr * dr / 12. * data.current_g_func;
+        let sol_last = Ratio(boundary.before_value);
 
-        let multi_step = SingleRatioNumerovStep { f1, f2, f3 };
+        let multi_step = SingleRNumerovStep {
+            f1,
+            f2,
+            f3,
+            sol_last,
+        };
 
         Self {
-            data,
-            step_rules,
+            equation: eq,
+            solution: sol,
             multi_step,
+            step_rule,
+            phantom: PhantomData,
         }
+    }
+
+    pub fn s_matrix(&self) -> SMatrix {
+        self.solution.s_matrix(&self.equation)
     }
 }
 
-impl<'a, P, S> Numerov<SingleNumerovData<'a, P>, S, SingleRatioNumerovStep>
+impl<R, M, S> Propagator<f64, R> for Numerov<'_, f64, R, M, S>
 where
-    P: SimplePotential,
-    S: StepRule<SingleNumerovData<'a, P>> + Clone,
+    R: Repr<f64>,
+    M: MultiStep<f64, R>,
+    S: StepRule<f64>,
 {
-    pub fn as_dummy(&self) -> Numerov<SingleNumerovData<'a, P>, S, DummyMultiStep<SingleNumerovData<'a, P>>> {
-        Numerov {
-            data: self.data.clone(),
-            step_rules: self.step_rules.clone(),
-            multi_step: DummyMultiStep::default(),
+    fn propagate_to(&mut self, r: f64) -> &Solution<R> {
+        while (self.solution.r - r) * self.solution.dr.signum() <= 0. {
+            self.step();
         }
+
+        &self.solution
+    }
+
+    fn propagate_to_with(
+        &mut self,
+        r: f64,
+        modifier: &mut impl PropagatorWatcher<f64, R>,
+    ) -> &Solution<R> {
+        modifier.before(&mut self.solution, &self.equation, r);
+
+        while (self.solution.r - r) * self.solution.dr.signum() <= 0. {
+            self.step();
+            modifier.after_step(&mut self.solution, &self.equation);
+        }
+
+        modifier.after_prop(&mut self.solution, &self.equation);
+
+        &self.solution
+    }
+
+    fn step(&mut self) -> &Solution<R> {
+        self.equation
+            .buffer_w_matrix(self.solution.r + self.solution.dr);
+
+        let mut action = self
+            .step_rule
+            .step_action(self.solution.dr, &self.equation.buffered_w_matrix());
+
+        if let StepAction::Double = action {
+            self.multi_step
+                .double_the_step(&mut self.solution, &self.equation);
+
+            self.equation
+                .buffer_w_matrix(self.solution.r + self.solution.dr);
+        }
+
+        let mut halved = false;
+        while let StepAction::Halve = action {
+            self.multi_step
+                .halve_the_step(&mut self.solution, &self.equation);
+            action = self
+                .step_rule
+                .step_action(self.solution.dr, &self.equation.buffered_w_matrix());
+            halved = true;
+        }
+
+        if halved {
+            self.equation
+                .buffer_w_matrix(self.solution.r + self.solution.dr);
+        }
+
+        self.multi_step
+            .perform_step(&mut self.solution, &self.equation);
+
+        &self.solution
     }
 }
 
-pub struct SingleNumerovData<'a, P>
-where
-    P: SimplePotential,
-{
-    pub r: f64,
-    pub dr: f64,
-
-    potential: &'a P,
-    mass: f64,
-    energy: f64,
-    pub l: AngMomentum,
-    centrifugal: Option<Dispersion>,
-
-    current_g_func: f64,
-
-    pub psi1: f64,
-    psi2: f64,
-    pub nodes: u64
-}
-
-impl<P> Clone for SingleNumerovData<'_, P>
-where
-    P: SimplePotential,
-{
-    fn clone(&self) -> Self {
-        Self { 
-            r: self.r, 
-            dr: self.dr, 
-            potential: self.potential, 
-            mass: self.mass, 
-            energy: self.energy, 
-            l: self.l, 
-            centrifugal: self.centrifugal.clone(), 
-            current_g_func: self.current_g_func, 
-            psi1: self.psi1, 
-            psi2: self.psi2,
-            nodes: self.nodes
-        }
-    }
-}
-
-impl<'a, P> SingleNumerovData<'a, P>
-where
-    P: SimplePotential,
-{
-    pub fn new(potential: &'a P, particles: &Particles) -> Self {
-        let mass = particles
-            .get::<Mass<Au>>()
-            .expect("no reduced mass parameter Mass<Au> found in particles")
-            .to_au();
-        let energy = particles
-            .get::<Energy<Au>>()
-            .expect("no collision energy Energy<Au> found in particles")
-            .to_au();
-
-        let l = particles.get::<AngMomentum>().unwrap_or(&AngMomentum(0));
-        let centrifugal = create_centrifugal(mass, *l);
-
-        Self {
-            r: 0.,
-            dr: 0.,
-            potential,
-            centrifugal,
-            mass,
-            energy,
-            l: *l,
-            current_g_func: 0.,
-            psi1: 0.,
-            psi2: 0.,
-            nodes: 0
-        }
-    }
-
-    pub fn calculate_s_matrix(&self) -> Result<SingleSMatrix, String> {
-        let r_last = self.r;
-        let r_prev_last = self.r - self.dr;
-        let wave_ratio = self.psi1;
-
-        let asymptotic = self.potential_value(r_last);
-
-        let momentum = (2.0 * self.mass * (self.energy - asymptotic)).sqrt();
-        if momentum.is_nan() {
-            return Err("closed channel".to_string());
-        }
-
-        let j_last = riccati_j(self.l.0, momentum * r_last) / momentum.sqrt();
-        let j_prev_last = riccati_j(self.l.0, momentum * r_prev_last) / momentum.sqrt();
-        let n_last = riccati_n(self.l.0, momentum * r_last) / momentum.sqrt();
-        let n_prev_last = riccati_n(self.l.0, momentum * r_prev_last) / momentum.sqrt();
-
-        let k_matrix = -(wave_ratio * j_prev_last - j_last) / (wave_ratio * n_prev_last - n_last);
-
-        let s_matrix = Complex64::new(1.0, k_matrix) / Complex64::new(1.0, -k_matrix);
-
-        Ok(SingleSMatrix::new(s_matrix, momentum))
-    }
-
-    pub fn potential_value(&self, r: f64) -> f64 {
-        let mut value = self.potential.value(r);
-
-        if let Some(centr) = &self.centrifugal {
-            value += centr.value(r);
-        }
-
-        value
-    }
-
-    fn get_g_func(&mut self, r: f64) -> f64 {
-        2.0 * self.mass * (self.energy - self.potential_value(r))
-    }
-}
-
-impl<P> PropagatorData for SingleNumerovData<'_, P>
-where
-    P: SimplePotential,
-{
-    fn step_size(&self) -> f64 {
-        self.dr
-    }
-
-    fn current_g_func(&mut self) {
-        self.current_g_func =
-            2.0 * self.mass * (self.energy - self.potential_value(self.r + self.dr));
-    }
-
-    fn crossed_distance(&self, r: f64) -> bool {
-        self.dr.signum() * (r - self.r) <= 0.0
-    }
-}
-
-impl<P> StepRule<SingleNumerovData<'_, P>> for MultiStepRule<SingleNumerovData<'_, P>>
-where
-    P: SimplePotential,
-{
-    fn get_step(&self, data: &SingleNumerovData<P>) -> f64 {
-        let lambda = 2. * PI / data.current_g_func.abs().sqrt();
-
-        f64::clamp(lambda / self.wave_step_ratio, self.min_step, self.max_step)
-    }
-
-    fn assign(&mut self, data: &SingleNumerovData<P>) -> StepAction {
-        let prop_step = data.step_size().abs();
-        let step = self.get_step(data);
-
-        if prop_step > 1.2 * step {
-            self.doubled_step = false;
-            StepAction::Halve
-        } else if prop_step < 0.5 * step && !self.doubled_step {
-            self.doubled_step = true;
-            StepAction::Double
-        } else {
-            self.doubled_step = false;
-            StepAction::Keep
-        }
-    }
-}
-
-#[derive(Default)]
-pub struct SingleRatioNumerovStep {
+#[derive(Clone, Debug, Default)]
+pub struct SingleRNumerovStep {
     f1: f64,
     f2: f64,
     f3: f64,
+
+    sol_last: Ratio<f64>,
 }
 
-impl<P> MultiStep<SingleNumerovData<'_, P>> for SingleRatioNumerovStep
-where
-    P: SimplePotential,
-{
-    fn step(&mut self, data: &mut SingleNumerovData<P>) {
-        data.r += data.dr;
+impl MultiStep<f64, Ratio<f64>> for SingleRNumerovStep {
+    /// Performs the step of the propagation using buffered w_matrix value
+    fn perform_step(&mut self, sol: &mut Solution<Ratio<f64>>, eq: &Equation<f64>) {
+        sol.r += sol.dr;
 
-        let f = 1.0 + data.dr * data.dr * data.current_g_func / 12.0;
-        let psi = (12.0 - 10.0 * self.f1 - self.f2 / data.psi1) / f;
+        let f = 1.0 + sol.dr * sol.dr * eq.buffered_w_matrix() / 12.0;
+        let sol_new = (12.0 - 10.0 * self.f1 - self.f2 / sol.sol.0) / f;
 
         self.f3 = self.f2;
         self.f2 = self.f1;
         self.f1 = f;
 
-        if psi < 0. {
-            data.nodes += 1
+        if sol_new < 0. {
+            sol.nodes += 1
         }
 
-        data.psi2 = data.psi1;
-        data.psi1 = psi;
+        self.sol_last = sol.sol;
+        sol.sol.0 = sol_new;
     }
 
-    fn halve_step(&mut self, data: &mut SingleNumerovData<P>) {
-        data.dr /= 2.;
+    fn halve_the_step(&mut self, sol: &mut Solution<Ratio<f64>>, eq: &Equation<f64>) {
+        sol.dr /= 2.;
 
-        let f = 1.0 + data.dr * data.dr * data.get_g_func(data.r - data.dr) / 12.0;
+        let f = 1.0 + sol.dr * sol.dr * eq.w_matrix(sol.r - sol.dr) / 12.0;
         self.f1 = self.f1 / 4.0 + 0.75;
         self.f2 = self.f2 / 4.0 + 0.75;
 
-        let psi = (self.f1 * data.psi1 + self.f2) / (12.0 - 10.0 * f);
+        let sol_half = (self.f1 * sol.sol.0 + self.f2) / (12.0 - 10.0 * f);
         self.f2 = f;
 
-        data.psi2 = psi;
-        data.psi1 /= psi;
+        self.sol_last.0 = sol_half;
+        sol.sol.0 /= sol_half;
     }
 
-    fn double_step(&mut self, data: &mut SingleNumerovData<P>) {
-        data.dr *= 2.0;
+    fn double_the_step(&mut self, sol: &mut Solution<Ratio<f64>>, _eq: &Equation<f64>) {
+        sol.dr *= 2.0;
 
         self.f2 = 4.0 * self.f3 - 3.0;
         self.f1 = 4.0 * self.f1 - 3.0;
 
-        data.psi1 *= data.psi2;
+        sol.sol.0 *= self.sol_last.0;
+    }
+}
+
+impl Solution<Ratio<f64>> {
+    pub fn s_matrix(&self, eq: &Equation<f64>) -> SMatrix {
+        let r_last = self.r;
+        let r_prev_last = self.r - self.dr;
+        let wave_ratio = self.sol.0;
+
+        let mut asymptotic = 0.0;
+        eq.potential.value_inplace(r_last, &mut asymptotic);
+
+        let momentum = (2.0 * eq.mass * (eq.energy - asymptotic)).sqrt();
+        if momentum.is_nan() {
+            panic!("propagated in closed channel");
+        }
+
+        assert!(eq.asymptotic.centrifugal.len() == 1);
+
+        let j_last = riccati_j(eq.asymptotic.centrifugal[0].0, momentum * r_last) / momentum.sqrt();
+        let j_prev_last =
+            riccati_j(eq.asymptotic.centrifugal[0].0, momentum * r_prev_last) / momentum.sqrt();
+        let n_last = riccati_n(eq.asymptotic.centrifugal[0].0, momentum * r_last) / momentum.sqrt();
+        let n_prev_last =
+            riccati_n(eq.asymptotic.centrifugal[0].0, momentum * r_prev_last) / momentum.sqrt();
+
+        let k_matrix = -(wave_ratio * j_prev_last - j_last) / (wave_ratio * n_prev_last - n_last);
+
+        let s_matrix = Complex64::new(1.0, k_matrix) / Complex64::new(1.0, -k_matrix);
+
+        SMatrix::new_single(s_matrix, momentum)
     }
 }
 

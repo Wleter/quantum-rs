@@ -6,16 +6,12 @@ use quantum::{
     params::{particle_factory::create_atom, particles::Particles},
     problems_impl,
     units::{
-        distance_units::Distance, energy_units::{Energy, GHz, Kelvin}, mass_units::Mass, Au
+        distance_units::Distance, energy_units::{Energy, Kelvin}, mass_units::Mass, Au
     },
     utility::linspace,
 };
 use scattering_solver::{
-    boundary::{Asymptotic, Boundary, Direction},
-    numerovs::{
-        bound_numerov::{BoundDiff, MultiBoundRatioNumerov}, multi_numerov::MultiRatioNumerov, numerov_modifier::{Sampling, WaveStorage}, propagator::MultiStepRule
-    },
-    potentials::{
+    boundary::{Asymptotic, Boundary, Direction}, numerovs::{multi_numerov::MultiRNumerov, numerov_modifier::{Sampling, WaveStorage}, LocalWavelengthStepRule}, potentials::{
         dispersion_potential::Dispersion,
         gaussian_coupling::GaussianCoupling,
         multi_coupling::MultiCoupling,
@@ -23,8 +19,7 @@ use scattering_solver::{
         pair_potential::PairPotential,
         potential::{MatPotential, Potential},
         potential_factory::create_lj,
-    },
-    utility::{save_data, AngMomentum},
+    }, propagator::{CoupledEquation, Propagator}, utility::{save_data, AngMomentum}
 };
 
 pub struct TwoChannel;
@@ -75,8 +70,9 @@ impl TwoChannel {
         let id: Mat<f64> = Mat::identity(potential.size(), potential.size());
         let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
 
-        let mut numerov =
-            MultiRatioNumerov::new(&potential, &particles, MultiStepRule::default(), boundary);
+        let eq = CoupledEquation::from_particles(&potential, &particles);
+        let mut numerov = MultiRNumerov::new(eq, boundary, LocalWavelengthStepRule::default());
+
         let mut wave_storage = WaveStorage::new(Sampling::default(), 1e-50 * id, 500);
 
         let preparation = start.elapsed();
@@ -101,13 +97,14 @@ impl TwoChannel {
         let id: Mat<f64> = Mat::identity(potential.size(), potential.size());
         let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
 
-        let mut numerov =
-            MultiRatioNumerov::new(&potential, &particles, MultiStepRule::default(), boundary);
+        let eq = CoupledEquation::from_particles(&potential, &particles);
+        let mut numerov = MultiRNumerov::new(eq, boundary, LocalWavelengthStepRule::default());
+
         let start = Instant::now();
         numerov.propagate_to(1e3);
         let propagation = start.elapsed();
 
-        let s_matrix = numerov.data.calculate_s_matrix();
+        let s_matrix = numerov.s_matrix();
         let scattering_length = s_matrix.get_scattering_length();
 
         let extraction = start.elapsed() - propagation;
@@ -131,15 +128,12 @@ impl TwoChannel {
             .map(|scaling| {
                 particles.get_mut::<Mass<Au>>().unwrap().0 = mass * scaling;
 
-                let mut numerov = MultiRatioNumerov::new(
-                    &potential,
-                    &particles,
-                    MultiStepRule::default(),
-                    boundary.clone(),
-                );
+                let eq = CoupledEquation::from_particles(&potential, &particles);
+                let mut numerov = MultiRNumerov::new(eq, boundary.clone(), LocalWavelengthStepRule::default());
+
                 numerov.propagate_to(1e3);
 
-                let s_matrix = numerov.data.calculate_s_matrix();
+                let s_matrix = numerov.s_matrix();
                 s_matrix.get_scattering_length()
             })
             .collect();
@@ -156,28 +150,28 @@ impl TwoChannel {
     }
 
     fn bound_states() {
-        let particles = Self::particles();
-        let potential = Self::potential();
+        // let particles = Self::particles();
+        // let potential = Self::potential();
         
-        let energies = linspace(Energy(-1.0, GHz).to_au(), Energy(0.0, GHz).to_au(), 1000);
-        let data: Vec<BoundDiff> = energies.iter()
-            .map(|&energy| {
-                let mut particles = particles.clone();
-                particles.insert(Energy(energy, Au));
+        // let energies = linspace(Energy(-1.0, GHz).to_au(), Energy(0.0, GHz).to_au(), 1000);
+        // let data: Vec<BoundDiff> = energies.iter()
+        //     .map(|&energy| {
+        //         let mut particles = particles.clone();
+        //         particles.insert(Energy(energy, Au));
 
-                MultiBoundRatioNumerov::new(MultiStepRule::new(1e-4, 10., 500.))
-                    .bound_diff(&potential, &particles, (6.5, 20.0, 1000.))
-            })
-            .collect();
+        //         MultiBoundRatioNumerov::new(MultiStepRule::new(1e-4, 10., 500.))
+        //             .bound_diff(&potential, &particles, (6.5, 20.0, 1000.))
+        //     })
+        //     .collect();
 
-            let bound_diffs = data.iter().map(|n| n.diff as f64).collect();
-            let node_counts = data.iter().map(|n| n.nodes as f64).collect();
-            let energies = energies.into_iter().map(|x| Energy(x, Au).to(GHz).value()).collect();
+        //     let bound_diffs = data.iter().map(|n| n.diff as f64).collect();
+        //     let node_counts = data.iter().map(|n| n.nodes as f64).collect();
+        //     let energies = energies.into_iter().map(|x| Energy(x, Au).to(GHz).value()).collect();
     
-            let header = "energy\tbound_diff\tnode_count";
-            let data = vec![energies, bound_diffs, node_counts];
+        //     let header = "energy\tbound_diff\tnode_count";
+        //     let data = vec![energies, bound_diffs, node_counts];
 
-        save_data("two_chan/bound_diffs", header, &data).unwrap();
+        // save_data("two_chan/bound_diffs", header, &data).unwrap();
 
         // let bound_states = vec![0, 1, 3, -1, -2, -5];
         // for n in bound_states {

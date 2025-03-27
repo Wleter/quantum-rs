@@ -5,24 +5,19 @@ use quantum::{
     params::{particle_factory::create_atom, particles::Particles},
     problems_impl,
     units::{
-        distance_units::Distance, energy_units::{Energy, GHz, Kelvin}, Au
+        distance_units::Distance, energy_units::{Energy, Kelvin}, Au
     },
     utility::linspace,
 };
 use scattering_solver::{
-    boundary::{Asymptotic, Boundary, Direction},
-    numerovs::{
-        bound_numerov::{BoundDiff, MultiBoundRatioNumerov}, multi_numerov::MultiRatioNumerov, numerov_modifier::NumerovLogging, propagator::MultiStepRule
-    },
-    potentials::{
+    boundary::{Asymptotic, Boundary, Direction}, numerovs::{multi_numerov::MultiRNumerov, numerov_modifier::NumerovLogging, LocalWavelengthStepRule}, potentials::{
         dispersion_potential::Dispersion,
         multi_coupling::MultiCoupling,
         multi_diag_potential::Diagonal,
         pair_potential::PairPotential,
         potential::{MatPotential, Potential},
         potential_factory::create_lj,
-    },
-    utility::{save_data, AngMomentum},
+    }, propagator::{CoupledEquation, Propagator}, utility::AngMomentum
 };
 pub struct ManyChannels;
 
@@ -90,13 +85,16 @@ impl ManyChannels {
         let id: Mat<f64> = Mat::identity(potential.size(), potential.size());
         let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
 
-        let step_rule = MultiStepRule::default();
-        let mut numerov = MultiRatioNumerov::new(&potential, &particles, step_rule, boundary);
+        let eq = CoupledEquation::from_particles(&potential, &particles);
+
+        let step_rule = LocalWavelengthStepRule::default();
+        let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
         let preparation = start.elapsed();
+
         numerov.propagate_to_with(1e3, &mut NumerovLogging::default());
         let propagation = start.elapsed() - preparation;
 
-        let s_matrix = numerov.data.calculate_s_matrix();
+        let s_matrix = numerov.s_matrix();
         let scattering_length = s_matrix.get_scattering_length();
 
         let extraction = start.elapsed() - propagation - preparation;
@@ -108,28 +106,28 @@ impl ManyChannels {
     }
 
     fn bound_states() {
-        let particles = Self::particles();
-        let potential = Self::potential();
+        // let particles = Self::particles();
+        // let potential = Self::potential();
         
-        let energies = linspace(Energy(-100.0, GHz).to_au(), Energy(0.0, GHz).to_au(), 100);
-        let data: Vec<BoundDiff> = energies.iter()
-            .map(|&energy| {
-                let mut particles = particles.clone();
-                particles.insert(Energy(energy, Au));
+        // let energies = linspace(Energy(-100.0, GHz).to_au(), Energy(0.0, GHz).to_au(), 100);
+        // let data: Vec<BoundDiff> = energies.iter()
+        //     .map(|&energy| {
+        //         let mut particles = particles.clone();
+        //         particles.insert(Energy(energy, Au));
 
-                MultiBoundRatioNumerov::new(MultiStepRule::new(1e-4, 10., 500.))
-                    .bound_diff(&potential, &particles, (6.5, 20.0, 500.))
-            })
-            .collect();
+        //         MultiBoundRatioNumerov::new(MultiStepRule::new(1e-4, 10., 500.))
+        //             .bound_diff(&potential, &particles, (6.5, 20.0, 500.))
+        //     })
+        //     .collect();
 
-            let bound_diffs = data.iter().map(|n| n.diff as f64).collect();
-            let node_counts = data.iter().map(|n| n.nodes as f64).collect();
-            let energies = energies.into_iter().map(|x| Energy(x, Au).to(GHz).value()).collect();
+        //     let bound_diffs = data.iter().map(|n| n.diff as f64).collect();
+        //     let node_counts = data.iter().map(|n| n.nodes as f64).collect();
+        //     let energies = energies.into_iter().map(|x| Energy(x, Au).to(GHz).value()).collect();
     
-            let header = "energy\tbound_diff\tnode_count";
-            let data = vec![energies, bound_diffs, node_counts];
+        //     let header = "energy\tbound_diff\tnode_count";
+        //     let data = vec![energies, bound_diffs, node_counts];
 
-        save_data("many_chan/bound_diffs", header, &data).unwrap();
+        // save_data("many_chan/bound_diffs", header, &data).unwrap();
 
         // let bound_states = vec![0, 1, 3, -1, -2, -5];
         // for n in bound_states {

@@ -6,17 +6,12 @@ use quantum::{
     params::{particle_factory::create_atom, particles::Particles},
     problems_impl,
     units::{
-        distance_units::Distance, energy_units::{Energy, GHz, Kelvin}, mass_units::Mass, Au
+        distance_units::Distance, energy_units::{Energy, Kelvin}, mass_units::Mass, Au
     },
     utility::linspace,
 };
 use scattering_solver::{
-    boundary::{Boundary, Direction},
-    numerovs::{
-        bound_numerov::{BoundDiff, SingleBoundRatioNumerov}, numerov_modifier::{Sampling, ScatteringVsDistance, WaveStorage}, propagator::MultiStepRule, single_numerov::SingleRatioNumerov
-    },
-    potentials::{potential::Potential, potential_factory::create_lj},
-    utility::{save_data, AngMomentum},
+    boundary::{Boundary, Direction}, numerovs::{numerov_modifier::{ManyPropagatorWatcher, NumerovLogging, Sampling, ScatteringVsDistance, WaveStorage}, single_numerov::SingleRNumerov, LocalWavelengthStepRule}, potentials::{potential::{Potential, SimplePotential}, potential_factory::create_lj}, propagator::{Propagator, SingleEquation}, utility::{save_data, AngMomentum}
 };
 
 pub struct SingleChannel {}
@@ -47,53 +42,53 @@ impl SingleChannel {
     }
 
     fn wave_function() {
-        let start = Instant::now();
-
         let particles = Self::particles();
         let potential = Self::potential();
 
-        let mut numerov = SingleRatioNumerov::new(
-            &potential,
-            &particles,
-            MultiStepRule::default(),
+        let eq = SingleEquation::from_particles(&potential, &particles);
+
+        let mut numerov = SingleRNumerov::new(
+            eq,
             Boundary::new(6.5, Direction::Outwards, (1.001, 1.002)),
+            LocalWavelengthStepRule::default(),
         );
         let mut wave_storage = WaveStorage::new(Sampling::default(), 1e-50, 500);
+        let mut numerov_logging = NumerovLogging::default();
 
-        let preparation = start.elapsed();
-        numerov.propagate_to_with(100., &mut wave_storage);
-        let propagation = start.elapsed() - preparation;
+        let mut watchers = ManyPropagatorWatcher::new(vec![
+            &mut wave_storage, 
+            &mut numerov_logging,
+        ]);
+
+        numerov.propagate_to_with(100., &mut watchers);
 
         let potential_values: Vec<f64> = wave_storage
             .rs
             .iter()
-            .map(|&r| numerov.data.potential_value(r))
+            .map(|&r| potential.value(r))
             .collect();
 
         let header = "position\twave function\tpotential";
         let data = vec![wave_storage.rs, wave_storage.waves, potential_values];
         save_data("single_chan/wave_function", header, &data).unwrap();
-
-        println!("Preparation time: {:?} μs", preparation.as_micros());
-        println!("Propagation time: {:?} μs", propagation.as_micros());
     }
 
     fn scattering_length() {
         let particles = Self::particles();
         let potential = Self::potential();
+        let eq = SingleEquation::from_particles(&potential, &particles);
 
-        let mut numerov = SingleRatioNumerov::new(
-            &potential,
-            &particles,
-            MultiStepRule::default(),
+        let mut numerov = SingleRNumerov::new(
+            eq,
             Boundary::new(6.5, Direction::Outwards, (1.001, 1.002)),
+            LocalWavelengthStepRule::default(),
         );
 
         let start = Instant::now();
         numerov.propagate_to(1000.0);
         let propagation = start.elapsed();
 
-        let s_matrix = numerov.data.calculate_s_matrix().unwrap();
+        let s_matrix = numerov.solution().s_matrix(numerov.equation());
         let scattering_length = s_matrix.get_scattering_length();
 
         println!("Propagation time: {:?} μs", propagation.as_micros());
@@ -104,11 +99,12 @@ impl SingleChannel {
         let particles = Self::particles();
         let potential = Self::potential();
 
-        let mut numerov = SingleRatioNumerov::new(
-            &potential,
-            &particles,
-            MultiStepRule::default(),
+        let eq = SingleEquation::from_particles(&potential, &particles);
+
+        let mut numerov = SingleRNumerov::new(
+            eq,
             Boundary::new(6.5, Direction::Outwards, (1.001, 1.002)),
+            LocalWavelengthStepRule::default(),
         );
         let mut scatterings = ScatteringVsDistance::new(120., 1000);
 
@@ -144,16 +140,16 @@ impl SingleChannel {
             .map(|scaling| {
                 particles.get_mut::<Mass<Au>>().unwrap().0 = mass * scaling;
 
-                let mut numerov = SingleRatioNumerov::new(
-                    &potential,
-                    &particles,
-                    MultiStepRule::default(),
+                let eq = SingleEquation::from_particles(&potential, &particles);
+                let mut numerov = SingleRNumerov::new(
+                    eq,
                     boundary.clone(),
+                    LocalWavelengthStepRule::default(),
                 );
+
                 numerov.propagate_to(1e4);
 
-                let s_matrix = numerov.data.calculate_s_matrix().unwrap();
-                s_matrix.get_scattering_length()
+                numerov.s_matrix().get_scattering_length()
             })
             .collect();
 
@@ -169,28 +165,28 @@ impl SingleChannel {
     }
 
     fn bound_states() {
-        let particles = Self::particles();
-        let potential = Self::potential();
+        // let particles = Self::particles();
+        // let potential = Self::potential();
 
-        let energies = linspace(Energy(-100.0, GHz).to_au(), Energy(0.0, GHz).to_au(), 1000);
-        let data: Vec<BoundDiff> = energies.iter()
-            .map(|&energy| {
-                let mut particles = particles.clone();
-                particles.insert(Energy(energy, Au));
+        // let energies = linspace(Energy(-100.0, GHz).to_au(), Energy(0.0, GHz).to_au(), 1000);
+        // let data: Vec<BoundDiff> = energies.iter()
+        //     .map(|&energy| {
+        //         let mut particles = particles.clone();
+        //         particles.insert(Energy(energy, Au));
 
-                SingleBoundRatioNumerov::new(MultiStepRule::new(1e-4, 10., 500.))
-                    .bound_diff(&potential, &particles, (6.5, 1000.))
-            })
-            .collect();
+        //         SingleBoundRatioNumerov::new(MultiStepRule::new(1e-4, 10., 500.))
+        //             .bound_diff(&potential, &particles, (6.5, 1000.))
+        //     })
+        //     .collect();
 
-        let bound_diffs = data.iter().map(|n| n.diff as f64).collect();
-        let node_counts = data.iter().map(|n| n.nodes as f64).collect();
-        let energies = energies.into_iter().map(|x| Energy(x, Au).to(GHz).value()).collect();
+        // let bound_diffs = data.iter().map(|n| n.diff as f64).collect();
+        // let node_counts = data.iter().map(|n| n.nodes as f64).collect();
+        // let energies = energies.into_iter().map(|x| Energy(x, Au).to(GHz).value()).collect();
 
-        let header = "energy\tbound_diff\tnode_count";
-        let data = vec![energies, bound_diffs, node_counts];
+        // let header = "energy\tbound_diff\tnode_count";
+        // let data = vec![energies, bound_diffs, node_counts];
 
-        save_data("single_chan/bound_diffs", header, &data).unwrap();
+        // save_data("single_chan/bound_diffs", header, &data).unwrap();
 
         // let bound_states = vec![0, 1, 3, -1, -2, -5];
         // for n in bound_states {
