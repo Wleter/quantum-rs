@@ -17,11 +17,15 @@ use scattering_problems::{
     IndexBasisDescription, ScatteringProblem, alkali_atoms::AlkaliAtomsProblemBuilder,
 };
 use scattering_solver::{
-    boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRNumerov, LocalWavelengthStepRule}, potentials::{
+    boundary::{Boundary, Direction},
+    numerovs::{LocalWavelengthStepRule, multi_numerov::MultiRNumerov},
+    potentials::{
         composite_potential::Composite,
         dispersion_potential::Dispersion,
         potential::{MatPotential, Potential},
-    }, propagator::{CoupledEquation, Propagator}, utility::save_data
+    },
+    propagator::{CoupledEquation, Propagator},
+    utility::save_data,
 };
 
 use rayon::prelude::*;

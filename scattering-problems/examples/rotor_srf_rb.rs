@@ -42,11 +42,18 @@ use scattering_problems::{
     utility::{AnisoHifi, GammaSpinRot},
 };
 use scattering_solver::{
-    boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRNumerov, numerov_modifier::NumerovLogging, LocalWavelengthStepRule}, observables::s_matrix::{ScatteringDependence, ScatteringObservables}, potentials::{
+    boundary::{Boundary, Direction},
+    numerovs::{
+        LocalWavelengthStepRule, multi_numerov::MultiRNumerov, numerov_modifier::NumerovLogging,
+    },
+    observables::s_matrix::{ScatteringDependence, ScatteringObservables},
+    potentials::{
         composite_potential::Composite,
         dispersion_potential::Dispersion,
         potential::{Potential, ScaledPotential, SimplePotential},
-    }, propagator::{CoupledEquation, Propagator}, utility::{save_data, save_serialize}
+    },
+    propagator::{CoupledEquation, Propagator},
+    utility::{save_data, save_serialize},
 };
 
 use rayon::prelude::*;
@@ -274,9 +281,9 @@ impl Problems {
             observables: scatterings,
         };
 
-        let filename = format!("SrF_Rb_scatterings_ground_n_max_{}_n_tot_max_{}", 
-            basis_recipe.n_max, 
-            basis_recipe.n_tot_max
+        let filename = format!(
+            "SrF_Rb_scatterings_ground_n_max_{}_n_tot_max_{}",
+            basis_recipe.n_max, basis_recipe.n_tot_max
         );
 
         save_serialize(&filename, &data).unwrap()

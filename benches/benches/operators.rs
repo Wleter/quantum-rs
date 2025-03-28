@@ -1,7 +1,17 @@
 use diol::prelude::*;
-use quantum::{cast_variant, operator_mel, states::{spins::{clebsch_gordan::half_integer::{HalfI32, HalfU32}, get_spin_basis, Spin, SpinOperators}, state::{into_variant, StateBasis}, States, StatesBasis}};
-use scattering_solver::faer::Mat;
+use quantum::{
+    cast_variant, operator_mel,
+    states::{
+        spins::{
+            clebsch_gordan::half_integer::{HalfI32, HalfU32},
+            get_spin_basis, Spin, SpinOperators,
+        },
+        state::{into_variant, StateBasis},
+        States, StatesBasis,
+    },
+};
 use scattering_solver::faer;
+use scattering_solver::faer::Mat;
 
 fn main() -> eyre::Result<()> {
     let mut bench = Bench::new(BenchConfig::from_args()?);
@@ -18,7 +28,7 @@ fn main() -> eyre::Result<()> {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum SimpleState {
-    Spin(Spin)
+    Spin(Spin),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -29,9 +39,11 @@ enum ComplexState {
     Spin4(Spin),
 }
 
-
 fn simple_operator(bencher: Bencher, size: u32) {
-    let state = into_variant(get_spin_basis(HalfU32::from_doubled(size)), SimpleState::Spin);
+    let state = into_variant(
+        get_spin_basis(HalfU32::from_doubled(size)),
+        SimpleState::Spin,
+    );
     let mut basis = States::default();
     basis.push_state(StateBasis::new(state));
     let basis = basis.get_basis();
@@ -53,25 +65,23 @@ fn simple_manual_operator(bencher: Bencher, size: u32) {
         .collect::<Vec<HalfI32>>();
 
     bencher.bench(|| {
-        let mut operator = Mat::from_fn(ms.len(), ms.len(), |i, j| {
-            unsafe {
-                let ms_bra = *ms.get_unchecked(i);
-                let ms_ket = *ms.get_unchecked(j);
+        let mut operator = Mat::from_fn(ms.len(), ms.len(), |i, j| unsafe {
+            let ms_bra = *ms.get_unchecked(i);
+            let ms_ket = *ms.get_unchecked(j);
 
-                let mut value = 0.0;
+            let mut value = 0.0;
 
-                if ms_bra == ms_ket {
-                    value += ms_bra.value()
-                }
-
-                if ms_bra.double_value() == ms_ket.double_value() + 2 
-                    || ms_bra.double_value() + 2 == ms_ket.double_value() 
-                {
-                    value += (s.value() * (s.value() + 1.) - ms_bra.value() * ms_ket.value()).sqrt()
-                }
-
-                value
+            if ms_bra == ms_ket {
+                value += ms_bra.value()
             }
+
+            if ms_bra.double_value() == ms_ket.double_value() + 2
+                || ms_bra.double_value() + 2 == ms_ket.double_value()
+            {
+                value += (s.value() * (s.value() + 1.) - ms_bra.value() * ms_ket.value()).sqrt()
+            }
+
+            value
         });
 
         black_box(&mut operator);
@@ -82,9 +92,19 @@ fn complex_operator(bencher: Bencher, size: u32) {
     let spins = get_spin_basis(HalfU32::from_doubled(size));
 
     let mut basis = States::default();
-    basis.push_state(StateBasis::new(into_variant(spins.clone(), ComplexState::Spin1)))
-        .push_state(StateBasis::new(into_variant(spins.clone(), ComplexState::Spin2)))
-        .push_state(StateBasis::new(into_variant(spins.clone(), ComplexState::Spin3)))
+    basis
+        .push_state(StateBasis::new(into_variant(
+            spins.clone(),
+            ComplexState::Spin1,
+        )))
+        .push_state(StateBasis::new(into_variant(
+            spins.clone(),
+            ComplexState::Spin2,
+        )))
+        .push_state(StateBasis::new(into_variant(
+            spins.clone(),
+            ComplexState::Spin3,
+        )))
         .push_state(StateBasis::new(into_variant(spins, ComplexState::Spin4)));
 
     let basis: StatesBasis<ComplexState> = basis
@@ -129,41 +149,39 @@ fn complex_manual_operator(bencher: Bencher, size: u32) {
     }
 
     bencher.bench(|| {
-        let mut operator = Mat::from_fn(states.len(), states.len(), |i, j| {
-            unsafe {
-                let ms_bra = *states.get_unchecked(i);
-                let ms_ket = *states.get_unchecked(j);
+        let mut operator = Mat::from_fn(states.len(), states.len(), |i, j| unsafe {
+            let ms_bra = *states.get_unchecked(i);
+            let ms_ket = *states.get_unchecked(j);
 
-                if ms_bra[0] != ms_ket[0] || ms_bra[2] != ms_ket[2] {
-                    return 0.0
-                }
-
-                let mut value = 0.0;
-
-                if ms_bra[1] == ms_ket[1] && ms_bra[3] == ms_ket[3] {
-                    value += ms_bra[1].value() * ms_bra[3].value()
-                }
-
-                if ms_bra[1].double_value() == ms_ket[1].double_value() + 2 
-                    && ms_bra[3].double_value() + 2 == ms_ket[3].double_value() 
-                {
-                    value += (
-                        s.value() * (s.value() + 1.) - ms_bra[1].value() * ms_ket[1].value()
-                        * s.value() * (s.value() + 1.) - ms_bra[3].value() * ms_ket[3].value()
-                    ).sqrt()
-                }
-
-                if ms_bra[1].double_value() + 2 == ms_ket[1].double_value()
-                    && ms_bra[3].double_value() == ms_ket[3].double_value() + 2
-                {
-                    value += (
-                        s.value() * (s.value() + 1.) - ms_bra[1].value() * ms_ket[1].value()
-                        * s.value() * (s.value() + 1.) - ms_bra[3].value() * ms_ket[3].value()
-                    ).sqrt()
-                }
-
-                value
+            if ms_bra[0] != ms_ket[0] || ms_bra[2] != ms_ket[2] {
+                return 0.0;
             }
+
+            let mut value = 0.0;
+
+            if ms_bra[1] == ms_ket[1] && ms_bra[3] == ms_ket[3] {
+                value += ms_bra[1].value() * ms_bra[3].value()
+            }
+
+            if ms_bra[1].double_value() == ms_ket[1].double_value() + 2
+                && ms_bra[3].double_value() + 2 == ms_ket[3].double_value()
+            {
+                value += (s.value() * (s.value() + 1.)
+                    - ms_bra[1].value() * ms_ket[1].value() * s.value() * (s.value() + 1.)
+                    - ms_bra[3].value() * ms_ket[3].value())
+                .sqrt()
+            }
+
+            if ms_bra[1].double_value() + 2 == ms_ket[1].double_value()
+                && ms_bra[3].double_value() == ms_ket[3].double_value() + 2
+            {
+                value += (s.value() * (s.value() + 1.)
+                    - ms_bra[1].value() * ms_ket[1].value() * s.value() * (s.value() + 1.)
+                    - ms_bra[3].value() * ms_ket[3].value())
+                .sqrt()
+            }
+
+            value
         });
 
         black_box(&mut operator);

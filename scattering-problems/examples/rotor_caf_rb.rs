@@ -34,11 +34,17 @@ use scattering_problems::{
     utility::{AnisoHifi, GammaSpinRot},
 };
 use scattering_solver::{
-    boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRNumerov, single_numerov::SingleRNumerov, LocalWavelengthStepRule}, potentials::{
+    boundary::{Boundary, Direction},
+    numerovs::{
+        LocalWavelengthStepRule, multi_numerov::MultiRNumerov, single_numerov::SingleRNumerov,
+    },
+    potentials::{
         composite_potential::Composite,
         dispersion_potential::Dispersion,
         potential::{MatPotential, Potential, SimplePotential},
-    }, propagator::{CoupledEquation, Propagator, SingleEquation}, utility::save_data
+    },
+    propagator::{CoupledEquation, Propagator, SingleEquation},
+    utility::save_data,
 };
 
 use rayon::prelude::*;
@@ -171,7 +177,8 @@ impl Problems {
                     let potential = &alkali_problem.potential;
 
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
-                    let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let boundary =
+                        Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
                     let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
                     let eq = CoupledEquation::from_particles(potential, &atoms);
                     let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
@@ -328,7 +335,8 @@ impl Problems {
                     let potential = &alkali_problem.potential;
 
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
-                    let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let boundary =
+                        Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
                     let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
                     let eq = CoupledEquation::from_particles(potential, &atoms);
                     let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
@@ -386,7 +394,8 @@ impl Problems {
                     let potential = &alkali_problem.potential;
 
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
-                    let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let boundary =
+                        Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
                     let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
                     let eq = CoupledEquation::from_particles(potential, &atoms);
                     let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
@@ -449,7 +458,8 @@ impl Problems {
                     let potential = &alkali_problem.potential;
 
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
-                    let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let boundary =
+                        Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
                     let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
                     let eq = CoupledEquation::from_particles(potential, &atoms);
                     let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
@@ -508,7 +518,8 @@ impl Problems {
                     let potential = &alkali_problem.potential;
 
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
-                    let boundary = Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let boundary =
+                        Boundary::new(7.2, Direction::Outwards, (1.001 * &id, 1.002 * &id));
                     let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
                     let eq = CoupledEquation::from_particles(potential, &atoms);
                     let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);

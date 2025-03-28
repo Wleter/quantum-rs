@@ -332,7 +332,10 @@ macro_rules! cached_mel {
 macro_rules! assert_approx_eq {
     ($x:expr, $y:expr, $err:expr) => {
         if ($x - $y).abs() > $x.abs() * $err {
-            panic!("assertion failed\nleft side: {:e}\nright side: {:e}", $x, $y)
+            panic!(
+                "assertion failed\nleft side: {:e}\nright side: {:e}",
+                $x, $y
+            )
         }
     };
     (iter => $x:expr, $y:expr, $err:expr) => {
@@ -361,10 +364,13 @@ mod test {
         time::{Duration, Instant},
     };
 
-    use crate::utility::{associated_legendre_polynomials, legendre_polynomials, logspace, ratio_riccati_i, ratio_riccati_k, riccati_n};
+    use crate::utility::{
+        associated_legendre_polynomials, legendre_polynomials, logspace, ratio_riccati_i,
+        ratio_riccati_k, riccati_n,
+    };
 
     use super::{linspace, riccati_j};
-    
+
     #[test]
     fn test_grids() {
         let grid = linspace(1.0, 15.0, 6);
@@ -388,17 +394,14 @@ mod test {
         let expected = vec![1.0, -0.7, 0.235, 0.1925, -0.4120625, 0.36519875];
         assert_approx_eq!(iter => legendre, expected, 1e-6);
 
-
         let legendre = associated_legendre_polynomials(5, 3, 0.3);
         let expected = vec![0.0, 0.0, 0.0, -13.02127, -27.3446672, 8.6591446];
         assert_approx_eq!(iter => legendre, expected, 1e-6);
-
 
         let legendre = associated_legendre_polynomials(5, 2, -0.7);
         let expected = vec![0.0, 0.0, 1.53, -5.355, 9.29475, -8.808975];
         assert_approx_eq!(iter => legendre, expected, 1e-6);
     }
-
 
     #[test]
     fn test_bessel() {

@@ -1,8 +1,48 @@
-use std::{f64::consts::PI, fs::File, io::{BufRead, BufReader}, time::Instant};
+use std::{
+    f64::consts::PI,
+    fs::File,
+    io::{BufRead, BufReader},
+    time::Instant,
+};
 
-use quantum::{params::{particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles, Params}, states::spins::clebsch_gordan::{half_integer::HalfI32, hi32, hu32}, units::{distance_units::{Angstrom, Distance}, energy_units::{CmInv, Energy, EnergyUnit, GHz, Kelvin}, mass_units::{Dalton, Mass}, Au, Unit}, utility::{legendre_polynomials, linspace}};
-use scattering_problems::{abm::{DoubleHifiProblemBuilder, HifiProblemBuilder}, alkali_rotor_atom::{AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder, TramBasisRecipe, TramStates}, potential_interpolation::{interpolate_potentials, PotentialArray, TransitionedPotential}, rkhs_interpolation::RKHSInterpolation, utility::{AnisoHifi, GammaSpinRot}, FieldScatteringProblem};
-use scattering_solver::{boundary::{Boundary, Direction}, faer::Mat, numerovs::{multi_numerov::MultiRNumerov, LocalWavelengthStepRule}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, propagator::{CoupledEquation, Propagator}, utility::save_data};
+use quantum::{
+    params::{
+        Params,
+        particle::Particle,
+        particle_factory::{RotConst, create_atom},
+        particles::Particles,
+    },
+    states::spins::clebsch_gordan::{half_integer::HalfI32, hi32, hu32},
+    units::{
+        Au, Unit,
+        distance_units::{Angstrom, Distance},
+        energy_units::{CmInv, Energy, EnergyUnit, GHz, Kelvin},
+        mass_units::{Dalton, Mass},
+    },
+    utility::{legendre_polynomials, linspace},
+};
+use scattering_problems::{
+    FieldScatteringProblem,
+    abm::{DoubleHifiProblemBuilder, HifiProblemBuilder},
+    alkali_rotor_atom::{
+        AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder, TramBasisRecipe, TramStates,
+    },
+    potential_interpolation::{PotentialArray, TransitionedPotential, interpolate_potentials},
+    rkhs_interpolation::RKHSInterpolation,
+    utility::{AnisoHifi, GammaSpinRot},
+};
+use scattering_solver::{
+    boundary::{Boundary, Direction},
+    faer::Mat,
+    numerovs::{LocalWavelengthStepRule, multi_numerov::MultiRNumerov},
+    potentials::{
+        composite_potential::Composite,
+        dispersion_potential::Dispersion,
+        potential::{Potential, SimplePotential},
+    },
+    propagator::{CoupledEquation, Propagator},
+    utility::save_data,
+};
 use timely_hpc::{distribute, timely};
 
 fn main() {
@@ -43,14 +83,17 @@ fn main() {
             let scattering = numerov.s_matrix().get_scattering_length().re;
 
             let elapsed = start.elapsed();
-            println!("magnetic field {mag_field:.1}, done in: {:.2}", elapsed.as_secs_f64());
+            println!(
+                "magnetic field {mag_field:.1}, done in: {:.2}",
+                elapsed.as_secs_f64()
+            );
 
             [mag_field, scattering]
         },
         |scatterings: Vec<[f64; 2]>| {
             let data = vec![
-                scatterings.iter().map(|x| x[0]).collect(), 
-                scatterings.iter().map(|x| x[1]).collect(), 
+                scatterings.iter().map(|x| x[0]).collect(),
+                scatterings.iter().map(|x| x[1]).collect(),
             ];
 
             save_data(
@@ -109,18 +152,16 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
     let mut path = std::env::current_dir().unwrap();
     path.push("data");
     path.push(filename);
-    let f = File::open(&path).unwrap_or_else(|_| panic!(
-        "couldn't find potential in provided path {path:?}"
-    ));
+    let f = File::open(&path)
+        .unwrap_or_else(|_| panic!("couldn't find potential in provided path {path:?}"));
     let f = BufReader::new(f);
 
     let filename = "Rb_SrF/casscf_ex.txt";
     let mut path = std::env::current_dir().unwrap();
     path.push("data");
     path.push(filename);
-    let f2 = File::open(&path).unwrap_or_else(|_| panic!(
-        "couldn't find potential in provided path {path:?}"
-    ));
+    let f2 = File::open(&path)
+        .unwrap_or_else(|_| panic!("couldn't find potential in provided path {path:?}"));
     let f2 = BufReader::new(f2);
 
     let angle_count = 1 + 180 / 5;
@@ -170,9 +211,8 @@ fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
     let filename = "weights.txt";
     path.pop();
     path.push(filename);
-    let f = File::open(&path).unwrap_or_else(|_| panic!(
-        "couldn't find potential in provided path {path:?}"
-    ));
+    let f = File::open(&path)
+        .unwrap_or_else(|_| panic!("couldn't find potential in provided path {path:?}"));
     let mut f = BufReader::new(f);
 
     let mut weights = String::new();

@@ -33,10 +33,15 @@ use scattering_problems::{
     utility::AngularPair,
 };
 use scattering_solver::{
-    boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRNumerov, LocalWavelengthStepRule}, observables::s_matrix::ScatteringDependence, potentials::{
+    boundary::{Boundary, Direction},
+    numerovs::{LocalWavelengthStepRule, multi_numerov::MultiRNumerov},
+    observables::s_matrix::ScatteringDependence,
+    potentials::{
         dispersion_potential::Dispersion,
         potential::{MatPotential, Potential, SimplePotential},
-    }, propagator::{CoupledEquation, Propagator}, utility::{save_data, save_serialize}
+    },
+    propagator::{CoupledEquation, Propagator},
+    utility::{save_data, save_serialize},
 };
 
 use rayon::prelude::*;
@@ -163,7 +168,8 @@ impl Problems {
                     particles.insert(asymptotic);
 
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
-                    let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let boundary =
+                        Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
                     let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
                     let eq = CoupledEquation::from_particles(&potential, &particles);
                     let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
@@ -223,7 +229,8 @@ impl Problems {
                     particles.insert(asymptotic);
 
                     let id = Mat::<f64>::identity(potential.size(), potential.size());
-                    let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                    let boundary =
+                        Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
                     let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
                     let eq = CoupledEquation::from_particles(&potential, &particles);
                     let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
@@ -287,7 +294,8 @@ impl Problems {
                         particles.insert(asymptotic);
 
                         let id = Mat::<f64>::identity(potential.size(), potential.size());
-                        let boundary = Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                        let boundary =
+                            Boundary::new(5., Direction::Outwards, (1.001 * &id, 1.002 * &id));
                         let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
                         let eq = CoupledEquation::from_particles(&potential, &particles);
                         let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
