@@ -266,4 +266,24 @@ mod test {
         numerov.step();
         assert_approx_eq!(numerov.solution.sol.0, 1.00162454, 1e-6);
     }
+
+    #[test]
+    fn test_scattering() {
+        let particles = particles();
+        let potential = potential();
+
+        let boundary = Boundary::new(6.5, Direction::Outwards, (1.001, 1.002));
+        let eq = SingleEquation::from_particles(&potential, &particles);
+
+        let mut numerov = SingleRNumerov::new(eq, boundary, LocalWavelengthStepRule::default());
+
+        numerov.propagate_to(1500.0);
+        let s_matrix = numerov.s_matrix();
+
+        // values at which the result was correct.
+        assert_approx_eq!(s_matrix.get_scattering_length().re, -15.51539, 1e-6);
+        assert_approx_eq!(s_matrix.get_scattering_length().im, -1.1120368e-12, 1e-6);
+        assert_approx_eq!(s_matrix.get_elastic_cross_sect(), 3025.06779, 1e-6);
+        assert_approx_eq!(s_matrix.get_inelastic_cross_sect(), 1.03508256e-23, 1e-6);
+    }
 }

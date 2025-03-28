@@ -5,7 +5,6 @@ use quantum::{
     states::{
         States, StatesBasis,
         braket::Braket,
-        operator::Operator,
         state::{StateBasis, into_variant},
     },
 };

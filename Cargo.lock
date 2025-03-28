@@ -159,6 +159,7 @@ version = "0.1.0"
 dependencies = [
  "dhat",
  "diol",
+ "quantum",
  "rand 0.9.0",
  "scattering-solver",
 ]

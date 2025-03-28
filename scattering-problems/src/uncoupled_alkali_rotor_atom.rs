@@ -5,7 +5,6 @@ use quantum::{
     params::{Params, particle_factory::RotConst},
     states::{
         States, StatesBasis,
-        operator::Operator,
         spins::{Spin, SpinOperators, get_spin_basis},
         state::{StateBasis, into_variant},
     },

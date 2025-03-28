@@ -1,6 +1,6 @@
 use abm::{DoubleHifiProblemBuilder, abm_states::HifiStates};
 use clebsch_gordan::hu32;
-use quantum::{operator_diagonal_mel, states::operator::Operator};
+use quantum::operator_diagonal_mel;
 use scattering_solver::{
     boundary::Asymptotic,
     potentials::{

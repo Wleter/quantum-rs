@@ -463,4 +463,25 @@ mod test {
         assert_approx_eq!(numerov.solution.sol.0[(0, 0)], 1.0016997, 1e-6);
         assert_approx_eq!(numerov.solution.sol.0[(1, 0)], 2.49725e-8, 1e-6);
     }
+
+    #[test]
+    fn test_scattering() {
+        let particles = particles();
+        let potential = potential();
+
+        let id: Mat<f64> = Mat::identity(potential.size(), potential.size());
+        let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+        let eq = CoupledEquation::from_particles(&potential, &particles);
+
+        let mut numerov = MultiRNumerov::new(eq, boundary, LocalWavelengthStepRule::default());
+
+        numerov.propagate_to(1500.0);
+        let s_matrix = numerov.s_matrix();
+
+        // values at which the result was correct.
+        assert_approx_eq!(s_matrix.get_scattering_length().re, -37.0230987, 1e-6);
+        assert_approx_eq!(s_matrix.get_scattering_length().im, -1.6974e-13, 1e-6);
+        assert_approx_eq!(s_matrix.get_elastic_cross_sect(), 17224.7595, 1e-6);
+        assert_approx_eq!(s_matrix.get_inelastic_cross_sect(), 1.0356329e-23, 1e-6);
+    }
 }

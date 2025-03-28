@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 scattering-solver = { path = "../scattering-solver/" }
+quantum = { path = "../quantum", features = ["spins"] }
 dhat = { version = "0.3", optional = true }
 diol = { version = "0.10", default-features = false }
 rand = "0.9"
@@ -15,4 +16,8 @@ allocations = ["dep:dhat"]
 
 [[bench]]
 name = "inverses"
+harness = false
+
+[[bench]]
+name = "operators"
 harness = false

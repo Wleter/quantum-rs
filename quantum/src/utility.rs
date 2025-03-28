@@ -332,7 +332,7 @@ macro_rules! cached_mel {
 macro_rules! assert_approx_eq {
     ($x:expr, $y:expr, $err:expr) => {
         if ($x - $y).abs() > $x.abs() * $err {
-            panic!("assertion failed\nleft side: {}\nright side: {}", $x, $y)
+            panic!("assertion failed\nleft side: {:e}\nright side: {:e}", $x, $y)
         }
     };
     (iter => $x:expr, $y:expr, $err:expr) => {

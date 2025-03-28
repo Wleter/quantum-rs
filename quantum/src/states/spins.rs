@@ -68,6 +68,7 @@ pub enum SpinType {
 pub struct SpinOperators;
 
 impl SpinOperators {
+    #[inline]
     pub fn proj_z(spin: Braket<Spin>) -> f64 {
         if spin.bra == spin.ket {
             spin.bra.ms.value()
@@ -76,6 +77,7 @@ impl SpinOperators {
         }
     }
 
+    #[inline]
     pub fn ladder_plus(spin: Braket<Spin>) -> f64 {
         if spin.bra.s == spin.ket.s && spin.bra.ms.double_value() == spin.ket.ms.double_value() + 2
         {
@@ -87,6 +89,7 @@ impl SpinOperators {
         }
     }
 
+    #[inline]
     pub fn ladder_minus(spin: Braket<Spin>) -> f64 {
         if spin.bra.s == spin.ket.s && spin.bra.ms.double_value() + 2 == spin.ket.ms.double_value()
         {
@@ -98,6 +101,7 @@ impl SpinOperators {
         }
     }
 
+    #[inline]
     pub fn dot(spin1: Braket<Spin>, spin2: Braket<Spin>) -> f64 {
         let val1 = Self::proj_z(spin1) * Self::proj_z(spin2);
         let val2 = 0.5 * Self::ladder_plus(spin1) * Self::ladder_minus(spin2);
