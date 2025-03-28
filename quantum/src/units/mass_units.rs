@@ -5,7 +5,7 @@ pub trait MassUnit: Unit {}
 /// Struct for representing mass unit values
 /// # Examples
 /// ```
-/// use quantum::units::{Au, mass_units::{Mass, Dalton}};
+/// use quantum::units::*;
 /// let mass_dalton = Mass(1.0, Dalton);
 /// let mass_au = mass_dalton.to(Au);
 /// let mass = mass_dalton.to_au();

@@ -109,19 +109,29 @@ macro_rules! problems_impl {
 
 #[cfg(test)]
 mod test {
+    use std::sync::Mutex;
+
     use crate::problem_selector::{ProblemSelector, get_args};
 
     struct TestProblems;
 
+    static CALLED: Mutex<bool> = Mutex::new(false);
+
     problems_impl!(TestProblems, "test",
         "test1" => |_| println!("test1"),
         "test2" => |_| println!("test2"),
-        "test3" => |args| println!("{:?}", args)
+        "test3" => |args| {
+            *CALLED.lock().unwrap() = true;
+            println!("{:?}", args);
+        }
     );
 
     #[test]
     fn problem_selector() {
-        println!("{:?}", TestProblems::list());
+        assert_eq!(vec!["test1", "test2", "test3"], TestProblems::list());
+
+        assert!(!*CALLED.lock().unwrap());
         TestProblems::methods("2", &mut get_args());
+        assert!(*CALLED.lock().unwrap());
     }
 }

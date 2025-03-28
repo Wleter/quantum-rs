@@ -6,3 +6,4 @@ pub mod propagator;
 pub mod utility;
 
 pub extern crate faer;
+pub extern crate quantum;

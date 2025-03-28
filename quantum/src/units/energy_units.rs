@@ -5,10 +5,11 @@ pub trait EnergyUnit: Unit {}
 /// Struct for representing energy unit values
 /// # Examples
 /// ```
-/// use quantum::units::energy_units::{Energy, Kelvin, CmInv};
+/// use quantum::units::*;
 /// let energy_kelvin = Energy(1.0, Kelvin);
-/// let energy_cm_inv = energy_kelvin.to(CmInv);
-/// let energy = energy_kelvin.to_au();
+/// let energy = energy_kelvin.to(Au);
+/// let energy_au = energy_kelvin.to_au();
+/// assert_eq!(energy_au, energy.value())
 #[derive(Debug, Copy, Clone)]
 pub struct Energy<U: EnergyUnit>(pub f64, pub U);
 

@@ -7,7 +7,6 @@ use crate::propagator::{Equation, MultiStep, Repr, Solution};
 pub mod multi_numerov;
 pub mod numerov_modifier;
 pub mod single_numerov;
-// pub mod dummy_numerov;
 // pub mod bound_numerov;
 
 #[derive(Clone, Copy, Debug, Default)]

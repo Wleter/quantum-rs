@@ -5,7 +5,7 @@ pub trait DistanceUnit: Unit {}
 /// Struct for representing distance unit values
 /// # Examples
 /// ```
-/// use quantum::units::{Au, distance_units::{Distance, Angstrom}};
+/// use quantum::units::*;
 /// let distance_ang = Distance(1.0, Angstrom);
 /// let distance_au = distance_ang.to(Au);
 /// let distance = distance_ang.to_au();

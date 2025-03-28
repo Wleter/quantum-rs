@@ -19,7 +19,7 @@ pub fn linspace(start: f64, end: f64, n: usize) -> Vec<f64> {
 /// Creates logarithmically spaced grid of points [10^start, 10^end] (including) with n points.
 pub fn logspace(start: f64, end: f64, n: usize) -> Vec<f64> {
     if n == 1 {
-        return vec![start];
+        return vec![10.0f64.powf(start)];
     }
 
     let mut result = Vec::with_capacity(n);
@@ -125,6 +125,7 @@ fn negate_m(l: u32, m: i32) -> f64 {
     }
 }
 
+/// Returns normalization factor of Associated Legendre Polynomial P_l^m.
 pub fn normalization(l: u32, m: i32) -> f64 {
     assert!(m < 50);
 
@@ -326,11 +327,17 @@ macro_rules! cached_mel {
 ///
 /// # Syntax
 ///
-/// - `assert_approx_eq!(x, y, err)`
+/// - `assert_approx_eq!(x, y, err)` for single element
+/// - `assert_approx_eq!(iter => x, y, err)` for list of elements
 macro_rules! assert_approx_eq {
     ($x:expr, $y:expr, $err:expr) => {
-        if ($x - $y).abs() >= $x.abs() * $err {
+        if ($x - $y).abs() > $x.abs() * $err {
             panic!("assertion failed\nleft side: {}\nright side: {}", $x, $y)
+        }
+    };
+    (iter => $x:expr, $y:expr, $err:expr) => {
+        for (x, y) in $x.iter().zip(&$y) {
+            assert_approx_eq!(x, y, $err);
         }
     };
 }
@@ -354,9 +361,59 @@ mod test {
         time::{Duration, Instant},
     };
 
-    use crate::utility::{ratio_riccati_i, ratio_riccati_k, riccati_n};
+    use crate::utility::{associated_legendre_polynomials, legendre_polynomials, logspace, ratio_riccati_i, ratio_riccati_k, riccati_n};
 
-    use super::riccati_j;
+    use super::{linspace, riccati_j};
+    
+    #[test]
+    fn test_grids() {
+        let grid = linspace(1.0, 15.0, 6);
+        let expected = vec![1.0, 3.8, 6.6, 9.4, 12.2, 15.0];
+
+        assert_approx_eq!(iter => grid, expected, 1e-6);
+
+        let grid = logspace(-2.0, 3.0, 4);
+        let expected = vec![0.01, 0.46415888, 21.5443469, 1000.0];
+
+        assert_approx_eq!(iter => grid, expected, 1e-6);
+    }
+
+    #[test]
+    fn test_legendre() {
+        let legendre = legendre_polynomials(5, 0.3);
+        let expected = vec![1.0, 0.3, -0.365, -0.3825, 0.0729375, 0.34538625];
+        assert_approx_eq!(iter => legendre, expected, 1e-6);
+
+        let legendre = legendre_polynomials(5, -0.7);
+        let expected = vec![1.0, -0.7, 0.235, 0.1925, -0.4120625, 0.36519875];
+        assert_approx_eq!(iter => legendre, expected, 1e-6);
+
+
+        let legendre = associated_legendre_polynomials(5, 3, 0.3);
+        let expected = vec![0.0, 0.0, 0.0, -13.02127, -27.3446672, 8.6591446];
+        assert_approx_eq!(iter => legendre, expected, 1e-6);
+
+
+        let legendre = associated_legendre_polynomials(5, 2, -0.7);
+        let expected = vec![0.0, 0.0, 1.53, -5.355, 9.29475, -8.808975];
+        assert_approx_eq!(iter => legendre, expected, 1e-6);
+    }
+
+
+    #[test]
+    fn test_bessel() {
+        assert_approx_eq!(riccati_j(5, 10.0), -0.555345, 1e-5);
+        assert_approx_eq!(riccati_j(10, 10.0), 0.646052, 1e-5);
+
+        assert_approx_eq!(riccati_n(5, 10.0), -0.938335, 1e-5);
+        assert_approx_eq!(riccati_n(10, 10.0), 1.72454, 1e-5);
+
+        assert_approx_eq!(ratio_riccati_i(5, 5.0, 10.0), 0.00157309, 1e-5);
+        assert_approx_eq!(ratio_riccati_i(10, 5.0, 10.0), 0.00011066, 1e-5);
+
+        assert_approx_eq!(ratio_riccati_k(5, 5.0, 10.0), 487.227, 1e-5);
+        assert_approx_eq!(ratio_riccati_k(10, 5.0, 10.0), 5633.13, 1e-5);
+    }
 
     fn long_computation<const N: usize>(a: [usize; N]) -> [usize; N] {
         sleep(Duration::from_millis(500));
@@ -398,20 +455,5 @@ mod test {
         assert!(durations[0] >= 0.5);
         assert!(durations[1] < 0.5);
         assert!(durations[2] >= 0.5);
-    }
-
-    #[test]
-    fn test_bessel() {
-        assert_approx_eq!(riccati_j(5, 10.0), -0.555345, 1e-5);
-        assert_approx_eq!(riccati_j(10, 10.0), 0.646052, 1e-5);
-
-        assert_approx_eq!(riccati_n(5, 10.0), -0.938335, 1e-5);
-        assert_approx_eq!(riccati_n(10, 10.0), 1.72454, 1e-5);
-
-        assert_approx_eq!(ratio_riccati_i(5, 5.0, 10.0), 0.00157309, 1e-5);
-        assert_approx_eq!(ratio_riccati_i(10, 5.0, 10.0), 0.00011066, 1e-5);
-
-        assert_approx_eq!(ratio_riccati_k(5, 5.0, 10.0), 487.227, 1e-5);
-        assert_approx_eq!(ratio_riccati_k(10, 5.0, 10.0), 5633.13, 1e-5);
     }
 }

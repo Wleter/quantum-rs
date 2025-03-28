@@ -5,9 +5,14 @@ edition = "2021"
 
 [dependencies]
 scattering-solver = { path = "../scattering-solver/" }
-faer = { version = "0.20" }
-dhat = {version = "0.3", optional = true}
+dhat = { version = "0.3", optional = true }
+diol = { version = "0.10", default-features = false }
+rand = "0.9"
 
 [features]
 default = []
 allocations = ["dep:dhat"]
+
+[[bench]]
+name = "inverses"
+harness = false
