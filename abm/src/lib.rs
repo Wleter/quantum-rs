@@ -10,7 +10,6 @@ use quantum::{
     states::{
         States, StatesBasis,
         braket::kron_delta,
-        operator::Operator,
         spins::{SpinOperators, get_spin_basis, get_summed_spin_basis},
         state::{StateBasis, into_variant},
     },
