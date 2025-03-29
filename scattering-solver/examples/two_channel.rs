@@ -3,15 +3,9 @@ use std::time::Instant;
 use faer::Mat;
 use num::Complex;
 use quantum::{
-    params::{particle_factory::create_atom, particles::Particles},
-    problems_impl,
-    units::{
-        Au,
-        distance_units::Distance,
-        energy_units::{Energy, Kelvin},
-        mass_units::Mass,
-    },
-    utility::linspace,
+    params::{particle_factory::create_atom, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{
+        distance_units::Distance, energy_units::{Energy, Kelvin}, mass_units::Mass, Au, GHz
+    }, utility::linspace
 };
 use scattering_solver::{
     boundary::{Asymptotic, Boundary, Direction},
@@ -33,16 +27,20 @@ use scattering_solver::{
     utility::{AngMomentum, save_data},
 };
 
-pub struct TwoChannel;
+pub fn main() {
+    Problems::select(&mut get_args());
+}
 
-problems_impl!(TwoChannel, "two channel",
+pub struct Problems;
+
+problems_impl!(Problems, "two channel",
     "wave function" => |_| Self::wave_function(),
     "scattering length" => |_| Self::scattering_length(),
     "mass scaling" => |_| Self::mass_scaling(),
     "bound states" => |_| Self::bound_states(),
 );
 
-impl TwoChannel {
+impl Problems {
     fn particles() -> Particles {
         let particle1 = create_atom("Li6").unwrap();
         let particle2 = create_atom("Li7").unwrap();
@@ -162,28 +160,33 @@ impl TwoChannel {
     }
 
     fn bound_states() {
-        // let particles = Self::particles();
-        // let potential = Self::potential();
+        let particles = Self::particles();
+        let potential = Self::potential();
 
-        // let energies = linspace(Energy(-1.0, GHz).to_au(), Energy(0.0, GHz).to_au(), 1000);
-        // let data: Vec<BoundDiff> = energies.iter()
-        //     .map(|&energy| {
-        //         let mut particles = particles.clone();
-        //         particles.insert(Energy(energy, Au));
+        let energies = linspace(Energy(-100.0, GHz).to_au(), Energy(0.0, GHz).to_au(), 1000);
+        let data: Vec<f64> = energies.iter()
+            .map(|&energy| {
+                let mut particles = particles.clone();
+                particles.insert(Energy(energy, Au));
 
-        //         MultiBoundRatioNumerov::new(MultiStepRule::new(1e-4, 10., 500.))
-        //             .bound_diff(&potential, &particles, (6.5, 20.0, 1000.))
-        //     })
-        //     .collect();
+                let eq = CoupledEquation::from_particles(&potential, &particles);
+                let boundary = Boundary::new_multi_vanishing(500., Direction::Inwards, potential.size());
+                let step_rule = LocalWavelengthStepRule::new(1e-4, 10., 500.);
 
-        //     let bound_diffs = data.iter().map(|n| n.diff as f64).collect();
-        //     let node_counts = data.iter().map(|n| n.nodes as f64).collect();
-        //     let energies = energies.into_iter().map(|x| Energy(x, Au).to(GHz).value()).collect();
+                let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
 
-        //     let header = "energy\tbound_diff\tnode_count";
-        //     let data = vec![energies, bound_diffs, node_counts];
+                numerov.propagate_to(6.5).nodes as f64
+            })
+            .collect();
 
-        // save_data("two_chan/bound_diffs", header, &data).unwrap();
+        // let bound_diffs = data.iter().map(|n| n.diff as f64).collect();
+        // let node_counts = data.iter().map(|n| n as f64).collect();
+        let energies = energies.into_iter().map(|x| Energy(x, Au).to(GHz).value()).collect();
+
+        let header = "energy\tnode_count";
+        let data = vec![energies, data];
+
+        save_data("two_chan/node_count", header, &data).unwrap();
 
         // let bound_states = vec![0, 1, 3, -1, -2, -5];
         // for n in bound_states {

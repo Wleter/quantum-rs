@@ -2,14 +2,9 @@ use std::time::Instant;
 
 use faer::Mat;
 use quantum::{
-    params::{particle_factory::create_atom, particles::Particles},
-    problems_impl,
-    units::{
-        Au,
-        distance_units::Distance,
-        energy_units::{Energy, Kelvin},
-    },
-    utility::linspace,
+    params::{particle_factory::create_atom, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{
+        distance_units::Distance, energy_units::{Energy, Kelvin}, Au
+    }, utility::linspace
 };
 use scattering_solver::{
     boundary::{Asymptotic, Boundary, Direction},
@@ -27,16 +22,21 @@ use scattering_solver::{
     propagator::{CoupledEquation, Propagator},
     utility::AngMomentum,
 };
-pub struct ManyChannels;
 
-problems_impl!(ManyChannels, "large number of channels",
+pub fn main() {
+    Problems::select(&mut get_args());
+}
+
+pub struct Problems;
+
+problems_impl!(Problems, "large number of channels",
     "scattering length" => |_| Self::scattering_length(),
     "bound states" => |_| Self::bound_states(),
 );
 
 const N: usize = 50;
 
-impl ManyChannels {
+impl Problems {
     fn particles() -> Particles {
         let particle1 = create_atom("Li6").unwrap();
         let particle2 = create_atom("Li7").unwrap();
