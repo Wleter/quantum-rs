@@ -7,7 +7,7 @@ members = [
     "scattering-problems", 
     "distribute",
     "benches"
-]
+, "pyo3-crates/scattering-problems-py"]
 resolver = "2"
 
 [workspace.package]

@@ -21,6 +21,30 @@ impl<T> Boundary<T> {
     }
 }
 
+impl Boundary<f64> {
+    pub fn new_vanishing(r_start: f64, direction: Direction) -> Self {
+        Self {
+            r_start,
+            direction,
+            start_value: 1e5,
+            before_value: 1e10,
+        }
+    }
+}
+
+impl Boundary<Mat<f64>> {
+    pub fn new_multi_vanishing(r_start: f64, direction: Direction, size: usize) -> Self {
+        let id = Mat::<f64>::identity(size, size);
+
+        Self {
+            r_start,
+            direction,
+            start_value: 1e5 * &id,
+            before_value: 1e10 * id,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum Direction {
     Inwards,

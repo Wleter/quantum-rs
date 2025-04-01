@@ -19,6 +19,12 @@ pub trait PropagatorWatcher<T, R: Repr<T>> {
     fn after_prop(&mut self, _sol: &Solution<R>, _eq: &Equation<T>) {}
 }
 
+impl<T, R: Repr<T>, F: Fn(&Solution<R>, &Equation<T>)> PropagatorWatcher<T, R> for F {
+    fn after_step(&mut self, sol: &Solution<R>, eq: &Equation<T>) {
+        self(sol, eq)
+    }
+}
+
 pub struct ManyPropagatorWatcher<'a, T, R: Repr<T>> {
     modifiers: Vec<&'a mut dyn PropagatorWatcher<T, R>>,
 }
@@ -331,36 +337,3 @@ impl<T, R: Repr<T>> PropagatorWatcher<T, R> for NumerovLogging {
         println!("------------------------");
     }
 }
-
-// #[derive(Default)]
-// pub struct NumerovNodeCount {
-//     count: u64
-// }
-
-// impl NumerovNodeCount {
-//     pub fn count(&self) -> u64 {
-//         self.count
-//     }
-// }
-
-// impl<P> PropagatorModifier<SingleNumerovData<'_, P>> for NumerovNodeCount
-// where
-//     P: SimplePotential,
-// {
-//     fn after_step(&mut self, data: &mut SingleNumerovData<'_, P>) {
-//         if data.psi1 < 0. {
-//             self.count += 1;
-//         }
-//     }
-// }
-
-// impl<P> PropagatorModifier<MultiNumerovData<'_, P>> for NumerovNodeCount
-// where
-//     P: MatPotential,
-// {
-//     fn after_step(&mut self, data: &mut MultiNumerovData<'_, P>) {
-//         if data.psi2_det < 0. {
-//             self.count += 1
-//         }
-//     }
-// }

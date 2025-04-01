@@ -175,6 +175,26 @@ pub fn riccati_n(n: u32, x: f64) -> f64 {
     bessel_recurrence(n, x, f64::cos(x), f64::cos(x) / x + f64::sin(x))
 }
 
+/// Calculates riccati bessel function of the first kind j_n(x)
+/// and the corresponding derivative
+///
+/// "Handbook of Mathematical Functions" - eq. 10.3.2 (written as z j_n(z))
+pub fn riccati_j_deriv(n: u32, x: f64) -> (f64, f64) {
+    let (value, value_deriv) = bessel_recurrence_deriv(n, x, f64::sin(x), f64::sin(x) / x - f64::cos(x), f64::cos(x));
+
+    (value, value_deriv + value / x)
+}
+
+/// Calculates riccati bessel function of the third kind n_n(x) = -y_n(x)
+/// and the corresponding derivative
+///
+/// "Handbook of Mathematical Functions" - eq. 10.3.2 (written as -z y_n(z))
+pub fn riccati_n_deriv(n: u32, x: f64) -> (f64, f64) {
+    let (value, value_deriv) = bessel_recurrence_deriv(n, x, f64::cos(x), f64::cos(x) / x + f64::sin(x), -f64::sin(x));
+    
+    (value, value_deriv + value / x)
+}
+
 /// Calculates ratio of the riccati modified spherical bessel function of the first kind
 /// (that is $sqrt(x) I_{n+1/2}(x)) at points `x_1`, `x_2`
 ///
@@ -205,7 +225,39 @@ pub fn ratio_riccati_k(n: u32, x_1: f64, x_2: f64) -> f64 {
     f64::exp(x_2 - x_1) * k_1 / k_2
 }
 
-/// Calculated f_{n+1}(x) given n, x, f_n(x), f_{n-1}(x)
+/// Calculates the ratio of derivative and the value of the  
+/// riccati modified spherical bessel function of the first kind
+/// (that is $sqrt(x) I_{n+1/2}(x))
+///
+/// "Handbook of Mathematical Functions" - eq. 10.2.2 (written as z * sqrt(pi/2z) I_{n+1/2}(z))
+pub fn ratio_riccati_i_deriv(n: u32, x: f64) -> f64 {
+    let red_i_0 = (1. - f64::exp(-2.0 * x)) / 2.0;
+    let red_i_0_deriv = f64::exp(-2.0 * x);
+    let red_i_1 = -(1. - f64::exp(-2.0 * x)) / (2.0 * x) + (1. + f64::exp(-2.0 * x)) / 2.0;
+
+    // Calculates riccati I bessel, without leading exponent, and its derivative
+    let (i_red, i_red_deriv) = modified_bessel_recurrence_deriv(n, x, red_i_0, red_i_1, red_i_0_deriv);
+
+    i_red_deriv / i_red + 1.0 / x
+}
+
+/// Calculates the ratio of derivative and the value of the  
+/// riccati modified spherical bessel function of the third kind
+/// (that is $sqrt(x) K_{n+1/2}(x))
+///
+/// "Handbook of Mathematical Functions" - eq. 10.2.4 (written as z * sqrt(pi/2z) K_{n+1/2}(z))
+pub fn ratio_riccati_k_deriv(n: u32, x: f64) -> f64 {
+    let red_k_0 = 1.0;
+    let red_k_1 = 1.0 + 1.0 / x;
+    let red_k_0_deriv = 0.0;
+
+    // Calculates riccati $(-1)^(n+1) * K$ bessel without leading exponent
+    let (k_red, k_red_deriv) = modified_bessel_recurrence_deriv(n, x, -red_k_0, red_k_1, -red_k_0_deriv);
+
+    k_red_deriv / k_red + 1.0 / x
+}
+
+/// Calculates f_n(x) given n, x, f_0(x), f_1(x)
 /// "Handbook of Mathematical Functions" - eq. 10.1.19
 fn bessel_recurrence(n: u32, x: f64, f_0: f64, f_1: f64) -> f64 {
     if n == 0 {
@@ -227,7 +279,29 @@ fn bessel_recurrence(n: u32, x: f64, f_0: f64, f_1: f64) -> f64 {
     f_k
 }
 
-/// Calculated f_{n+1}(x) given n, x, f_n(x), f_{n-1}(x).
+/// Calculates f_n(x) and its derivative given n, x, f_0(x), f_1(x)
+/// "Handbook of Mathematical Functions" - eq. 10.1.19
+fn bessel_recurrence_deriv(n: u32, x: f64, f_0: f64, f_1: f64, df_0: f64) -> (f64, f64) {
+    if n == 0 {
+        return (f_0, df_0);
+    }
+    if n == 1 {
+        return (f_1, f_0 - (n + 1) as f64 / x * f_1);
+    }
+
+    let mut f_k_1 = f_0;
+    let mut f_k = f_1;
+    let mut f_new;
+    for k in 1..n {
+        f_new = (2 * k + 1) as f64 / x * f_k - f_k_1;
+        f_k_1 = f_k;
+        f_k = f_new;
+    }
+
+    (f_k, f_k_1 - (n + 1) as f64 / x * f_k)
+}
+
+/// Calculates f_n(x) given n, x, f_0(x), f_1(x).
 /// "Handbook of Mathematical Functions" - eq. 10.2.18
 fn modified_bessel_recurrence(n: u32, x: f64, f_0: f64, f_1: f64) -> f64 {
     if n == 0 {
@@ -247,6 +321,28 @@ fn modified_bessel_recurrence(n: u32, x: f64, f_0: f64, f_1: f64) -> f64 {
     }
 
     f_k
+}
+
+/// Calculates f_n(x) and its derivative given n, x, f_0(x), f_1(x).
+/// "Handbook of Mathematical Functions" - eq. 10.2.18
+fn modified_bessel_recurrence_deriv(n: u32, x: f64, f_0: f64, f_1: f64, df_0: f64) -> (f64, f64) {
+    if n == 0 {
+        return (f_0, df_0);
+    }
+    if n == 1 {
+        return (f_1, f_0 - (n + 1) as f64 / x * f_1);
+    }
+
+    let mut f_k_1 = f_0;
+    let mut f_k = f_1;
+    let mut f_new;
+    for k in 1..n {
+        f_new = f_k_1 - (2 * k + 1) as f64 / x * f_k;
+        f_k_1 = f_k;
+        f_k = f_new;
+    }
+
+    (f_k, f_k_1 - (n + 1) as f64 / x * f_k)
 }
 
 /// Macro for crating cache with given name `$cache_name:ident` around the expression

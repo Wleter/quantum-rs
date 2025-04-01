@@ -1,0 +1,9 @@
+[package]
+name = "scattering-problems-py"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+scattering-solver = { path = "../../scattering-solver" }
+scattering-problems = { path = "../../scattering-problems" }
+pyo3 = "0.24.1"
