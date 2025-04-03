@@ -32,7 +32,8 @@ where
     pub(super) solution: Solution<LogDeriv<Mat<f64>>>,
 
     step: LogDerivativeStep<R>,
-    step_rule: S
+    step_rule: S,
+    direction: Direction
 }
 
 impl<'a, S, R> LogDerivative<'a, S, R>
@@ -40,7 +41,7 @@ where
     S: StepRule<Mat<f64>>,
     R: LogDerivativeReference
 {
-    pub fn new(mut eq: Equation<'a, Mat<f64>>, boundary: Boundary<Mat<f64>>,step_rule: S) -> Self {
+    pub fn new(mut eq: Equation<'a, Mat<f64>>, boundary: Boundary<Mat<f64>>, step_rule: S) -> Self {
         let r = boundary.r_start;
 
         eq.buffer_w_matrix(r);
@@ -62,11 +63,29 @@ where
             equation: eq,
             solution: sol,
             step_rule,
+            direction: boundary.direction
         }
     }
 
     pub fn s_matrix(&self) -> SMatrix {
         self.solution.s_matrix(&self.equation)
+    }
+
+    fn step_r_target(&mut self, r: Option<f64>) {
+        self.equation.buffer_w_matrix(self.solution.r);
+        self.solution.dr = match self.direction {
+            Direction::Inwards => -self.step_rule.get_step(&self.equation.buffered_w_matrix()),
+            Direction::Outwards => self.step_rule.get_step(&self.equation.buffered_w_matrix()),
+            Direction::Step(dr) => dr,
+        };
+
+        if let Some(r) = r {
+            if (self.solution.r - r).abs() < self.solution.dr.abs() {
+                self.solution.dr *= ((self.solution.r - r) / self.solution.dr).abs()
+            }
+        }
+
+        self.step.perform_step(&mut self.solution, &self.equation);
     }
 }
 
@@ -78,17 +97,14 @@ where
     // todo! get minimal step from w_matrix from r and r+dr, r+dr buffered in eq,
     // r buffered in LogDerivativeStep
     fn step(&mut self) -> &Solution<LogDeriv<Mat<f64>>> {
-        self.equation.buffer_w_matrix(self.solution.r);
-        self.solution.dr = self.step_rule.get_step(self.equation.buffered_w_matrix());
-
-        self.step.perform_step(&mut self.solution, &self.equation);
+        self.step_r_target(None);
 
         &self.solution
     }
 
     fn propagate_to(&mut self, r: f64) -> &Solution<LogDeriv<Mat<f64>>> {
-        while (self.solution.r - r) * self.solution.dr.signum() <= 0. {
-            self.step();
+        while (self.solution.r - r) * self.solution.dr.signum() < 0. {
+            self.step_r_target(Some(r));
         }
 
         &self.solution
@@ -97,8 +113,9 @@ where
     fn propagate_to_with(&mut self, r: f64, modifier: &mut impl PropagatorWatcher<Mat<f64>, LogDeriv<Mat<f64>>> ) -> &Solution<LogDeriv<Mat<f64>>> {
         modifier.before(&mut self.solution, &self.equation, r);
 
-        while (self.solution.r - r) * self.solution.dr.signum() <= 0. {
-            self.step();
+        while (self.solution.r - r) * self.solution.dr.signum() < 0. {
+            self.step_r_target(Some(r));
+
             modifier.after_step(&mut self.solution, &self.equation);
         }
 
