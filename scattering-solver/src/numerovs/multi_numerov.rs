@@ -15,7 +15,7 @@ use crate::{
     utility::{inverse_inplace, inverse_inplace_nodes},
 };
 
-use super::{Numerov, Ratio, StepAction, StepRule, numerov_modifier::PropagatorWatcher};
+use super::{Numerov, Ratio, StepAction, StepRule, propagator_watcher::PropagatorWatcher};
 
 pub type MultiRNumerov<'a, S> = Numerov<'a, Mat<f64>, Ratio<Mat<f64>>, MultiRNumerovStep, S>;
 

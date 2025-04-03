@@ -44,7 +44,7 @@ use scattering_problems::{
 use scattering_solver::{
     boundary::{Boundary, Direction},
     numerovs::{
-        LocalWavelengthStepRule, multi_numerov::MultiRNumerov, numerov_modifier::PropagatorLogging,
+        LocalWavelengthStepRule, multi_numerov::MultiRNumerov, propagator_watcher::PropagatorLogging,
     },
     observables::s_matrix::{ScatteringDependence, ScatteringObservables},
     potentials::{

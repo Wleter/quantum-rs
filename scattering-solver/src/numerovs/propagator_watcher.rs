@@ -203,7 +203,9 @@ impl PropagatorWatcher<Mat<f64>, LogDeriv<Mat<f64>>> for WaveStorage<Mat<f64>> {
     }
 
     fn after_step(&mut self, sol: &Solution<LogDeriv<Mat<f64>>>, _eq: &Equation<Mat<f64>>) {
-        self.last_value = &sol.sol.0 * &self.last_value * sol.dr - &self.last_value;
+        // self.last_value = &sol.sol.0 * &self.last_value * sol.dr - &self.last_value;
+        self.last_value = sol.sol.0.clone();
+
 
         match &mut self.sampling {
             SampleConfig::Each(sample_each) => {

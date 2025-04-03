@@ -5,7 +5,7 @@ use quantum::{
 };
 
 use crate::{
-    boundary::Asymptotic, numerovs::numerov_modifier::PropagatorWatcher,
+    boundary::Asymptotic, numerovs::propagator_watcher::PropagatorWatcher,
     potentials::potential::Potential,
 };
 

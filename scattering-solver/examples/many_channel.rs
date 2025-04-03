@@ -9,7 +9,7 @@ use quantum::{
 use scattering_solver::{
     boundary::{Asymptotic, Boundary, Direction},
     numerovs::{
-        LocalWavelengthStepRule, multi_numerov::MultiRNumerov, numerov_modifier::PropagatorLogging,
+        LocalWavelengthStepRule, multi_numerov::MultiRNumerov, propagator_watcher::PropagatorLogging,
     },
     potentials::{
         dispersion_potential::Dispersion,

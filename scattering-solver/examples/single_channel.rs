@@ -10,7 +10,7 @@ use quantum::{
 use scattering_solver::{
     boundary::{Boundary, Direction},
     numerovs::{
-        numerov_modifier::{
+        propagator_watcher::{
             ManyPropagatorWatcher, PropagatorLogging, Sampling, ScatteringVsDistance, WaveStorage,
         }, single_numerov::SingleRNumerov, LocalWavelengthStepRule
     },

@@ -9,7 +9,7 @@ use crate::{
     propagator::{Equation, MultiStep, Propagator, Repr, Solution},
 };
 
-use super::{Numerov, Ratio, StepAction, StepRule, numerov_modifier::PropagatorWatcher};
+use super::{Numerov, Ratio, StepAction, StepRule, propagator_watcher::PropagatorWatcher};
 
 pub type SingleRNumerov<'a, S> = Numerov<'a, f64, Ratio<f64>, SingleRNumerovStep, S>;
 

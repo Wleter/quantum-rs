@@ -6,7 +6,7 @@ use std::marker::PhantomData;
 use faer::{linalg::matmul::matmul, prelude::{c64, SolverCore}, unzipped, zipped, Mat, MatMut, MatRef};
 use quantum::utility::{ratio_riccati_i_deriv, ratio_riccati_k_deriv, riccati_j_deriv, riccati_n_deriv};
 
-use crate::{boundary::{Boundary, Direction}, numerovs::{numerov_modifier::PropagatorWatcher, StepRule}, observables::s_matrix::SMatrix, propagator::{Equation, Propagator, Repr, Solution}, utility::{inverse_inplace, inverse_inplace_nodes}};
+use crate::{boundary::{Boundary, Direction}, numerovs::{propagator_watcher::PropagatorWatcher, StepRule}, observables::s_matrix::SMatrix, propagator::{Equation, Propagator, Repr, Solution}, utility::{inverse_inplace, inverse_inplace_nodes}};
 
 
 #[derive(Clone, Copy, Debug, Default)]
