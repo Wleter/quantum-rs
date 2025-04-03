@@ -405,7 +405,7 @@ mod test {
         utility::AngMomentum,
     };
 
-    fn potential() -> impl MatPotential {
+    pub fn potential() -> impl MatPotential {
         let potential_lj1 = create_lj(Energy(0.002, Au), Distance(9., Au));
         let mut potential_lj2 = create_lj(Energy(0.0021, Au), Distance(8.9, Au));
         potential_lj2.add_potential(Dispersion::new(Energy(1., Kelvin).to_au(), 0));
@@ -418,7 +418,7 @@ mod test {
         PairPotential::new(potential, coupling)
     }
 
-    fn particles() -> Particles {
+    pub fn particles() -> Particles {
         let particle1 = create_atom("Li6").unwrap();
         let particle2 = create_atom("Li7").unwrap();
         let energy = Energy(1e-7, Kelvin);

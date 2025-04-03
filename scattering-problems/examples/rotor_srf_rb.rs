@@ -44,7 +44,7 @@ use scattering_problems::{
 use scattering_solver::{
     boundary::{Boundary, Direction},
     numerovs::{
-        LocalWavelengthStepRule, multi_numerov::MultiRNumerov, numerov_modifier::NumerovLogging,
+        LocalWavelengthStepRule, multi_numerov::MultiRNumerov, numerov_modifier::PropagatorLogging,
     },
     observables::s_matrix::{ScatteringDependence, ScatteringObservables},
     potentials::{
@@ -165,7 +165,7 @@ impl Problems {
         let eq = CoupledEquation::from_particles(potential, &atoms);
         let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
 
-        numerov.propagate_to_with(1500., &mut NumerovLogging::default());
+        numerov.propagate_to_with(1500., &mut PropagatorLogging::default());
 
         let scattering = numerov.s_matrix().observables();
 

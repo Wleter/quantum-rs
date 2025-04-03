@@ -9,7 +9,7 @@ use quantum::{
 use scattering_solver::{
     boundary::{Asymptotic, Boundary, Direction},
     numerovs::{
-        LocalWavelengthStepRule, multi_numerov::MultiRNumerov, numerov_modifier::NumerovLogging,
+        LocalWavelengthStepRule, multi_numerov::MultiRNumerov, numerov_modifier::PropagatorLogging,
     },
     potentials::{
         dispersion_potential::Dispersion,
@@ -99,7 +99,7 @@ impl Problems {
         let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
         let preparation = start.elapsed();
 
-        numerov.propagate_to_with(1e3, &mut NumerovLogging::default());
+        numerov.propagate_to_with(1e3, &mut PropagatorLogging::default());
         let propagation = start.elapsed() - preparation;
 
         let s_matrix = numerov.s_matrix();

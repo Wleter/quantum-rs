@@ -5,8 +5,7 @@ use hhmmss::Hhmmss;
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::{
-    observables::s_matrix::SMatrix,
-    propagator::{Equation, Repr, Solution},
+    log_derivatives::LogDeriv, observables::s_matrix::SMatrix, propagator::{Equation, Repr, Solution}
 };
 
 use super::Ratio;
@@ -193,6 +192,57 @@ impl PropagatorWatcher<Mat<f64>, Ratio<Mat<f64>>> for WaveStorage<Mat<f64>> {
     }
 }
 
+impl PropagatorWatcher<Mat<f64>, LogDeriv<Mat<f64>>> for WaveStorage<Mat<f64>> {
+    fn before(&mut self, sol: &Solution<LogDeriv<Mat<f64>>>, _eq: &Equation<Mat<f64>>, r_stop: f64) {
+        if let SampleConfig::Step(value) = &mut self.sampling {
+            *value = (sol.r - r_stop).abs() / self.capacity as f64
+        }
+
+        self.rs.push(sol.r);
+        self.waves.push(self.last_value.clone());
+    }
+
+    fn after_step(&mut self, sol: &Solution<LogDeriv<Mat<f64>>>, _eq: &Equation<Mat<f64>>) {
+        self.last_value = &sol.sol.0 * &self.last_value * sol.dr - &self.last_value;
+
+        match &mut self.sampling {
+            SampleConfig::Each(sample_each) => {
+                self.counter += 1;
+                if self.counter % *sample_each == 0 {
+                    self.rs.push(sol.r);
+                    self.waves.push(self.last_value.clone());
+                }
+
+                if self.rs.len() == self.capacity {
+                    *sample_each *= 2;
+
+                    self.rs = self
+                        .rs
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, _)| i % 2 == 1)
+                        .map(|(_, r)| *r)
+                        .collect();
+
+                    self.waves = self
+                        .waves
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, _)| i % 2 == 1)
+                        .map(|(_, w)| w.clone())
+                        .collect();
+                }
+            }
+            SampleConfig::Step(sample_step) => {
+                if (sol.r - self.rs.last().unwrap()).abs() > *sample_step {
+                    self.rs.push(sol.r);
+                    self.waves.push(self.last_value.clone());
+                }
+            }
+        }
+    }
+}
+
 #[derive(Default, Debug, Clone, Copy)]
 pub enum Sampling {
     Uniform,
@@ -272,7 +322,7 @@ impl PropagatorWatcher<Mat<f64>, Ratio<Mat<f64>>> for ScatteringVsDistance {
     }
 }
 
-pub struct NumerovLogging {
+pub struct PropagatorLogging {
     r_min: f64,
     r_stop: f64,
     current: f64,
@@ -281,7 +331,7 @@ pub struct NumerovLogging {
     progress: ProgressBar,
 }
 
-impl Default for NumerovLogging {
+impl Default for PropagatorLogging {
     fn default() -> Self {
         Self {
             r_min: Default::default(),
@@ -294,13 +344,13 @@ impl Default for NumerovLogging {
     }
 }
 
-impl NumerovLogging {
+impl PropagatorLogging {
     pub fn steps_no(&self) -> u64 {
         self.steps_no
     }
 }
 
-impl<T, R: Repr<T>> PropagatorWatcher<T, R> for NumerovLogging {
+impl<T, R: Repr<T>> PropagatorWatcher<T, R> for PropagatorLogging {
     fn before(&mut self, sol: &Solution<R>, _eq: &Equation<T>, r_stop: f64) {
         self.r_min = sol.r;
         self.r_stop = r_stop;

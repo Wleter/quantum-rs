@@ -2,62 +2,34 @@ use faer::{MatMut, MatRef};
 
 use super::{LogDerivative, LogDerivativeReference};
 
-pub type DiabaticLogDerivative<'a, S> = LogDerivative<'a, S, Diabatic>;
+pub type JohnsonLogDerivative<'a, S> = LogDerivative<'a, S, Johnson>;
 
-pub struct Diabatic;
+pub struct Johnson;
 
-impl LogDerivativeReference for Diabatic {
-    fn w_ref(w_c: MatRef<f64>, mut w_ref: MatMut<f64>) {
+impl LogDerivativeReference for Johnson {
+    fn w_ref(_w_c: MatRef<f64>, mut w_ref: MatMut<f64>) {
         w_ref.fill_zero();
-        
-        w_ref.diagonal_mut()
-            .column_vector_mut()
-            .iter_mut()
-            .zip(w_c
-                .diagonal()
-                .column_vector()
-                .iter()
-            )
-            .for_each(|(w_ref, &w_c)| {
-                *w_ref = w_c
-            });
     }
 
-    fn imbedding1(h: f64, w_ref: MatRef<f64>, mut out: MatMut<f64>) {
+    fn imbedding1(h: f64, _w_ref: MatRef<f64>, mut out: MatMut<f64>) {
         out.fill_zero();
 
         out.diagonal_mut()
             .column_vector_mut()
             .iter_mut()
-            .zip(w_ref.diagonal()
-                .column_vector()
-                .iter()
-            )
-            .for_each(|(y1, &p2)| {
-                if p2 < 0.0 {
-                    *y1 = (-p2).sqrt() * 1.0 / f64::tanh((-p2).sqrt() * h)
-                } else {
-                    *y1 = p2.sqrt() * 1.0 / f64::tan(p2.sqrt() * h)
-                }
+            .for_each(|y1| {
+                *y1 = 1.0 / h
             });
     }
 
-    fn imbedding2(h: f64, w_ref: MatRef<f64>, mut out: MatMut<f64>) {
+    fn imbedding2(h: f64, _w_ref: MatRef<f64>, mut out: MatMut<f64>) {
         out.fill_zero();
 
         out.diagonal_mut()
             .column_vector_mut()
             .iter_mut()
-            .zip(w_ref.diagonal()
-                .column_vector()
-                .iter()
-            )
-            .for_each(|(y2, &p2)| {
-                if p2 < 0.0 {
-                    *y2 = (-p2).sqrt() * 1.0 / f64::sinh((-p2).sqrt() * h)
-                } else {
-                    *y2 = p2.sqrt() * 1.0 / f64::sin(p2.sqrt() * h)
-                }
+            .for_each(|y2| {
+                *y2 = 1.0 / h
             });
     }
 
@@ -78,7 +50,7 @@ mod test {
     use faer::Mat;
     use quantum::{assert_approx_eq, params::{particle_factory::create_atom, particles::Particles}, units::*};
 
-    use crate::{boundary::{Asymptotic, Boundary, Direction}, log_derivatives::diabatic::DiabaticLogDerivative, numerovs::LocalWavelengthStepRule, potentials::{dispersion_potential::Dispersion, gaussian_coupling::GaussianCoupling, multi_coupling::MultiCoupling, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{MatPotential, Potential}, potential_factory::create_lj}, propagator::{CoupledEquation, Propagator}, utility::AngMomentum};
+    use crate::{boundary::{Asymptotic, Boundary, Direction}, log_derivatives::johnson::JohnsonLogDerivative, numerovs::LocalWavelengthStepRule, potentials::{dispersion_potential::Dispersion, gaussian_coupling::GaussianCoupling, multi_coupling::MultiCoupling, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{MatPotential, Potential}, potential_factory::create_lj}, propagator::{CoupledEquation, Propagator}, utility::AngMomentum};
 
     fn potential() -> impl MatPotential {
         let potential_lj1 = create_lj(Energy(0.002, Au), Distance(9., Au));
@@ -110,14 +82,14 @@ mod test {
     }
 
     #[test]
-    fn test_scattering_diabatic_log_derivative() {
+    fn test_scattering_johnson_log_derivative() {
         let particles = particles();
         let potential = potential();
 
         let boundary = Boundary::new_multi_vanishing(6.5, Direction::Outwards, potential.size());
         let eq = CoupledEquation::from_particles(&potential, &particles);
 
-        let mut log_deriv = DiabaticLogDerivative::new(eq, boundary, LocalWavelengthStepRule::default());
+        let mut log_deriv = JohnsonLogDerivative::new(eq, boundary, LocalWavelengthStepRule::default());
 
         log_deriv.propagate_to(1500.0);
         let s_matrix = log_deriv.s_matrix();

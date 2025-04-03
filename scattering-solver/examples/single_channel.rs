@@ -11,7 +11,7 @@ use scattering_solver::{
     boundary::{Boundary, Direction},
     numerovs::{
         numerov_modifier::{
-            ManyPropagatorWatcher, NumerovLogging, Sampling, ScatteringVsDistance, WaveStorage,
+            ManyPropagatorWatcher, PropagatorLogging, Sampling, ScatteringVsDistance, WaveStorage,
         }, single_numerov::SingleRNumerov, LocalWavelengthStepRule
     },
     potentials::{
@@ -66,7 +66,7 @@ impl Problems {
             LocalWavelengthStepRule::default(),
         );
         let mut wave_storage = WaveStorage::new(Sampling::default(), 1e-50, 500);
-        let mut numerov_logging = NumerovLogging::default();
+        let mut numerov_logging = PropagatorLogging::default();
 
         let mut watchers =
             ManyPropagatorWatcher::new(vec![&mut wave_storage, &mut numerov_logging]);

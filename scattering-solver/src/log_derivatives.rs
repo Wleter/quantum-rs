@@ -1,4 +1,5 @@
 pub mod diabatic;
+pub mod johnson;
 
 use std::marker::PhantomData;
 
@@ -62,6 +63,10 @@ where
             solution: sol,
             step_rule,
         }
+    }
+
+    pub fn s_matrix(&self) -> SMatrix {
+        self.solution.s_matrix(&self.equation)
     }
 }
 

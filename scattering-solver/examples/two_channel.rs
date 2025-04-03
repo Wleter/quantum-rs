@@ -8,13 +8,9 @@ use quantum::{
     }, utility::linspace
 };
 use scattering_solver::{
-    boundary::{Asymptotic, Boundary, Direction},
-    numerovs::{
-        LocalWavelengthStepRule,
-        multi_numerov::MultiRNumerov,
-        numerov_modifier::{Sampling, WaveStorage},
-    },
-    potentials::{
+    boundary::{Asymptotic, Boundary, Direction}, log_derivatives::diabatic::DiabaticLogDerivative, numerovs::{
+        multi_numerov::MultiRNumerov, numerov_modifier::{ManyPropagatorWatcher, PropagatorLogging, Sampling, WaveStorage}, LocalWavelengthStepRule
+    }, potentials::{
         dispersion_potential::Dispersion,
         gaussian_coupling::GaussianCoupling,
         multi_coupling::MultiCoupling,
@@ -22,9 +18,7 @@ use scattering_solver::{
         pair_potential::PairPotential,
         potential::{MatPotential, Potential},
         potential_factory::create_lj,
-    },
-    propagator::{CoupledEquation, Propagator},
-    utility::{AngMomentum, save_data},
+    }, propagator::{CoupledEquation, Propagator}, utility::{save_data, AngMomentum}
 };
 
 pub fn main() {
@@ -71,22 +65,21 @@ impl Problems {
     }
 
     fn wave_function() {
-        let start = Instant::now();
-
         let particles = Self::particles();
         let potential = Self::potential();
 
         let id: Mat<f64> = Mat::identity(potential.size(), potential.size());
-        let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+        let boundary = Boundary::new_multi_vanishing(6.5, Direction::Outwards, potential.size());
 
         let eq = CoupledEquation::from_particles(&potential, &particles);
-        let mut numerov = MultiRNumerov::new(eq, boundary, LocalWavelengthStepRule::default());
+        let mut numerov = DiabaticLogDerivative::new(eq, boundary, LocalWavelengthStepRule::new(1e-4, 2.0, 500.));
 
         let mut wave_storage = WaveStorage::new(Sampling::default(), 1e-50 * id, 500);
+        let mut numerov_logging = PropagatorLogging::default();
 
-        let preparation = start.elapsed();
-        numerov.propagate_to_with(100., &mut wave_storage);
-        let propagation = start.elapsed() - preparation;
+        let mut watchers = ManyPropagatorWatcher::new(vec![&mut wave_storage, &mut numerov_logging]);
+
+        numerov.propagate_to_with(100., &mut watchers);
 
         let chan1 = wave_storage.waves.iter().map(|wave| wave[(0, 0)]).collect();
         let chan2 = wave_storage.waves.iter().map(|wave| wave[(0, 1)]).collect();
@@ -94,9 +87,6 @@ impl Problems {
         let header = "position\tchannel_1\tchannel_2";
         let data = vec![wave_storage.rs, chan1, chan2];
         save_data("two_chan/wave_function", header, &data).unwrap();
-
-        println!("Preparation time: {:?} μs", preparation.as_micros());
-        println!("Propagation time: {:?} μs", propagation.as_micros());
     }
 
     fn scattering_length() {
