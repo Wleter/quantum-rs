@@ -180,7 +180,7 @@ pub fn riccati_n(n: u32, x: f64) -> f64 {
 ///
 /// "Handbook of Mathematical Functions" - eq. 10.3.2 (written as z j_n(z))
 pub fn riccati_j_deriv(n: u32, x: f64) -> (f64, f64) {
-    let (value, value_deriv) = bessel_recurrence_deriv(n, x, f64::sin(x), f64::sin(x) / x - f64::cos(x), f64::cos(x));
+    let (value, value_deriv) = bessel_recurrence_deriv(n, x, f64::sin(x), f64::sin(x) / x - f64::cos(x));
 
     (value, value_deriv + value / x)
 }
@@ -190,7 +190,7 @@ pub fn riccati_j_deriv(n: u32, x: f64) -> (f64, f64) {
 ///
 /// "Handbook of Mathematical Functions" - eq. 10.3.2 (written as -z y_n(z))
 pub fn riccati_n_deriv(n: u32, x: f64) -> (f64, f64) {
-    let (value, value_deriv) = bessel_recurrence_deriv(n, x, f64::cos(x), f64::cos(x) / x + f64::sin(x), -f64::sin(x));
+    let (value, value_deriv) = bessel_recurrence_deriv(n, x, f64::cos(x), f64::cos(x) / x + f64::sin(x));
     
     (value, value_deriv + value / x)
 }
@@ -232,11 +232,10 @@ pub fn ratio_riccati_k(n: u32, x_1: f64, x_2: f64) -> f64 {
 /// "Handbook of Mathematical Functions" - eq. 10.2.2 (written as z * sqrt(pi/2z) I_{n+1/2}(z))
 pub fn ratio_riccati_i_deriv(n: u32, x: f64) -> f64 {
     let red_i_0 = (1. - f64::exp(-2.0 * x)) / 2.0;
-    let red_i_0_deriv = f64::exp(-2.0 * x);
     let red_i_1 = -(1. - f64::exp(-2.0 * x)) / (2.0 * x) + (1. + f64::exp(-2.0 * x)) / 2.0;
 
     // Calculates riccati I bessel, without leading exponent, and its derivative
-    let (i_red, i_red_deriv) = modified_bessel_recurrence_deriv(n, x, red_i_0, red_i_1, red_i_0_deriv);
+    let (i_red, i_red_deriv) = modified_bessel_recurrence_deriv(n, x, red_i_0, red_i_1);
 
     i_red_deriv / i_red + 1.0 / x
 }
@@ -249,10 +248,9 @@ pub fn ratio_riccati_i_deriv(n: u32, x: f64) -> f64 {
 pub fn ratio_riccati_k_deriv(n: u32, x: f64) -> f64 {
     let red_k_0 = 1.0;
     let red_k_1 = 1.0 + 1.0 / x;
-    let red_k_0_deriv = 0.0;
 
     // Calculates riccati $(-1)^(n+1) * K$ bessel without leading exponent
-    let (k_red, k_red_deriv) = modified_bessel_recurrence_deriv(n, x, -red_k_0, red_k_1, -red_k_0_deriv);
+    let (k_red, k_red_deriv) = modified_bessel_recurrence_deriv(n, x, -red_k_0, red_k_1);
 
     k_red_deriv / k_red + 1.0 / x
 }
@@ -279,11 +277,11 @@ fn bessel_recurrence(n: u32, x: f64, f_0: f64, f_1: f64) -> f64 {
     f_k
 }
 
-/// Calculates f_n(x) and its derivative given n, x, f_0(x), f_1(x)
+/// Calculates f_n(x) and its derivative (g(x) d Bessel(x)/dx) given n, x, f_0(x), f_1(x)
 /// "Handbook of Mathematical Functions" - eq. 10.1.19
-fn bessel_recurrence_deriv(n: u32, x: f64, f_0: f64, f_1: f64, df_0: f64) -> (f64, f64) {
+fn bessel_recurrence_deriv(n: u32, x: f64, f_0: f64, f_1: f64) -> (f64, f64) {
     if n == 0 {
-        return (f_0, df_0);
+        return (f_0, -f_1);
     }
     if n == 1 {
         return (f_1, f_0 - (n + 1) as f64 / x * f_1);
@@ -323,11 +321,11 @@ fn modified_bessel_recurrence(n: u32, x: f64, f_0: f64, f_1: f64) -> f64 {
     f_k
 }
 
-/// Calculates f_n(x) and its derivative given n, x, f_0(x), f_1(x).
+/// Calculates f_n(x) and its derivative (g(x) d MBessel(x)/dx) given n, x, f_0(x), f_1(x).
 /// "Handbook of Mathematical Functions" - eq. 10.2.18
-fn modified_bessel_recurrence_deriv(n: u32, x: f64, f_0: f64, f_1: f64, df_0: f64) -> (f64, f64) {
+fn modified_bessel_recurrence_deriv(n: u32, x: f64, f_0: f64, f_1: f64) -> (f64, f64) {
     if n == 0 {
-        return (f_0, df_0);
+        return (f_0, f_1);
     }
     if n == 1 {
         return (f_1, f_0 - (n + 1) as f64 / x * f_1);
@@ -461,8 +459,7 @@ mod test {
     };
 
     use crate::utility::{
-        associated_legendre_polynomials, legendre_polynomials, logspace, ratio_riccati_i,
-        ratio_riccati_k, riccati_n,
+        associated_legendre_polynomials, legendre_polynomials, logspace, ratio_riccati_i, ratio_riccati_i_deriv, ratio_riccati_k, ratio_riccati_k_deriv, riccati_j_deriv, riccati_n, riccati_n_deriv
     };
 
     use super::{linspace, riccati_j};
@@ -512,6 +509,22 @@ mod test {
 
         assert_approx_eq!(ratio_riccati_k(5, 5.0, 10.0), 487.227, 1e-5);
         assert_approx_eq!(ratio_riccati_k(10, 5.0, 10.0), 5633.13, 1e-5);
+
+        assert_approx_eq!(riccati_j_deriv(5, 10.0).0, -0.555345, 1e-5);
+        assert_approx_eq!(riccati_j_deriv(5, 10.0).1, -0.77822, 1e-5);
+        assert_approx_eq!(riccati_j_deriv(10, 10.0).0, 0.646052, 1e-5);
+        assert_approx_eq!(riccati_j_deriv(10, 10.0).1, 0.354913, 1e-5);
+        
+        assert_approx_eq!(riccati_n_deriv(5, 10.0).0, -0.938335, 1e-5);
+        assert_approx_eq!(riccati_n_deriv(5, 10.0).1, 0.485767, 1e-5);
+        assert_approx_eq!(riccati_n_deriv(10, 10.0).0, 1.72454, 1e-5);
+        assert_approx_eq!(riccati_n_deriv(10, 10.0).1, -0.600479, 1e-5);
+
+        assert_approx_eq!(ratio_riccati_i_deriv(5, 10.0), 1.1531, 1e-5);
+        assert_approx_eq!(ratio_riccati_i_deriv(10, 10.0), 1.47691, 1e-5);
+
+        assert_approx_eq!(ratio_riccati_k_deriv(5, 10.0), -1.12973, 1e-5);
+        assert_approx_eq!(ratio_riccati_k_deriv(10, 10.0), -1.42441, 1e-5);
     }
 
     fn long_computation<const N: usize>(a: [usize; N]) -> [usize; N] {

@@ -301,8 +301,7 @@ impl Solution<Ratio<Mat<f64>>> {
         let r_prev_last = self.r - self.dr;
         let wave_ratio = self.sol.0.as_ref();
 
-        // todo! check if it is better to include centrifugal barrier or not
-        let asymptotic = &eq.asymptotic.channel_energies;
+        let asymptotic = &eq.asymptotic(r_last);
 
         let is_open_channel = asymptotic
             .iter()

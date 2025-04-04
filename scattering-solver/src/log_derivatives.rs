@@ -264,11 +264,10 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
 impl Solution<LogDeriv<Mat<f64>>> {
     pub fn s_matrix(&self, eq: &Equation<Mat<f64>>) -> SMatrix {
         let size = eq.potential.size();
-        let r_last = self.r;
+        let r = self.r;
         let log_deriv = self.sol.0.as_ref();
 
-        // todo! check if it is better to include centrifugal barrier or not
-        let asymptotic = &eq.asymptotic.channel_energies;
+        let asymptotic = &eq.asymptotic(r);
 
         let is_open_channel = asymptotic
             .iter()
@@ -288,20 +287,20 @@ impl Solution<LogDeriv<Mat<f64>>> {
             let momentum = momenta[i];
             let l = eq.asymptotic.centrifugal[i].0;
             if is_open_channel[i] {
-                let (j_riccati, j_deriv_riccati) = riccati_j_deriv(l, momentum * r_last);
-                let (n_riccati, n_deriv_riccati) = riccati_n_deriv(l, momentum * r_last);
+                let (j_riccati, j_deriv_riccati) = riccati_j_deriv(l, momentum * r);
+                let (n_riccati, n_deriv_riccati) = riccati_n_deriv(l, momentum * r);
 
                 j_last[(i, i)] = j_riccati / momentum.sqrt();
                 j_deriv_last[(i, i)] = j_deriv_riccati * momentum.sqrt();
                 n_last[(i, i)] = n_riccati / momentum.sqrt();
                 n_deriv_last[(i, i)] = n_deriv_riccati * momentum.sqrt();
             } else {
-                let ratio_i = ratio_riccati_i_deriv(l, momentum * r_last);
-                let ratio_k = ratio_riccati_k_deriv(l, momentum * r_last);
+                let ratio_i = ratio_riccati_i_deriv(l, momentum * r);
+                let ratio_k = ratio_riccati_k_deriv(l, momentum * r);
 
-                j_deriv_last[(i, i)] = ratio_i;
+                j_deriv_last[(i, i)] = ratio_i * momentum;
                 j_last[(i, i)] = 1.0;
-                n_deriv_last[(i, i)] = ratio_k;
+                n_deriv_last[(i, i)] = ratio_k * momentum;
                 n_last[(i, i)] = 1.0;
             }
         }

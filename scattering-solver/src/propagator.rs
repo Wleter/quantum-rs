@@ -111,6 +111,18 @@ impl<'a> Equation<'a, Mat<f64>> {
             .for_each(|unzipped!(o, u)| *o = 2.0 * self.mass * (self.energy * u - *o));
     }
 
+    // todo! check if including centrifugal term is good, 
+    // however then how to differentiate open channels with closed etc
+    pub fn asymptotic(&self, _r: f64) -> &[f64] {
+        &self.asymptotic.channel_energies
+            // .iter()
+            // .zip(&self.asymptotic.centrifugal)
+            // .map(move |(e, AngMomentum(l))| {
+            //     e + (l * (l + 1)) as f64 / (2. * self.mass * r * r)
+            // })
+            // .collect()
+    }
+
     pub fn buffered_w_matrix(&self) -> &Mat<f64> {
         &self.buffered_w_matrix
     }

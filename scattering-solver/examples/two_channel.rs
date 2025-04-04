@@ -8,7 +8,7 @@ use quantum::{
     }, utility::linspace
 };
 use scattering_solver::{
-    boundary::{Asymptotic, Boundary, Direction}, log_derivatives::diabatic::DiabaticLogDerivative, numerovs::{
+    boundary::{Asymptotic, Boundary, Direction}, numerovs::{
         multi_numerov::MultiRNumerov, propagator_watcher::{ManyPropagatorWatcher, PropagatorLogging, Sampling, WaveStorage}, LocalWavelengthStepRule
     }, potentials::{
         dispersion_potential::Dispersion,
@@ -72,9 +72,9 @@ impl Problems {
         let boundary = Boundary::new_multi_vanishing(6.5, Direction::Outwards, potential.size());
 
         let eq = CoupledEquation::from_particles(&potential, &particles);
-        let mut numerov = DiabaticLogDerivative::new(eq, boundary, LocalWavelengthStepRule::new(1e-4, 2.0, 500.));
+        let mut numerov = MultiRNumerov::new(eq, boundary, LocalWavelengthStepRule::default());
 
-        let mut wave_storage = WaveStorage::new(Sampling::default(), 1e-50 * id, 500);
+        let mut wave_storage = WaveStorage::new(Sampling::Uniform, 1e-50 * id, 500);
         let mut numerov_logging = PropagatorLogging::default();
 
         let mut watchers = ManyPropagatorWatcher::new(vec![&mut wave_storage, &mut numerov_logging]);
