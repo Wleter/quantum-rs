@@ -42,18 +42,13 @@ use scattering_problems::{
     utility::{AnisoHifi, GammaSpinRot},
 };
 use scattering_solver::{
-    boundary::{Boundary, Direction},
-    numerovs::{
-        LocalWavelengthStepRule, multi_numerov::MultiRNumerov, propagator_watcher::PropagatorLogging,
-    },
-    observables::s_matrix::{ScatteringDependence, ScatteringObservables},
-    potentials::{
+    boundary::{Boundary, Direction}, numerovs::{
+        multi_numerov::MultiRNumerov, propagator_watcher::PropagatorLogging, LocalWavelengthStepRule
+    }, observables::s_matrix::{ScatteringDependence, ScatteringObservables}, potentials::{
         composite_potential::Composite,
         dispersion_potential::Dispersion,
         potential::{Potential, ScaledPotential, SimplePotential},
-    },
-    propagator::{CoupledEquation, Propagator},
-    utility::{save_data, save_serialize},
+    }, propagator::{CoupledEquation, Propagator}, utility::{save_data, save_serialize}
 };
 
 use rayon::prelude::*;
@@ -173,10 +168,10 @@ impl Problems {
     }
 
     fn atom_approximation_cross_sections() {
-        let entrance = 0;
+        let entrance = 4;
         let mag_fields = linspace(0., 2000., 1000);
 
-        let projection = hi32!(1);
+        let projection = hi32!(-1);
         let energy_relative = Energy(1e-7, Kelvin);
 
         ////////////////////////////////////
@@ -207,8 +202,7 @@ impl Problems {
                 atoms.insert(asymptotic);
                 let potential = &alkali_problem.potential;
 
-                let id = Mat::<f64>::identity(potential.size(), potential.size());
-                let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+                let boundary = Boundary::new_multi_vanishing(5.0, Direction::Outwards, potential.size());
                 let step_rule = LocalWavelengthStepRule::new(4e-3, f64::INFINITY, 400.);
                 let eq = CoupledEquation::from_particles(potential, &atoms);
                 let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
@@ -227,7 +221,7 @@ impl Problems {
             observables: scatterings,
         };
 
-        save_serialize("SrF_Rb_scatterings_n_0_ground", &data).unwrap()
+        save_serialize("SrF_Rb_scatterings_n_0", &data).unwrap()
     }
 
     fn cross_sections() {

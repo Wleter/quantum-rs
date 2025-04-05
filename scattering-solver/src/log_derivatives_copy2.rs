@@ -33,9 +33,9 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
         eq.w_matrix(sol.r + h, &mut self.buffer1);
         R::w_ref(self.buffer1.as_ref(), self.w_ref.as_mut());
 
-        zipped!(self.buffer1.as_mut(), eq.unit.as_ref())
-        .for_each(|unzipped!(b, u)| {
-            *b = u + h * h / 6. * *b // different sign since W(c) is -W(c) in our notation
+        zipped!(self.buffer1.as_mut(), eq.unit.as_ref(), self.w_ref.as_ref())
+        .for_each(|unzipped!(b, u, w_ref)| {
+            *b = u - h * h / 6. * (w_ref - *b)  // sign change because of different convention
         });
 
         inverse_inplace(self.buffer1.as_ref(), self.buffer2.as_mut(), &mut self.perm, &mut self.perm_inv);
@@ -95,7 +95,7 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
             *y1 = sol + *y1
         });
         
-        sol.nodes += inverse_inplace_nodes(self.buffer3.as_ref(), sol.sol.0.as_mut(), &mut self.perm, &mut self.perm_inv);
+        let mut nodes = inverse_inplace_nodes(self.buffer3.as_ref(), sol.sol.0.as_mut(), &mut self.perm, &mut self.perm_inv);
         // sol is now (y + y1(a, b))^-1
 
         R::imbedding2(h, self.w_ref.as_ref(), self.buffer1.as_mut());
@@ -139,92 +139,11 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
         });
         // sol is y(b)
 
+        if sol.dr < 0. {
+            nodes = self.perm.len() as u64 - nodes
+        }
+        sol.nodes += nodes;
+
         sol.r += sol.dr;
-    }
-}
-
-impl Solution<LogDeriv<Mat<f64>>> {
-    pub fn s_matrix(&self, eq: &Equation<Mat<f64>>) -> SMatrix {
-        let size = eq.potential.size();
-        let r = self.r;
-        let log_deriv = self.sol.0.as_ref();
-
-        let asymptotic = &eq.asymptotic(r);
-
-        let is_open_channel = asymptotic
-            .iter()
-            .map(|&val| val < eq.energy)
-            .collect::<Vec<bool>>();
-        let momenta: Vec<f64> = asymptotic
-            .iter()
-            .map(|&val| (2.0 * eq.mass * (eq.energy - val).abs()).sqrt())
-            .collect();
-
-        let mut j_last = Mat::zeros(size, size);
-        let mut j_deriv_last = Mat::zeros(size, size);
-        let mut n_last = Mat::zeros(size, size);
-        let mut n_deriv_last = Mat::zeros(size, size);
-
-        for i in 0..size {
-            let momentum = momenta[i];
-            let l = eq.asymptotic.centrifugal[i].0;
-            if is_open_channel[i] {
-                let (j_riccati, j_deriv_riccati) = riccati_j_deriv(l, momentum * r);
-                let (n_riccati, n_deriv_riccati) = riccati_n_deriv(l, momentum * r);
-
-                j_last[(i, i)] = j_riccati / momentum.sqrt();
-                j_deriv_last[(i, i)] = j_deriv_riccati * momentum.sqrt();
-                n_last[(i, i)] = n_riccati / momentum.sqrt();
-                n_deriv_last[(i, i)] = n_deriv_riccati * momentum.sqrt();
-            } else {
-                let ratio_i = ratio_riccati_i_deriv(l, momentum * r);
-                let ratio_k = ratio_riccati_k_deriv(l, momentum * r);
-
-                j_deriv_last[(i, i)] = ratio_i;
-                j_last[(i, i)] = 1.0;
-                n_deriv_last[(i, i)] = ratio_k;
-                n_last[(i, i)] = 1.0;
-            }
-        }
-
-        let denominator = (log_deriv * n_last - n_deriv_last).partial_piv_lu();
-        let denominator = denominator.inverse();
-
-        let k_matrix = -denominator * (log_deriv * j_last - j_deriv_last);
-
-        let open_channel_count = is_open_channel.iter().filter(|val| **val).count();
-        let mut red_ik_matrix = Mat::<c64>::zeros(open_channel_count, open_channel_count);
-
-        let mut i_full = 0;
-        for i in 0..open_channel_count {
-            while !is_open_channel[i_full] {
-                i_full += 1
-            }
-
-            let mut j_full = 0;
-            for j in 0..open_channel_count {
-                while !is_open_channel[j_full] {
-                    j_full += 1
-                }
-
-                red_ik_matrix[(i, j)] = c64::new(0.0, k_matrix[(i_full, j_full)]);
-                j_full += 1;
-            }
-            i_full += 1;
-        }
-        let id = Mat::<c64>::identity(open_channel_count, open_channel_count);
-
-        let denominator = (&id - &red_ik_matrix).partial_piv_lu();
-        let denominator = denominator.inverse();
-        let s_matrix = denominator * (id + red_ik_matrix);
-        let entrance = is_open_channel
-            .iter()
-            .enumerate()
-            .filter(|(_, x)| **x)
-            .find(|(i, _)| *i == eq.asymptotic.entrance)
-            .expect("Closed entrance channel")
-            .0;
-
-        SMatrix::new(s_matrix, momenta[eq.asymptotic.entrance], entrance)
     }
 }

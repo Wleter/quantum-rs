@@ -8,7 +8,7 @@ use quantum::{
     }, utility::linspace
 };
 use scattering_solver::{
-    boundary::{Asymptotic, Boundary, Direction}, numerovs::{
+    boundary::{Asymptotic, Boundary, Direction}, log_derivatives::{diabatic::DiabaticLogDerivative, johnson::JohnsonLogDerivative}, numerovs::{
         multi_numerov::MultiRNumerov, propagator_watcher::{ManyPropagatorWatcher, PropagatorLogging, Sampling, WaveStorage}, LocalWavelengthStepRule
     }, potentials::{
         dispersion_potential::Dispersion,
@@ -32,6 +32,7 @@ problems_impl!(Problems, "two channel",
     "scattering length" => |_| Self::scattering_length(),
     "mass scaling" => |_| Self::mass_scaling(),
     "bound states" => |_| Self::bound_states(),
+    "testing" => |_| Self::testing()
 );
 
 impl Problems {
@@ -69,23 +70,27 @@ impl Problems {
         let potential = Self::potential();
 
         let id: Mat<f64> = Mat::identity(potential.size(), potential.size());
-        let boundary = Boundary::new_multi_vanishing(6.5, Direction::Outwards, potential.size());
+        // let boundary = Boundary::new_multi_vanishing(6.5, Direction::Outwards, potential.size());
 
         let eq = CoupledEquation::from_particles(&potential, &particles);
-        let mut numerov = MultiRNumerov::new(eq, boundary, LocalWavelengthStepRule::default());
+
+        let boundary = Boundary::new_exponential_vanishing(500., &eq);
+
+        let mut numerov = JohnsonLogDerivative::new(eq, boundary, LocalWavelengthStepRule::default());
 
         let mut wave_storage = WaveStorage::new(Sampling::Uniform, 1e-50 * id, 500);
         let mut numerov_logging = PropagatorLogging::default();
 
         let mut watchers = ManyPropagatorWatcher::new(vec![&mut wave_storage, &mut numerov_logging]);
 
-        numerov.propagate_to_with(100., &mut watchers);
+        numerov.propagate_to_with(6.5, &mut watchers);
 
         let chan1 = wave_storage.waves.iter().map(|wave| wave[(0, 0)]).collect();
         let chan2 = wave_storage.waves.iter().map(|wave| wave[(0, 1)]).collect();
+        let nodes = wave_storage.nodes.iter().map(|&nodes| nodes as f64).collect();
 
-        let header = "position\tchannel_1\tchannel_2";
-        let data = vec![wave_storage.rs, chan1, chan2];
+        let header = "position\tchannel_1\tchannel_2\tnodes";
+        let data = vec![wave_storage.rs, chan1, chan2, nodes];
         save_data("two_chan/wave_function", header, &data).unwrap();
     }
 
@@ -97,7 +102,7 @@ impl Problems {
         let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
 
         let eq = CoupledEquation::from_particles(&potential, &particles);
-        let mut numerov = MultiRNumerov::new(eq, boundary, LocalWavelengthStepRule::default());
+        let mut numerov = JohnsonLogDerivative::new(eq, boundary, LocalWavelengthStepRule::default());
 
         let start = Instant::now();
         numerov.propagate_to(1e3);
@@ -160,10 +165,11 @@ impl Problems {
                 particles.insert(Energy(energy, Au));
 
                 let eq = CoupledEquation::from_particles(&potential, &particles);
-                let boundary = Boundary::new_multi_vanishing(500., Direction::Inwards, potential.size());
+                let boundary = Boundary::new_exponential_vanishing(500., &eq);
+
                 let step_rule = LocalWavelengthStepRule::new(1e-4, 10., 500.);
 
-                let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
+                let mut numerov = DiabaticLogDerivative::new(eq, boundary, step_rule);
 
                 numerov.propagate_to(6.5).nodes as f64
             })
@@ -189,5 +195,9 @@ impl Problems {
         //     let data = vec![rs, wave];
         //     save_data("two_chan", &format!("bound_wave_{}", n), header, data).unwrap();
         // }
+    }
+
+    fn testing() {
+
     }
 }

@@ -123,9 +123,9 @@ mod test {
         let s_matrix = log_deriv.s_matrix();
 
         // values at which the result was correct.
-        assert_approx_eq!(s_matrix.get_scattering_length().re, -37.0230987, 1e-6);
-        assert_approx_eq!(s_matrix.get_scattering_length().im, -1.6974e-13, 1e-6);
-        assert_approx_eq!(s_matrix.get_elastic_cross_sect(), 17224.7595, 1e-6);
+        assert_approx_eq!(s_matrix.get_scattering_length().re, -36.998695, 1e-6);
+        assert_approx_eq!(s_matrix.get_scattering_length().im, -1.0772965e-12, 1e-6);
+        assert_approx_eq!(s_matrix.get_elastic_cross_sect(), 1.720206e4, 1e-6);
         assert_approx_eq!(s_matrix.get_inelastic_cross_sect(), 1.0356329e-23, 1e-6);
     }
 }

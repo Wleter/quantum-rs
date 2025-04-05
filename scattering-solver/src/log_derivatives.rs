@@ -33,7 +33,6 @@ where
 
     step: LogDerivativeStep<R>,
     step_rule: S,
-    direction: Direction
 }
 
 impl<'a, S, R> LogDerivative<'a, S, R>
@@ -63,7 +62,6 @@ where
             equation: eq,
             solution: sol,
             step_rule,
-            direction: boundary.direction
         }
     }
 
@@ -77,11 +75,9 @@ where
 
     fn step_r_target(&mut self, r: Option<f64>) {
         self.equation.buffer_w_matrix(self.solution.r);
-        self.solution.dr = (match self.direction {
-            Direction::Inwards => -self.step_rule.get_step(&self.equation.buffered_w_matrix()),
-            Direction::Outwards => self.step_rule.get_step(&self.equation.buffered_w_matrix()),
-            Direction::Step(dr) => dr,
-        }).clamp(0.0, 2. * self.solution.dr);
+
+        let dr_new = self.step_rule.get_step(&self.equation.buffered_w_matrix());
+        self.solution.dr = dr_new.clamp(0., 2. * self.solution.dr.abs()) * self.solution.dr.signum();
 
         if let Some(r) = r {
             if (self.solution.r - r).abs() < self.solution.dr.abs() {
@@ -176,7 +172,8 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
         .for_each(|unzipped!(y1, sol)| {
             *y1 = sol + *y1
         });
-        sol.nodes += inverse_inplace_nodes(self.buffer2.as_ref(), sol.sol.0.as_mut(), &mut self.perm, &mut self.perm_inv);
+
+        let nodes1 = inverse_inplace_nodes(self.buffer2.as_ref(), sol.sol.0.as_mut(), &mut self.perm, &mut self.perm_inv);
         // sol is now (Y(a) + y_1(a, c))^-1
 
         R::imbedding3(h, self.w_ref.as_ref(), self.buffer1.as_mut());
@@ -226,7 +223,8 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
         .for_each(|unzipped!(y1, sol)| {
             *y1 = sol + *y1
         });
-        sol.nodes += inverse_inplace_nodes(self.buffer1.as_ref(), sol.sol.0.as_mut(), &mut self.perm, &mut self.perm_inv);
+        let nodes2 = inverse_inplace_nodes(self.buffer1.as_ref(), sol.sol.0.as_mut(), &mut self.perm, &mut self.perm_inv);
+
         // sol is now (Y(c) + y_1(c, b))^-1
 
         R::imbedding3(h, self.w_ref.as_ref(), self.buffer1.as_mut());
@@ -249,13 +247,22 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
         .for_each(|unzipped!(y, y4)| {
             *y = y4 - *y
         });
-
-        if sol.nodes < k_count {
-            panic!("Node counting is wrong k-count {} nodes {}", k_count, sol.nodes);
-        }
-        sol.nodes -= k_count;
-
         // sol is Y(c) 
+
+        let mut nodes1 = nodes1;
+        let mut nodes2 = nodes2;
+        if sol.dr < 0. {
+            nodes1 = self.perm.len() as u64 - nodes1;
+            nodes2 = self.perm.len() as u64 - nodes2;
+        }
+        let nodes = nodes1 + nodes2;
+        
+        assert!(nodes >= k_count, "Node counting is wrong k-count {} nodes {}", k_count, sol.nodes);
+        sol.nodes += nodes - k_count;
+
+        if nodes1 > 0 || nodes2 > 0 {
+            println!("nodes1 {nodes1} nodes2 {nodes2} k_count {k_count} r {}", sol.r);
+        }
 
         sol.r += sol.dr;
     }

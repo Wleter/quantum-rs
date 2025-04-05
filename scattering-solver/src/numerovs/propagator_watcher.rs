@@ -62,6 +62,7 @@ pub(super) enum SampleConfig {
 pub struct WaveStorage<T> {
     pub rs: Vec<f64>,
     pub waves: Vec<T>,
+    pub nodes: Vec<u64>,
 
     pub(super) last_value: T,
     pub(super) counter: usize,
@@ -73,6 +74,7 @@ impl<T: Clone> WaveStorage<T> {
     pub fn new(sampling: Sampling, wave_init: T, capacity: usize) -> Self {
         let rs = Vec::with_capacity(capacity);
         let waves = Vec::with_capacity(capacity);
+        let nodes = Vec::with_capacity(capacity);
 
         let sampling = match sampling {
             Sampling::Uniform => SampleConfig::Step(0.),
@@ -86,160 +88,90 @@ impl<T: Clone> WaveStorage<T> {
             capacity,
             counter: 0,
             sampling,
+            nodes
         }
     }
+
+    fn sample(&mut self, r: f64, nodes: u64) {
+        match &mut self.sampling {
+            SampleConfig::Each(sample_each) => {
+                self.counter += 1;
+                if self.counter % *sample_each == 0 {
+                    self.rs.push(r);
+                    self.waves.push(self.last_value.clone());
+                    self.nodes.push(nodes);
+                }
+
+                if self.rs.len() == self.capacity {
+                    *sample_each *= 2;
+
+                    halve_data(&self.rs);
+                    halve_data(&self.waves);
+                    halve_data(&self.nodes);
+                }
+            }
+            SampleConfig::Step(sample_step) => {
+                if (r - self.rs.last().unwrap()).abs() > *sample_step {
+                    self.rs.push(r);
+                    self.waves.push(self.last_value.clone());
+                    self.nodes.push(nodes);
+                }
+            }
+        }
+    }
+
+    fn before_internal(&mut self, r: f64, r_stop: f64) {
+        if let SampleConfig::Step(value) = &mut self.sampling {
+            *value = (r - r_stop).abs() / self.capacity as f64
+        }
+
+        self.rs.push(r);
+        self.waves.push(self.last_value.clone());
+        self.nodes.push(0);
+    }
+}
+
+fn halve_data<T: Clone>(data: &[T]) -> Vec<T> {
+    data.iter()
+        .enumerate()
+        .filter(|(i, _)| i % 2 == 1)
+        .map(|(_, w)| w.clone())
+        .collect()
 }
 
 impl PropagatorWatcher<f64, Ratio<f64>> for WaveStorage<f64> {
     fn before(&mut self, sol: &Solution<Ratio<f64>>, _eq: &Equation<f64>, r_stop: f64) {
-        if let SampleConfig::Step(value) = &mut self.sampling {
-            *value = (sol.r - r_stop).abs() / self.capacity as f64
-        }
-
-        self.rs.push(sol.r);
-        self.waves.push(self.last_value);
+        self.before_internal(sol.r, r_stop);
     }
 
     fn after_step(&mut self, sol: &Solution<Ratio<f64>>, _eq: &Equation<f64>) {
         self.last_value *= sol.sol.0;
 
-        match &mut self.sampling {
-            SampleConfig::Each(sample_each) => {
-                self.counter += 1;
-                if self.counter % *sample_each == 0 {
-                    self.rs.push(sol.r);
-                    self.waves.push(self.last_value);
-                }
-
-                if self.rs.len() == self.capacity {
-                    *sample_each *= 2;
-
-                    self.rs = self
-                        .rs
-                        .iter()
-                        .enumerate()
-                        .filter(|(i, _)| i % 2 == 1)
-                        .map(|(_, r)| *r)
-                        .collect();
-
-                    self.waves = self
-                        .waves
-                        .iter()
-                        .enumerate()
-                        .filter(|(i, _)| i % 2 == 1)
-                        .map(|(_, w)| *w)
-                        .collect();
-                }
-            }
-            SampleConfig::Step(sample_step) => {
-                if (sol.r - self.rs.last().unwrap()).abs() > *sample_step {
-                    self.rs.push(sol.r);
-                    self.waves.push(self.last_value);
-                }
-            }
-        }
+        self.sample(sol.r, sol.nodes);
     }
 }
 
 impl PropagatorWatcher<Mat<f64>, Ratio<Mat<f64>>> for WaveStorage<Mat<f64>> {
     fn before(&mut self, sol: &Solution<Ratio<Mat<f64>>>, _eq: &Equation<Mat<f64>>, r_stop: f64) {
-        if let SampleConfig::Step(value) = &mut self.sampling {
-            *value = (sol.r - r_stop).abs() / self.capacity as f64
-        }
-
-        self.rs.push(sol.r);
-        self.waves.push(self.last_value.clone());
+        self.before_internal(sol.r, r_stop);
     }
 
     fn after_step(&mut self, sol: &Solution<Ratio<Mat<f64>>>, _eq: &Equation<Mat<f64>>) {
         self.last_value = &sol.sol.0 * &self.last_value;
 
-        match &mut self.sampling {
-            SampleConfig::Each(sample_each) => {
-                self.counter += 1;
-                if self.counter % *sample_each == 0 {
-                    self.rs.push(sol.r);
-                    self.waves.push(self.last_value.clone());
-                }
-
-                if self.rs.len() == self.capacity {
-                    *sample_each *= 2;
-
-                    self.rs = self
-                        .rs
-                        .iter()
-                        .enumerate()
-                        .filter(|(i, _)| i % 2 == 1)
-                        .map(|(_, r)| *r)
-                        .collect();
-
-                    self.waves = self
-                        .waves
-                        .iter()
-                        .enumerate()
-                        .filter(|(i, _)| i % 2 == 1)
-                        .map(|(_, w)| w.clone())
-                        .collect();
-                }
-            }
-            SampleConfig::Step(sample_step) => {
-                if (sol.r - self.rs.last().unwrap()).abs() > *sample_step {
-                    self.rs.push(sol.r);
-                    self.waves.push(self.last_value.clone());
-                }
-            }
-        }
+        self.sample(sol.r, sol.nodes);
     }
 }
 
 impl PropagatorWatcher<Mat<f64>, LogDeriv<Mat<f64>>> for WaveStorage<Mat<f64>> {
     fn before(&mut self, sol: &Solution<LogDeriv<Mat<f64>>>, _eq: &Equation<Mat<f64>>, r_stop: f64) {
-        if let SampleConfig::Step(value) = &mut self.sampling {
-            *value = (sol.r - r_stop).abs() / self.capacity as f64
-        }
-
-        self.rs.push(sol.r);
-        self.waves.push(self.last_value.clone());
+        self.before_internal(sol.r, r_stop);
     }
 
     fn after_step(&mut self, sol: &Solution<LogDeriv<Mat<f64>>>, _eq: &Equation<Mat<f64>>) {
         self.last_value = &sol.sol.0 * &self.last_value * sol.dr + &self.last_value;
 
-        match &mut self.sampling {
-            SampleConfig::Each(sample_each) => {
-                self.counter += 1;
-                if self.counter % *sample_each == 0 {
-                    self.rs.push(sol.r);
-                    self.waves.push(self.last_value.clone());
-                }
-
-                if self.rs.len() == self.capacity {
-                    *sample_each *= 2;
-
-                    self.rs = self
-                        .rs
-                        .iter()
-                        .enumerate()
-                        .filter(|(i, _)| i % 2 == 1)
-                        .map(|(_, r)| *r)
-                        .collect();
-
-                    self.waves = self
-                        .waves
-                        .iter()
-                        .enumerate()
-                        .filter(|(i, _)| i % 2 == 1)
-                        .map(|(_, w)| w.clone())
-                        .collect();
-                }
-            }
-            SampleConfig::Step(sample_step) => {
-                if (sol.r - self.rs.last().unwrap()).abs() > *sample_step {
-                    self.rs.push(sol.r);
-                    self.waves.push(self.last_value.clone());
-                }
-            }
-        }
+        self.sample(sol.r, sol.nodes);
     }
 }
 
