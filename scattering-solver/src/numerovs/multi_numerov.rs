@@ -172,7 +172,7 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
         )
         .for_each(|unzipped!(b1, u, c)| *b1 = u + sol.dr * sol.dr / 12. * c);
 
-        inverse_inplace(
+        let artificial = inverse_inplace_nodes(
             self.buffer1.as_ref(),
             self.f3.as_mut(),
             &mut self.perm_buffer,
@@ -185,6 +185,8 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
             &mut self.perm_buffer,
             &mut self.perm_inv_buffer,
         );
+        assert!(sol.nodes >= artificial);
+        sol.nodes -= artificial;
 
         matmul(
             self.buffer2.as_mut(),
