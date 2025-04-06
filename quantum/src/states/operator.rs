@@ -191,10 +191,10 @@ where
 }
 
 #[cfg(feature = "faer")]
-use faer::{Entity, Mat};
+use faer::Mat;
 
 #[cfg(feature = "faer")]
-impl<E: Entity + Zero> Operator<Mat<E>> {
+impl<E: Zero> Operator<Mat<E>> {
     pub fn from_mel<const N: usize, T: Copy + PartialEq, F>(
         elements: &StatesBasis<T>,
         action_states: [T; N],
@@ -241,7 +241,7 @@ impl<E: Entity + Zero> Operator<Mat<E>> {
 }
 
 #[cfg(feature = "faer")]
-impl<E: Entity> Deref for Operator<Mat<E>> {
+impl<E> Deref for Operator<Mat<E>> {
     type Target = Mat<E>;
 
     fn deref(&self) -> &Self::Target {
