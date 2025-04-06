@@ -64,7 +64,7 @@ where
             equation: self.equation,
             solution: self.solution,
             multi_step: self.multi_step,
-            step_rule: step_rule,
+            step_rule,
             phantom: PhantomData,
         }
     }

@@ -77,14 +77,14 @@ where
         r: f64,
         modifier: &mut impl PropagatorWatcher<f64, R>,
     ) -> &Solution<R> {
-        modifier.before(&mut self.solution, &self.equation, r);
+        modifier.before(&self.solution, &self.equation, r);
 
         while (self.solution.r - r) * self.solution.dr.signum() <= 0. {
             self.step();
-            modifier.after_step(&mut self.solution, &self.equation);
+            modifier.after_step(&self.solution, &self.equation);
         }
 
-        modifier.after_prop(&mut self.solution, &self.equation);
+        modifier.after_prop(&self.solution, &self.equation);
 
         &self.solution
     }

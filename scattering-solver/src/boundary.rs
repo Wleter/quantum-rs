@@ -49,7 +49,8 @@ impl Boundary<Mat<f64>> {
         let size = eq.asymptotic.channel_energies.len();
 
         let mut start_mat = Mat::<f64>::identity(size, size);
-        start_mat.diagonal_mut()
+        start_mat
+            .diagonal_mut()
             .column_vector_mut()
             .iter_mut()
             .zip(eq.asymptotic(r_start))

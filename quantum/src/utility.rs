@@ -180,7 +180,8 @@ pub fn riccati_n(n: u32, x: f64) -> f64 {
 ///
 /// "Handbook of Mathematical Functions" - eq. 10.3.2 (written as z j_n(z))
 pub fn riccati_j_deriv(n: u32, x: f64) -> (f64, f64) {
-    let (value, value_deriv) = bessel_recurrence_deriv(n, x, f64::sin(x), f64::sin(x) / x - f64::cos(x));
+    let (value, value_deriv) =
+        bessel_recurrence_deriv(n, x, f64::sin(x), f64::sin(x) / x - f64::cos(x));
 
     (value, value_deriv + value / x)
 }
@@ -190,8 +191,9 @@ pub fn riccati_j_deriv(n: u32, x: f64) -> (f64, f64) {
 ///
 /// "Handbook of Mathematical Functions" - eq. 10.3.2 (written as -z y_n(z))
 pub fn riccati_n_deriv(n: u32, x: f64) -> (f64, f64) {
-    let (value, value_deriv) = bessel_recurrence_deriv(n, x, f64::cos(x), f64::cos(x) / x + f64::sin(x));
-    
+    let (value, value_deriv) =
+        bessel_recurrence_deriv(n, x, f64::cos(x), f64::cos(x) / x + f64::sin(x));
+
     (value, value_deriv + value / x)
 }
 
@@ -459,7 +461,9 @@ mod test {
     };
 
     use crate::utility::{
-        associated_legendre_polynomials, legendre_polynomials, logspace, ratio_riccati_i, ratio_riccati_i_deriv, ratio_riccati_k, ratio_riccati_k_deriv, riccati_j_deriv, riccati_n, riccati_n_deriv
+        associated_legendre_polynomials, legendre_polynomials, logspace, ratio_riccati_i,
+        ratio_riccati_i_deriv, ratio_riccati_k, ratio_riccati_k_deriv, riccati_j_deriv, riccati_n,
+        riccati_n_deriv,
     };
 
     use super::{linspace, riccati_j};
@@ -514,7 +518,7 @@ mod test {
         assert_approx_eq!(riccati_j_deriv(5, 10.0).1, -0.77822, 1e-5);
         assert_approx_eq!(riccati_j_deriv(10, 10.0).0, 0.646052, 1e-5);
         assert_approx_eq!(riccati_j_deriv(10, 10.0).1, 0.354913, 1e-5);
-        
+
         assert_approx_eq!(riccati_n_deriv(5, 10.0).0, -0.938335, 1e-5);
         assert_approx_eq!(riccati_n_deriv(5, 10.0).1, 0.485767, 1e-5);
         assert_approx_eq!(riccati_n_deriv(10, 10.0).0, 1.72454, 1e-5);

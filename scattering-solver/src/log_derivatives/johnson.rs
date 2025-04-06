@@ -17,9 +17,7 @@ impl LogDerivativeReference for Johnson {
         out.diagonal_mut()
             .column_vector_mut()
             .iter_mut()
-            .for_each(|y1| {
-                *y1 = 1.0 / h
-            });
+            .for_each(|y1| *y1 = 1.0 / h);
     }
 
     fn imbedding2(h: f64, _w_ref: MatRef<f64>, mut out: MatMut<f64>) {
@@ -28,9 +26,7 @@ impl LogDerivativeReference for Johnson {
         out.diagonal_mut()
             .column_vector_mut()
             .iter_mut()
-            .for_each(|y2| {
-                *y2 = 1.0 / h
-            });
+            .for_each(|y2| *y2 = 1.0 / h);
     }
 
     #[inline]
@@ -44,13 +40,31 @@ impl LogDerivativeReference for Johnson {
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use faer::Mat;
-    use quantum::{assert_approx_eq, params::{particle_factory::create_atom, particles::Particles}, units::*};
+    use quantum::{
+        assert_approx_eq,
+        params::{particle_factory::create_atom, particles::Particles},
+        units::*,
+    };
 
-    use crate::{boundary::{Asymptotic, Boundary, Direction}, log_derivatives::johnson::JohnsonLogDerivative, numerovs::LocalWavelengthStepRule, potentials::{dispersion_potential::Dispersion, gaussian_coupling::GaussianCoupling, multi_coupling::MultiCoupling, multi_diag_potential::Diagonal, pair_potential::PairPotential, potential::{MatPotential, Potential}, potential_factory::create_lj}, propagator::{CoupledEquation, Propagator}, utility::AngMomentum};
+    use crate::{
+        boundary::{Asymptotic, Boundary, Direction},
+        log_derivatives::johnson::JohnsonLogDerivative,
+        numerovs::LocalWavelengthStepRule,
+        potentials::{
+            dispersion_potential::Dispersion,
+            gaussian_coupling::GaussianCoupling,
+            multi_coupling::MultiCoupling,
+            multi_diag_potential::Diagonal,
+            pair_potential::PairPotential,
+            potential::{MatPotential, Potential},
+            potential_factory::create_lj,
+        },
+        propagator::{CoupledEquation, Propagator},
+        utility::AngMomentum,
+    };
 
     fn potential() -> impl MatPotential {
         let potential_lj1 = create_lj(Energy(0.002, Au), Distance(9., Au));
@@ -89,7 +103,8 @@ mod test {
         let boundary = Boundary::new_multi_vanishing(6.5, Direction::Outwards, potential.size());
         let eq = CoupledEquation::from_particles(&potential, &particles);
 
-        let mut log_deriv = JohnsonLogDerivative::new(eq, boundary, LocalWavelengthStepRule::default());
+        let mut log_deriv =
+            JohnsonLogDerivative::new(eq, boundary, LocalWavelengthStepRule::default());
 
         log_deriv.propagate_to(1500.0);
         let s_matrix = log_deriv.s_matrix();

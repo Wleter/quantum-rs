@@ -3,29 +3,37 @@ use std::time::Instant;
 
 use num::Complex;
 use quantum::{
-    params::{particle_factory::create_atom, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{
-        distance_units::Distance, energy_units::{Energy, Kelvin}, mass_units::Mass, Au, GHz
-    }, utility::linspace
+    params::{particle_factory::create_atom, particles::Particles},
+    problem_selector::{ProblemSelector, get_args},
+    problems_impl,
+    units::{
+        Au, GHz,
+        distance_units::Distance,
+        energy_units::{Energy, Kelvin},
+        mass_units::Mass,
+    },
+    utility::linspace,
 };
 use scattering_solver::{
     boundary::{Boundary, Direction},
     numerovs::{
+        LocalWavelengthStepRule,
         propagator_watcher::{
             ManyPropagatorWatcher, PropagatorLogging, Sampling, ScatteringVsDistance, WaveStorage,
-        }, single_numerov::SingleRNumerov, LocalWavelengthStepRule
+        },
+        single_numerov::SingleRNumerov,
     },
     potentials::{
         potential::{Potential, SimplePotential},
         potential_factory::create_lj,
     },
     propagator::{Propagator, SingleEquation},
-    utility::{save_data, AngMomentum},
+    utility::{AngMomentum, save_data},
 };
 
 pub fn main() {
     Problems::select(&mut get_args());
 }
-
 
 pub struct Problems {}
 
@@ -177,7 +185,8 @@ impl Problems {
         let potential = Self::potential();
 
         let energies = linspace(Energy(-100.0, GHz).to_au(), Energy(0.0, GHz).to_au(), 1000);
-        let data: Vec<f64> = energies.iter()
+        let data: Vec<f64> = energies
+            .iter()
             .map(|&energy| {
                 let mut particles = particles.clone();
                 particles.insert(Energy(energy, Au));
@@ -194,7 +203,10 @@ impl Problems {
 
         // let bound_diffs = data.iter().map(|n| n.diff as f64).collect();
         // let node_counts = data.iter().map(|n| n as f64).collect();
-        let energies = energies.into_iter().map(|x| Energy(x, Au).to(GHz).value()).collect();
+        let energies = energies
+            .into_iter()
+            .map(|x| Energy(x, Au).to(GHz).value())
+            .collect();
 
         let header = "energy\tnode_count";
         let data = vec![energies, data];

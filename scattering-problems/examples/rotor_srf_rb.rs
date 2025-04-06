@@ -42,13 +42,19 @@ use scattering_problems::{
     utility::{AnisoHifi, GammaSpinRot},
 };
 use scattering_solver::{
-    boundary::{Boundary, Direction}, numerovs::{
-        multi_numerov::MultiRNumerov, propagator_watcher::PropagatorLogging, LocalWavelengthStepRule
-    }, observables::s_matrix::{ScatteringDependence, ScatteringObservables}, potentials::{
+    boundary::{Boundary, Direction},
+    numerovs::{
+        LocalWavelengthStepRule, multi_numerov::MultiRNumerov,
+        propagator_watcher::PropagatorLogging,
+    },
+    observables::s_matrix::{ScatteringDependence, ScatteringObservables},
+    potentials::{
         composite_potential::Composite,
         dispersion_potential::Dispersion,
         potential::{Potential, ScaledPotential, SimplePotential},
-    }, propagator::{CoupledEquation, Propagator}, utility::{save_data, save_serialize}
+    },
+    propagator::{CoupledEquation, Propagator},
+    utility::{save_data, save_serialize},
 };
 
 use rayon::prelude::*;
@@ -202,7 +208,8 @@ impl Problems {
                 atoms.insert(asymptotic);
                 let potential = &alkali_problem.potential;
 
-                let boundary = Boundary::new_multi_vanishing(5.0, Direction::Outwards, potential.size());
+                let boundary =
+                    Boundary::new_multi_vanishing(5.0, Direction::Outwards, potential.size());
                 let step_rule = LocalWavelengthStepRule::new(4e-3, f64::INFINITY, 400.);
                 let eq = CoupledEquation::from_particles(potential, &atoms);
                 let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);

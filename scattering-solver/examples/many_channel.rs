@@ -2,14 +2,21 @@ use std::time::Instant;
 
 use faer::Mat;
 use quantum::{
-    params::{particle_factory::create_atom, particles::Particles}, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{
-        distance_units::Distance, energy_units::{Energy, Kelvin}, Au
-    }, utility::linspace
+    params::{particle_factory::create_atom, particles::Particles},
+    problem_selector::{ProblemSelector, get_args},
+    problems_impl,
+    units::{
+        Au,
+        distance_units::Distance,
+        energy_units::{Energy, Kelvin},
+    },
+    utility::linspace,
 };
 use scattering_solver::{
     boundary::{Asymptotic, Boundary, Direction},
     numerovs::{
-        LocalWavelengthStepRule, multi_numerov::MultiRNumerov, propagator_watcher::PropagatorLogging,
+        LocalWavelengthStepRule, multi_numerov::MultiRNumerov,
+        propagator_watcher::PropagatorLogging,
     },
     potentials::{
         dispersion_potential::Dispersion,

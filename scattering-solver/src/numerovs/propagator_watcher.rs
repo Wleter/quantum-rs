@@ -5,7 +5,9 @@ use hhmmss::Hhmmss;
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::{
-    log_derivatives::LogDeriv, observables::s_matrix::SMatrix, propagator::{Equation, Repr, Solution}
+    log_derivatives::LogDeriv,
+    observables::s_matrix::SMatrix,
+    propagator::{Equation, Repr, Solution},
 };
 
 use super::Ratio;
@@ -88,7 +90,7 @@ impl<T: Clone> WaveStorage<T> {
             capacity,
             counter: 0,
             sampling,
-            nodes
+            nodes,
         }
     }
 
@@ -164,7 +166,12 @@ impl PropagatorWatcher<Mat<f64>, Ratio<Mat<f64>>> for WaveStorage<Mat<f64>> {
 }
 
 impl PropagatorWatcher<Mat<f64>, LogDeriv<Mat<f64>>> for WaveStorage<Mat<f64>> {
-    fn before(&mut self, sol: &Solution<LogDeriv<Mat<f64>>>, _eq: &Equation<Mat<f64>>, r_stop: f64) {
+    fn before(
+        &mut self,
+        sol: &Solution<LogDeriv<Mat<f64>>>,
+        _eq: &Equation<Mat<f64>>,
+        r_stop: f64,
+    ) {
         self.before_internal(sol.r, r_stop);
     }
 

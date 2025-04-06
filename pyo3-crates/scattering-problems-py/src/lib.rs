@@ -1,2 +1,2 @@
-pub mod propagation;
 pub mod potentials;
+pub mod propagation;

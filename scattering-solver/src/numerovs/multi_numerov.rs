@@ -27,8 +27,8 @@ impl<'a, S: StepRule<Mat<f64>>> MultiRNumerov<'a, S> {
 
         eq.buffer_w_matrix(r);
         let dr = match boundary.direction {
-            crate::boundary::Direction::Inwards => -step_rule.get_step(&eq.buffered_w_matrix()),
-            crate::boundary::Direction::Outwards => step_rule.get_step(&eq.buffered_w_matrix()),
+            crate::boundary::Direction::Inwards => -step_rule.get_step(eq.buffered_w_matrix()),
+            crate::boundary::Direction::Outwards => step_rule.get_step(eq.buffered_w_matrix()),
             crate::boundary::Direction::Step(dr) => dr,
         };
 

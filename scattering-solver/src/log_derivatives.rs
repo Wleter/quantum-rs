@@ -3,11 +3,23 @@ pub mod johnson;
 
 use std::marker::PhantomData;
 
-use faer::{linalg::matmul::matmul, prelude::{c64, SolverCore}, unzipped, zipped, Mat, MatMut, MatRef};
-use quantum::utility::{ratio_riccati_i_deriv, ratio_riccati_k_deriv, riccati_j_deriv, riccati_n_deriv};
+use faer::{
+    Mat, MatMut, MatRef,
+    linalg::matmul::matmul,
+    prelude::{SolverCore, c64},
+    unzipped, zipped,
+};
+use quantum::utility::{
+    ratio_riccati_i_deriv, ratio_riccati_k_deriv, riccati_j_deriv, riccati_n_deriv,
+};
 
-use crate::{boundary::{Boundary, Direction}, numerovs::{propagator_watcher::PropagatorWatcher, StepRule}, observables::s_matrix::SMatrix, propagator::{Equation, Propagator, Repr, Solution}, utility::inverse_inplace_nodes};
-
+use crate::{
+    boundary::{Boundary, Direction},
+    numerovs::{StepRule, propagator_watcher::PropagatorWatcher},
+    observables::s_matrix::SMatrix,
+    propagator::{Equation, Propagator, Repr, Solution},
+    utility::inverse_inplace_nodes,
+};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct LogDeriv<T>(pub T);
@@ -22,11 +34,10 @@ pub trait LogDerivativeReference {
     fn imbedding4(h: f64, w_ref: MatRef<f64>, out: MatMut<f64>);
 }
 
-
 pub struct LogDerivative<'a, S, R>
 where
     S: StepRule<Mat<f64>>,
-    R: LogDerivativeReference
+    R: LogDerivativeReference,
 {
     pub(super) equation: Equation<'a, Mat<f64>>,
     pub(super) solution: Solution<LogDeriv<Mat<f64>>>,
@@ -38,18 +49,18 @@ where
 impl<'a, S, R> LogDerivative<'a, S, R>
 where
     S: StepRule<Mat<f64>>,
-    R: LogDerivativeReference
+    R: LogDerivativeReference,
 {
     pub fn new(mut eq: Equation<'a, Mat<f64>>, boundary: Boundary<Mat<f64>>, step_rule: S) -> Self {
         let r = boundary.r_start;
 
         eq.buffer_w_matrix(r);
         let dr = match boundary.direction {
-            Direction::Inwards => -step_rule.get_step(&eq.buffered_w_matrix()),
-            Direction::Outwards => step_rule.get_step(&eq.buffered_w_matrix()),
+            Direction::Inwards => -step_rule.get_step(eq.buffered_w_matrix()),
+            Direction::Outwards => step_rule.get_step(eq.buffered_w_matrix()),
             Direction::Step(dr) => dr,
         };
-        
+
         let sol = Solution {
             r,
             dr,
@@ -76,8 +87,9 @@ where
     fn step_r_target(&mut self, r: Option<f64>) {
         self.equation.buffer_w_matrix(self.solution.r);
 
-        let dr_new = self.step_rule.get_step(&self.equation.buffered_w_matrix());
-        self.solution.dr = dr_new.clamp(0., 2. * self.solution.dr.abs()) * self.solution.dr.signum();
+        let dr_new = self.step_rule.get_step(self.equation.buffered_w_matrix());
+        self.solution.dr =
+            dr_new.clamp(0., 2. * self.solution.dr.abs()) * self.solution.dr.signum();
 
         if let Some(r) = r {
             if (self.solution.r - r).abs() < self.solution.dr.abs() {
@@ -89,10 +101,10 @@ where
     }
 }
 
-impl<S, R> Propagator<Mat<f64>, LogDeriv<Mat<f64>>> for LogDerivative<'_, S, R> 
-where 
+impl<S, R> Propagator<Mat<f64>, LogDeriv<Mat<f64>>> for LogDerivative<'_, S, R>
+where
     S: StepRule<Mat<f64>>,
-    R: LogDerivativeReference
+    R: LogDerivativeReference,
 {
     // todo! get minimal step from w_matrix from r and r+dr, r+dr buffered in eq,
     // r buffered in LogDerivativeStep
@@ -110,16 +122,20 @@ where
         &self.solution
     }
 
-    fn propagate_to_with(&mut self, r: f64, modifier: &mut impl PropagatorWatcher<Mat<f64>, LogDeriv<Mat<f64>>> ) -> &Solution<LogDeriv<Mat<f64>>> {
-        modifier.before(&mut self.solution, &self.equation, r);
+    fn propagate_to_with(
+        &mut self,
+        r: f64,
+        modifier: &mut impl PropagatorWatcher<Mat<f64>, LogDeriv<Mat<f64>>>,
+    ) -> &Solution<LogDeriv<Mat<f64>>> {
+        modifier.before(&self.solution, &self.equation, r);
 
         while (self.solution.r - r) * self.solution.dr.signum() < 0. {
             self.step_r_target(Some(r));
 
-            modifier.after_step(&mut self.solution, &self.equation);
+            modifier.after_step(&self.solution, &self.equation);
         }
 
-        modifier.after_prop(&mut self.solution, &self.equation);
+        modifier.after_prop(&self.solution, &self.equation);
 
         &self.solution
     }
@@ -164,13 +180,13 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
 
         zipped!(self.buffer2.as_mut(), self.buffer1.as_ref(), self.w_ref.as_ref())
         .for_each(|unzipped!(y1, w_a, w_ref)| {
-            *y1 = *y1 + h / 3. * (w_ref - w_a) // sign change because of different convention
+            *y1 += h / 3. * (w_ref - w_a) // sign change because of different convention
         });
         // buffer2 is a y_1(a, c)
 
         zipped!(self.buffer2.as_mut(), sol.sol.0.as_ref())
         .for_each(|unzipped!(y1, sol)| {
-            *y1 = sol + *y1
+            *y1 += sol
         });
 
         let nodes1 = inverse_inplace_nodes(self.buffer2.as_ref(), sol.sol.0.as_mut(), &mut self.perm, &mut self.perm_inv);
@@ -200,7 +216,7 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
 
         zipped!(self.buffer1.as_mut(), self.buffer2.as_ref())
         .for_each(|unzipped!(y4, w_tilde)| {
-            *y4 = *y4 + 2. * h / 3. * w_tilde
+            *y4 += 2. * h / 3. * w_tilde
         });
         // buffer1 is a y_4(a, c)
 
@@ -215,13 +231,13 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
 
         zipped!(self.buffer1.as_mut(), self.buffer2.as_ref())
         .for_each(|unzipped!(y1, w_tilde)| {
-            *y1 = *y1 + 2. * h / 3. * w_tilde
+            *y1 += 2. * h / 3. * w_tilde
         });
         // buffer1 is a y_1(c, b)
 
         zipped!(self.buffer1.as_mut(), sol.sol.0.as_ref())
         .for_each(|unzipped!(y1, sol)| {
-            *y1 = sol + *y1
+            *y1 += sol
         });
         let nodes2 = inverse_inplace_nodes(self.buffer1.as_ref(), sol.sol.0.as_mut(), &mut self.perm, &mut self.perm_inv);
 
@@ -239,7 +255,7 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
 
         zipped!(self.buffer2.as_mut(), self.buffer1.as_ref(), self.w_ref.as_ref())
         .for_each(|unzipped!(y4, w_b, w_ref)| {
-            *y4 = *y4 + h / 3. * (w_ref - w_b) // sign change because of different convention
+            *y4 += h / 3. * (w_ref - w_b) // sign change because of different convention
         });
         // buffer2 is a y_4(c, b)
 
@@ -256,7 +272,7 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
             nodes2 = self.perm.len() as u64 - nodes2;
         }
         let nodes = nodes1 + nodes2;
-        
+
         assert!(nodes >= k_count, "Node counting is wrong k-count {} nodes {}", k_count, sol.nodes);
         sol.nodes += nodes - k_count;
 
