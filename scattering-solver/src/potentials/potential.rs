@@ -8,8 +8,8 @@ impl Dimension for f64 {
     }
 }
 
-use faer::{Entity, Mat};
-impl<T: Entity> Dimension for Mat<T> {
+use faer::Mat;
+impl<T> Dimension for Mat<T> {
     fn size(&self) -> usize {
         assert!(self.nrows() == self.ncols());
 

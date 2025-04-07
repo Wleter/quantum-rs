@@ -1,10 +1,7 @@
 use std::{marker::PhantomData, mem::swap};
 
 use faer::{
-    Mat,
-    linalg::matmul::matmul,
-    prelude::{SolverCore, c64},
-    unzipped, zipped,
+    dyn_stack::MemBuffer, linalg::{matmul::matmul, solvers::DenseSolveCore}, prelude::c64, unzip, zip, Accum, Mat, Par
 };
 use quantum::utility::{ratio_riccati_i, ratio_riccati_k, riccati_j, riccati_n};
 
@@ -12,7 +9,7 @@ use crate::{
     boundary::Boundary,
     observables::s_matrix::SMatrix,
     propagator::{Equation, MultiStep, Propagator, Repr, Solution},
-    utility::{inverse_inplace, inverse_inplace_nodes},
+    utility::{get_symmetric_inverse_buffer, inverse_symmetric_inplace, inverse_symmetric_inplace_nodes},
 };
 
 use super::{Numerov, Ratio, StepAction, StepRule, propagator_watcher::PropagatorWatcher};
@@ -36,7 +33,7 @@ impl<'a, S: StepRule<Mat<f64>>> MultiRNumerov<'a, S> {
             r,
             dr,
             sol: Ratio(boundary.start_value),
-            ..Default::default()
+            nodes: 0
         };
 
         let mut f3 = Mat::zeros(size, size);
@@ -58,8 +55,7 @@ impl<'a, S: StepRule<Mat<f64>>> MultiRNumerov<'a, S> {
             sol_last,
             buffer1: Mat::zeros(size, size),
             buffer2: Mat::zeros(size, size),
-            perm_buffer: vec![0; size],
-            perm_inv_buffer: vec![0; size],
+            inverse_buffer: get_symmetric_inverse_buffer(size)
         };
 
         Self {
@@ -145,7 +141,6 @@ where
     }
 }
 
-#[derive(Clone, Debug, Default)]
 pub struct MultiRNumerovStep {
     f1: Mat<f64>,
     f2: Mat<f64>,
@@ -155,9 +150,7 @@ pub struct MultiRNumerovStep {
 
     buffer1: Mat<f64>,
     buffer2: Mat<f64>,
-
-    perm_buffer: Vec<usize>,
-    perm_inv_buffer: Vec<usize>,
+    inverse_buffer: MemBuffer,
 }
 
 impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
@@ -165,48 +158,47 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
     fn perform_step(&mut self, sol: &mut Solution<Ratio<Mat<f64>>>, eq: &Equation<Mat<f64>>) {
         sol.r += sol.dr;
 
-        zipped!(
+        zip!(
             self.buffer1.as_mut(),
             eq.unit.as_ref(),
             eq.buffered_w_matrix().as_ref()
         )
-        .for_each(|unzipped!(b1, u, c)| *b1 = u + sol.dr * sol.dr / 12. * c);
+        .for_each(|unzip!(b1, u, c)| *b1 = u + sol.dr * sol.dr / 12. * c);
 
-        let artificial = inverse_inplace_nodes(
+        let artificial = inverse_symmetric_inplace_nodes(
             self.buffer1.as_ref(),
             self.f3.as_mut(),
-            &mut self.perm_buffer,
-            &mut self.perm_inv_buffer,
+            &mut self.inverse_buffer
         );
 
-        sol.nodes += inverse_inplace_nodes(
+        sol.nodes += inverse_symmetric_inplace_nodes(
             sol.sol.0.as_ref(),
             self.sol_last.0.as_mut(),
-            &mut self.perm_buffer,
-            &mut self.perm_inv_buffer,
+            &mut self.inverse_buffer
         );
+
         assert!(sol.nodes >= artificial);
         sol.nodes -= artificial;
 
         matmul(
             self.buffer2.as_mut(),
+            Accum::Replace,
             self.f2.as_ref(),
             self.sol_last.0.as_ref(),
-            None,
             1.,
-            faer::Parallelism::None,
+            Par::Seq,
         );
 
-        zipped!(self.buffer2.as_mut(), eq.unit.as_ref(), self.f1.as_ref())
-            .for_each(|unzipped!(b2, u, f1)| *b2 = 12. * u - 10. * f1 - *b2);
+        zip!(self.buffer2.as_mut(), eq.unit.as_ref(), self.f1.as_ref())
+            .for_each(|unzip!(b2, u, f1)| *b2 = 12. * u - 10. * f1 - *b2);
 
         matmul(
             self.sol_last.0.as_mut(),
+            Accum::Replace,
             self.f3.as_ref(),
             self.buffer2.as_ref(),
-            None,
             1.,
-            faer::Parallelism::None,
+            Par::Seq,
         );
 
         swap(&mut self.f3, &mut self.f2);
@@ -216,61 +208,60 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
         swap(&mut self.sol_last, &mut sol.sol);
     }
 
+    // todo! check how to properly count nodes here
     fn halve_the_step(&mut self, sol: &mut Solution<Ratio<Mat<f64>>>, eq: &Equation<Mat<f64>>) {
         sol.dr /= 2.0;
 
-        zipped!(self.f2.as_mut(), eq.unit.as_ref())
-            .for_each(|unzipped!(f2, u)| *f2 = *f2 / 4. + 0.75 * u);
+        zip!(self.f2.as_mut(), eq.unit.as_ref())
+            .for_each(|unzip!(f2, u)| *f2 = *f2 / 4. + 0.75 * u);
 
-        zipped!(self.f1.as_mut(), eq.unit.as_ref())
-            .for_each(|unzipped!(f1, u)| *f1 = *f1 / 4. + 0.75 * u);
+        zip!(self.f1.as_mut(), eq.unit.as_ref())
+            .for_each(|unzip!(f1, u)| *f1 = *f1 / 4. + 0.75 * u);
 
         eq.w_matrix(sol.r - sol.dr, &mut self.buffer1);
-        zipped!(self.buffer1.as_mut(), eq.unit.as_ref())
-            .for_each(|unzipped!(b1, u)| *b1 = 2. * u - sol.dr * sol.dr * 10. / 12. * *b1);
+        zip!(self.buffer1.as_mut(), eq.unit.as_ref())
+            .for_each(|unzip!(b1, u)| *b1 = 2. * u - sol.dr * sol.dr * 10. / 12. * *b1);
 
-        inverse_inplace(
+        inverse_symmetric_inplace(
             self.buffer1.as_ref(),
             self.buffer2.as_mut(),
-            &mut self.perm_buffer,
-            &mut self.perm_inv_buffer,
+            &mut self.inverse_buffer
         );
 
-        zipped!(self.f2.as_mut(), eq.unit.as_ref(), self.buffer1.as_ref())
-            .for_each(|unzipped!(f2, u, b1)| *f2 = 1.2 * u - b1 / 10.);
+        zip!(self.f2.as_mut(), eq.unit.as_ref(), self.buffer1.as_ref())
+            .for_each(|unzip!(f2, u, b1)| *f2 = 1.2 * u - b1 / 10.);
 
         matmul(
             self.buffer1.as_mut(),
+            Accum::Replace,
             self.f1.as_ref(),
             sol.sol.0.as_ref(),
-            None,
             1.,
-            faer::Parallelism::None,
+            Par::Seq,
         );
         self.buffer1 += self.f2.as_ref();
         matmul(
             self.sol_last.0.as_mut(),
+            Accum::Replace,
             self.buffer2.as_ref(),
             self.buffer1.as_ref(),
-            None,
             1.,
-            faer::Parallelism::None,
+            Par::Seq,
         );
 
-        inverse_inplace(
+        inverse_symmetric_inplace(
             self.sol_last.0.as_ref(),
             self.buffer1.as_mut(),
-            &mut self.perm_buffer,
-            &mut self.perm_inv_buffer,
+            &mut self.inverse_buffer
         );
 
         matmul(
             self.buffer2.as_mut(),
+            Accum::Replace,
             sol.sol.0.as_ref(),
             self.buffer1.as_ref(),
-            None,
             1.,
-            faer::Parallelism::None,
+            Par::Seq,
         );
         swap(&mut sol.sol.0, &mut self.buffer2);
     }
@@ -278,19 +269,19 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
     fn double_the_step(&mut self, sol: &mut Solution<Ratio<Mat<f64>>>, eq: &Equation<Mat<f64>>) {
         sol.dr *= 2.;
 
-        zipped!(self.f2.as_mut(), eq.unit.as_ref(), self.f3.as_ref())
-            .for_each(|unzipped!(f2, u, f3)| *f2 = 4.0 * f3 - 3. * u);
+        zip!(self.f2.as_mut(), eq.unit.as_ref(), self.f3.as_ref())
+            .for_each(|unzip!(f2, u, f3)| *f2 = 4.0 * f3 - 3. * u);
 
-        zipped!(self.f1.as_mut(), eq.unit.as_ref())
-            .for_each(|unzipped!(f1, u)| *f1 = 4.0 * *f1 - 3. * u);
+        zip!(self.f1.as_mut(), eq.unit.as_ref())
+            .for_each(|unzip!(f1, u)| *f1 = 4.0 * *f1 - 3. * u);
 
         matmul(
             self.buffer1.as_mut(),
+            Accum::Replace,
             sol.sol.0.as_ref(),
             self.sol_last.0.as_ref(),
-            None,
             1.,
-            faer::Parallelism::None,
+            Par::Seq,
         );
         swap(&mut self.buffer1, &mut sol.sol.0);
     }

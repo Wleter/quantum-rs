@@ -7,10 +7,10 @@ use std::{
 use faer::{Mat, MatRef, Side};
 
 pub fn diagonalize(mat: MatRef<f64>) -> (Vec<f64>, Mat<f64>) {
-    let eigen = mat.selfadjoint_eigendecomposition(Side::Upper);
-    let values = eigen.s().column_vector().try_as_slice().unwrap().into();
+    let eigen = mat.self_adjoint_eigen(Side::Upper).expect("could not diagonalize matrix");
+    let values = eigen.S().column_vector().iter().copied().collect();
 
-    (values, eigen.u().to_owned())
+    (values, eigen.U().to_owned())
 }
 
 pub fn save_spectrum(

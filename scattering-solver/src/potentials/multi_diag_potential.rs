@@ -22,7 +22,7 @@ impl<P: Potential<Space = f64>> Potential for Diagonal<Mat<f64>, P> {
     type Space = Mat<f64>;
 
     fn value_inplace(&self, r: f64, value: &mut Mat<f64>) {
-        value.fill_zero();
+        value.as_mut().fill(0.);
 
         value
             .diagonal_mut()

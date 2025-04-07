@@ -28,7 +28,7 @@ impl<'a, S: StepRule<f64>> SingleRNumerov<'a, S> {
             r,
             dr,
             sol: Ratio(boundary.start_value),
-            ..Default::default()
+            nodes: 0
         };
 
         let f3 = 1. + dr * dr / 12. * eq.w_matrix(r - 2. * dr);

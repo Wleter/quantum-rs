@@ -424,7 +424,8 @@ macro_rules! cached_mel {
 /// # Syntax
 ///
 /// - `assert_approx_eq!(x, y, err)` for single element
-/// - `assert_approx_eq!(iter => x, y, err)` for list of elements
+/// - `assert_approx_eq!(iter => x, y, err)` for elements in slice
+/// - `assert_approx_eq!(mat => x, y, err)` for elements in matrices
 macro_rules! assert_approx_eq {
     ($x:expr, $y:expr, $err:expr) => {
         if ($x - $y).abs() > $x.abs() * $err {
@@ -437,6 +438,16 @@ macro_rules! assert_approx_eq {
     (iter => $x:expr, $y:expr, $err:expr) => {
         for (x, y) in $x.iter().zip(&$y) {
             assert_approx_eq!(x, y, $err);
+        }
+    };
+    (mat => $x:expr, $y:expr, $err:expr) => {
+        assert_eq!($x.nrows(), $y.nrows());
+        assert_eq!($x.ncols(), $y.ncols());
+
+        for i in 0..$x.nrows() {
+            for j in 0..$x.ncols() {
+                assert_approx_eq!($x[(i, j)], $y[(i, j)], $err);
+            }
         }
     };
 }

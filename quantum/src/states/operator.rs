@@ -693,9 +693,9 @@ mod test {
     #[test]
     #[cfg(feature = "faer")]
     fn test_transformations() {
-        use faer::{Mat, assert_matrix_eq, mat};
+        use faer::{Mat, mat};
 
-        use crate::states::StatesElement;
+        use crate::{assert_approx_eq, states::StatesElement};
 
         #[derive(Debug, Clone, Copy, PartialEq)]
         enum Combined {
@@ -757,7 +757,7 @@ mod test {
             &elements_sep,
             &elements_combined,
             transformation,
-        );
+        ).into_backed();
 
         let expected = mat![
             [1.000, 0.000, 0.000, 0.000],
@@ -765,12 +765,7 @@ mod test {
             [0.000, 0.000, 0.000, 1.000],
         ];
 
-        assert_matrix_eq!(
-            expected,
-            transformation_faer.into_backed(),
-            comp = abs,
-            tol = 1e-3
-        );
+        assert_approx_eq!(mat => expected, transformation_faer, 1e-2);
     }
 
     #[test]

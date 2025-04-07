@@ -1,4 +1,4 @@
-use faer::{Mat, unzipped, zipped};
+use faer::{Mat, unzip, zip};
 use quantum::{
     params::particles::Particles,
     units::{Au, energy_units::Energy, mass_units::Mass},
@@ -11,7 +11,7 @@ use crate::{
 
 pub trait Repr<T> {}
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Solution<R> {
     pub r: f64,
     pub dr: f64,
@@ -93,8 +93,8 @@ impl<'a> Equation<'a, Mat<f64>> {
             .zip(self.asymptotic.centrifugal.iter())
             .for_each(|(x, l)| *x += (l.0 * (l.0 + 1)) as f64 / (2. * self.mass * r * r));
 
-        zipped!(out.as_mut(), self.unit.as_ref())
-            .for_each(|unzipped!(o, u)| *o = 2.0 * self.mass * (self.energy * u - *o));
+        zip!(out.as_mut(), self.unit.as_ref())
+            .for_each(|unzip!(o, u)| *o = 2.0 * self.mass * (self.energy * u - *o));
     }
 
     pub fn buffer_w_matrix(&mut self, r: f64) {
@@ -107,8 +107,8 @@ impl<'a> Equation<'a, Mat<f64>> {
             .zip(self.asymptotic.centrifugal.iter())
             .for_each(|(x, l)| *x += (l.0 * (l.0 + 1)) as f64 / (2. * self.mass * r * r));
 
-        zipped!(self.buffered_w_matrix.as_mut(), self.unit.as_ref())
-            .for_each(|unzipped!(o, u)| *o = 2.0 * self.mass * (self.energy * u - *o));
+        zip!(self.buffered_w_matrix.as_mut(), self.unit.as_ref())
+            .for_each(|unzip!(o, u)| *o = 2.0 * self.mass * (self.energy * u - *o));
     }
 
     // todo! check if including centrifugal term is good,
