@@ -8,7 +8,7 @@ pub struct Diabatic;
 
 impl LogDerivativeReference for Diabatic {
     fn w_ref(w_c: MatRef<f64>, mut w_ref: MatMut<f64>) {
-        w_ref.fill_zero();
+        w_ref.fill(0.);
 
         w_ref
             .diagonal_mut()
@@ -19,7 +19,7 @@ impl LogDerivativeReference for Diabatic {
     }
 
     fn imbedding1(h: f64, w_ref: MatRef<f64>, mut out: MatMut<f64>) {
-        out.fill_zero();
+        out.fill(0.);
 
         out.diagonal_mut()
             .column_vector_mut()
@@ -35,7 +35,7 @@ impl LogDerivativeReference for Diabatic {
     }
 
     fn imbedding2(h: f64, w_ref: MatRef<f64>, mut out: MatMut<f64>) {
-        out.fill_zero();
+        out.fill(0.);
 
         out.diagonal_mut()
             .column_vector_mut()

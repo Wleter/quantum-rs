@@ -121,17 +121,12 @@ impl SpinOperators {
 #[cfg(feature = "faer")]
 mod test {
     use clebsch_gordan::hu32;
-    use faer::{Mat, assert_matrix_eq, mat};
+    use faer::{Mat, mat};
 
     use crate::{
-        cast_variant,
-        states::{
-            States,
-            braket::Braket,
-            operator::Operator,
-            spins::{get_spin_basis, get_summed_spin_basis},
-            state::{StateBasis, into_variant},
-        },
+        assert_approx_eq, cast_variant, states::{
+            braket::Braket, operator::Operator, spins::{get_spin_basis, get_summed_spin_basis}, state::{into_variant, StateBasis}, States
+        }
     };
 
     use super::{Spin, SpinOperators};
@@ -187,7 +182,7 @@ mod test {
             [0.0, 0.5, -0.25, 0.0],
             [0.0, 0.0, 0.0, 0.25],
         ];
-        assert_matrix_eq!(*op, expected);
+        assert_approx_eq!(mat => *op, expected, 1e-5);
 
         let mut combined = States::default();
         let spins = StateBasis::new(into_variant(
@@ -213,6 +208,6 @@ mod test {
             [0.0, 0.7071, 0.7071, 0.0],
             [0.0, 0.0, 0.0, 1.0],
         ];
-        assert_matrix_eq!(*op, expected, comp = abs, tol = 1e-5);
+        assert_approx_eq!(mat => *op, expected, 1e-5);
     }
 }

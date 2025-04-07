@@ -1,5 +1,5 @@
 use abm::utility::diagonalize;
-use faer::{Mat, unzipped, zipped};
+use faer::{Mat, unzip, zip};
 use scattering_solver::utility::AngMomentum;
 
 #[derive(Debug)]
@@ -92,9 +92,8 @@ impl AngularBlocks {
             let (energies_block, eigenstates_block) = diagonalize(internal.as_ref());
 
             energies.extend(energies_block);
-            let mut sub_matrix =
-                eigenstates.submatrix_mut(block_index, block_index, n_block, n_block);
-            zipped!(sub_matrix, eigenstates_block.as_ref()).for_each(|unzipped!(s, &e)| *s = e);
+            let sub_matrix = eigenstates.submatrix_mut(block_index, block_index, n_block, n_block);
+            zip!(sub_matrix, eigenstates_block.as_ref()).for_each(|unzip!(s, &e)| *s = e);
 
             block_index += n_block;
         }

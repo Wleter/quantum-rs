@@ -4,10 +4,7 @@ pub mod johnson;
 use std::marker::PhantomData;
 
 use faer::{
-    Mat, MatMut, MatRef,
-    linalg::matmul::matmul,
-    prelude::{SolverCore, c64},
-    unzipped, zipped,
+    dyn_stack::MemBuffer, linalg::{matmul::matmul, solvers::DenseSolveCore}, prelude::c64, unzip, zip, Accum, Mat, MatMut, MatRef, Par
 };
 use quantum::utility::{
     ratio_riccati_i_deriv, ratio_riccati_k_deriv, riccati_j_deriv, riccati_n_deriv,
@@ -15,10 +12,10 @@ use quantum::utility::{
 
 use crate::{
     boundary::{Boundary, Direction},
-    numerovs::{StepRule, propagator_watcher::PropagatorWatcher},
+    numerovs::{propagator_watcher::PropagatorWatcher, StepRule},
     observables::s_matrix::SMatrix,
     propagator::{Equation, Propagator, Repr, Solution},
-    utility::inverse_inplace_nodes,
+    utility::{get_symmetric_inverse_buffer, inverse_symmetric_inplace_nodes},
 };
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -65,7 +62,7 @@ where
             r,
             dr,
             sol: LogDeriv(boundary.start_value),
-            ..Default::default()
+            nodes: 0
         };
 
         Self {
@@ -148,8 +145,7 @@ struct LogDerivativeStep<R: LogDerivativeReference> {
 
     w_ref: Mat<f64>,
 
-    perm: Vec<usize>,
-    perm_inv: Vec<usize>,
+    inverse_buffer: MemBuffer,
 
     reference: PhantomData<R>,
 }
@@ -161,8 +157,7 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
             buffer2: Mat::zeros(size, size),
             buffer3: Mat::zeros(size, size),
             w_ref: Mat::zeros(size, size),
-            perm: vec![0; size],
-            perm_inv: vec![0; size],
+            inverse_buffer: get_symmetric_inverse_buffer(size),
             reference: PhantomData,
         }
     }
@@ -178,50 +173,50 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
 
         R::imbedding1(h, self.w_ref.as_ref(), self.buffer2.as_mut());
 
-        zipped!(self.buffer2.as_mut(), self.buffer1.as_ref(), self.w_ref.as_ref())
-        .for_each(|unzipped!(y1, w_a, w_ref)| {
+        zip!(self.buffer2.as_mut(), self.buffer1.as_ref(), self.w_ref.as_ref())
+        .for_each(|unzip!(y1, w_a, w_ref)| {
             *y1 += h / 3. * (w_ref - w_a) // sign change because of different convention
         });
         // buffer2 is a y_1(a, c)
 
-        zipped!(self.buffer2.as_mut(), sol.sol.0.as_ref())
-        .for_each(|unzipped!(y1, sol)| {
+        zip!(self.buffer2.as_mut(), sol.sol.0.as_ref())
+        .for_each(|unzip!(y1, sol)| {
             *y1 += sol
         });
 
-        let nodes1 = inverse_inplace_nodes(self.buffer2.as_ref(), sol.sol.0.as_mut(), &mut self.perm, &mut self.perm_inv);
+        let mut nodes = inverse_symmetric_inplace_nodes(self.buffer2.as_ref(), sol.sol.0.as_mut(), &mut self.inverse_buffer);
         // sol is now (Y(a) + y_1(a, c))^-1
 
         R::imbedding3(h, self.w_ref.as_ref(), self.buffer1.as_mut());
-        matmul(self.buffer2.as_mut(), self.buffer1.as_ref(), sol.sol.0.as_ref(), None, 1.0, faer::Parallelism::None);
+        matmul(self.buffer2.as_mut(), Accum::Replace, self.buffer1.as_ref(), sol.sol.0.as_ref(), 1.0, Par::Seq);
         R::imbedding2(h, self.w_ref.as_ref(), self.buffer1.as_mut());
-        matmul(sol.sol.0.as_mut(), self.buffer2.as_ref(), self.buffer1.as_ref(), None, 1.0, faer::Parallelism::None);
+        matmul(sol.sol.0.as_mut(), Accum::Replace, self.buffer2.as_ref(), self.buffer1.as_ref(), 1.0, Par::Seq);
         // sol is a second term in y_3 (Y(a) + y_1(a, c))^-1 y_2
 
-        zipped!(self.buffer3.as_mut(), eq.unit.as_ref(), self.w_ref.as_ref())
-        .for_each(|unzipped!(b, u, w)| {
+        zip!(self.buffer3.as_mut(), eq.unit.as_ref(), self.w_ref.as_ref())
+        .for_each(|unzip!(b, u, w)| {
             *b = u - h * h / 6. * (w - *b) // different sign since W(c) is -W(c) in our notation
         });
 
-        let k_count = inverse_inplace_nodes(self.buffer3.as_ref(), self.buffer2.as_mut(), &mut self.perm, &mut self.perm_inv);
+        let k_count = inverse_symmetric_inplace_nodes(self.buffer3.as_ref(), self.buffer2.as_mut(), &mut self.inverse_buffer);
         // same as in molscat mdprop.f file
 
-        zipped!(self.buffer2.as_mut(), eq.unit.as_ref())
-        .for_each(|unzipped!(b, u)| {
+        zip!(self.buffer2.as_mut(), eq.unit.as_ref())
+        .for_each(|unzip!(b, u)| {
             *b = 6. / (h * h) * (*b - u)
         });
         // buffer2 is a W_tilde(c)
 
         R::imbedding4(h, self.w_ref.as_ref(), self.buffer1.as_mut());
 
-        zipped!(self.buffer1.as_mut(), self.buffer2.as_ref())
-        .for_each(|unzipped!(y4, w_tilde)| {
+        zip!(self.buffer1.as_mut(), self.buffer2.as_ref())
+        .for_each(|unzip!(y4, w_tilde)| {
             *y4 += 2. * h / 3. * w_tilde
         });
         // buffer1 is a y_4(a, c)
 
-        zipped!(sol.sol.0.as_mut(), self.buffer1.as_ref())
-        .for_each(|unzipped!(y, y4)| {
+        zip!(sol.sol.0.as_mut(), self.buffer1.as_ref())
+        .for_each(|unzip!(y, y4)| {
             *y = y4 - *y
         });
 
@@ -229,56 +224,49 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
 
         R::imbedding1(h, self.w_ref.as_ref(), self.buffer1.as_mut());
 
-        zipped!(self.buffer1.as_mut(), self.buffer2.as_ref())
-        .for_each(|unzipped!(y1, w_tilde)| {
+        zip!(self.buffer1.as_mut(), self.buffer2.as_ref())
+        .for_each(|unzip!(y1, w_tilde)| {
             *y1 += 2. * h / 3. * w_tilde
         });
         // buffer1 is a y_1(c, b)
 
-        zipped!(self.buffer1.as_mut(), sol.sol.0.as_ref())
-        .for_each(|unzipped!(y1, sol)| {
+        zip!(self.buffer1.as_mut(), sol.sol.0.as_ref())
+        .for_each(|unzip!(y1, sol)| {
             *y1 += sol
         });
-        let nodes2 = inverse_inplace_nodes(self.buffer1.as_ref(), sol.sol.0.as_mut(), &mut self.perm, &mut self.perm_inv);
+        nodes += inverse_symmetric_inplace_nodes(self.buffer1.as_ref(), sol.sol.0.as_mut(), &mut self.inverse_buffer);
 
         // sol is now (Y(c) + y_1(c, b))^-1
 
         R::imbedding3(h, self.w_ref.as_ref(), self.buffer1.as_mut());
-        matmul(self.buffer2.as_mut(), self.buffer1.as_ref(), sol.sol.0.as_ref(), None, 1.0, faer::Parallelism::None);
+        matmul(self.buffer2.as_mut(), Accum::Replace, self.buffer1.as_ref(), sol.sol.0.as_ref(), 1.0, Par::Seq);
         R::imbedding2(h, self.w_ref.as_ref(), self.buffer1.as_mut());
-        matmul(sol.sol.0.as_mut(), self.buffer2.as_ref(), self.buffer1.as_ref(), None, 1.0, faer::Parallelism::None);
+        matmul(sol.sol.0.as_mut(), Accum::Replace, self.buffer2.as_ref(), self.buffer1.as_ref(), 1.0, Par::Seq);
         // sol is a second term in y_3 (Y(c) + y_1(c, b))^-1 y_2
 
         eq.w_matrix(sol.r + sol.dr, &mut self.buffer1);
 
         R::imbedding4(h, self.w_ref.as_ref(), self.buffer2.as_mut());
 
-        zipped!(self.buffer2.as_mut(), self.buffer1.as_ref(), self.w_ref.as_ref())
-        .for_each(|unzipped!(y4, w_b, w_ref)| {
+        zip!(self.buffer2.as_mut(), self.buffer1.as_ref(), self.w_ref.as_ref())
+        .for_each(|unzip!(y4, w_b, w_ref)| {
             *y4 += h / 3. * (w_ref - w_b) // sign change because of different convention
         });
         // buffer2 is a y_4(c, b)
 
-        zipped!(sol.sol.0.as_mut(), self.buffer2.as_ref())
-        .for_each(|unzipped!(y, y4)| {
+        zip!(sol.sol.0.as_mut(), self.buffer2.as_ref())
+        .for_each(|unzip!(y, y4)| {
             *y = y4 - *y
         });
         // sol is Y(c) 
 
-        let mut nodes1 = nodes1;
-        let mut nodes2 = nodes2;
+        let dim = eq.potential.size();
         if sol.dr < 0. {
-            nodes1 = self.perm.len() as u64 - nodes1;
-            nodes2 = self.perm.len() as u64 - nodes2;
+            nodes = 2 * dim as u64 - nodes;
         }
-        let nodes = nodes1 + nodes2;
 
         assert!(nodes >= k_count, "Node counting is wrong k-count {} nodes {}", k_count, sol.nodes);
         sol.nodes += nodes - k_count;
-
-        if nodes1 > 0 || nodes2 > 0 {
-            println!("nodes1 {nodes1} nodes2 {nodes2} k_count {k_count} r {}", sol.r);
-        }
 
         sol.r += sol.dr;
     }

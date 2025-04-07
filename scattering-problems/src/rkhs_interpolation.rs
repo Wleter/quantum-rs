@@ -1,4 +1,4 @@
-use faer::{Col, Mat, Side, prelude::SpSolver};
+use faer::{linalg::solvers::Solve, Col, Mat, Side};
 use scattering_solver::potentials::potential::Potential;
 
 pub struct RKHSInterpolation {
@@ -60,7 +60,7 @@ impl RKHSInterpolation {
 
         let values = Col::from_fn(values.len(), |i| values[i]);
 
-        let cholesky = q_matrix.cholesky(Side::Lower).unwrap();
+        let cholesky = q_matrix.ldlt(Side::Lower).unwrap();
         let alphas = cholesky.solve(values.as_ref());
 
         let alphas = alphas.iter().copied().collect();

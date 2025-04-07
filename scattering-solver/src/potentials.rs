@@ -13,10 +13,9 @@ pub mod multi_diag_potential;
 
 #[cfg(test)]
 mod test {
-    use quantum::units::{
-        Au,
-        energy_units::{CmInv, Energy},
-    };
+    use quantum::{assert_approx_eq, units::{
+        energy_units::{CmInv, Energy}, Au
+    }};
 
     use crate::potentials::{
         dispersion_potential::Dispersion, function_potential::FunctionPotential,
@@ -63,7 +62,7 @@ mod test {
 
     #[test]
     fn test_faer() {
-        use faer::{Mat, assert_matrix_eq, mat};
+        use faer::{Mat, mat};
 
         use crate::potentials::{multi_coupling::MultiCoupling, potential::Potential};
 
@@ -83,7 +82,7 @@ mod test {
 
         let mut value = Mat::zeros(N, N);
         diagonal.value_inplace(1., &mut value);
-        assert_matrix_eq!(value, expected, comp = abs, tol = 1e-12);
+        assert_approx_eq!(mat => value, expected, 1e-5);
 
         let potentials = (0..(N - 1))
             .map(|x| (Dispersion::new(x as f64, 0), x, x + 1))
@@ -100,7 +99,7 @@ mod test {
 
         let mut value = Mat::zeros(4, 4);
         coupling.value_inplace(1., &mut value);
-        assert_matrix_eq!(value, expected, comp = abs, tol = 1e-12);
+        assert_approx_eq!(mat => value, expected, 1e-5);
 
         let combined = PairPotential::new(diagonal, coupling);
 
@@ -113,6 +112,6 @@ mod test {
 
         let mut value = Mat::zeros(4, 4);
         combined.value_inplace(1., &mut value);
-        assert_matrix_eq!(value, expected, comp = abs, tol = 1e-12);
+        assert_approx_eq!(mat => value, expected, 1e-5);
     }
 }

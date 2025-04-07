@@ -56,7 +56,7 @@ impl SMatrix {
 
     pub fn new_single(s_matrix: Complex64, momentum: f64) -> Self {
         let mut s_mat = Mat::zeros(1, 1);
-        s_mat.fill(s_matrix.into());
+        s_mat.as_mut().fill(s_matrix.into());
 
         Self {
             s_matrix: s_mat,

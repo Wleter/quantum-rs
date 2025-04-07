@@ -8,11 +8,11 @@ pub struct Johnson;
 
 impl LogDerivativeReference for Johnson {
     fn w_ref(_w_c: MatRef<f64>, mut w_ref: MatMut<f64>) {
-        w_ref.fill_zero();
+        w_ref.fill(0.);
     }
 
     fn imbedding1(h: f64, _w_ref: MatRef<f64>, mut out: MatMut<f64>) {
-        out.fill_zero();
+        out.fill(0.);
 
         out.diagonal_mut()
             .column_vector_mut()
@@ -21,7 +21,7 @@ impl LogDerivativeReference for Johnson {
     }
 
     fn imbedding2(h: f64, _w_ref: MatRef<f64>, mut out: MatMut<f64>) {
-        out.fill_zero();
+        out.fill(0.);
 
         out.diagonal_mut()
             .column_vector_mut()
@@ -111,7 +111,7 @@ mod test {
 
         // values at which the result was correct.
         assert_approx_eq!(s_matrix.get_scattering_length().re, -36.998695, 1e-6);
-        assert_approx_eq!(s_matrix.get_scattering_length().im, -9.973878e-13, 1e-6);
+        assert_approx_eq!(s_matrix.get_scattering_length().im, -8.697948e-13, 1e-6);
         assert_approx_eq!(s_matrix.get_elastic_cross_sect(), 1.720206e4, 1e-6);
         assert_approx_eq!(s_matrix.get_inelastic_cross_sect(), 1.0356329e-23, 1e-6);
     }

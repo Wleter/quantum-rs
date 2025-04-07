@@ -4,7 +4,7 @@ use clebsch_gordan::{
     hu32,
 };
 use consts::Consts;
-use faer::{Mat, MatRef, unzipped, zipped};
+use faer::{Mat, MatRef, unzip, zip};
 use quantum::{
     cast_variant, operator_diagonal_mel, operator_mel,
     states::{
@@ -498,7 +498,7 @@ impl ABMProblemBuilder {
         );
 
         let mut hifi = &*transf * hifi * transf.transpose();
-        zipped!(hifi.as_mut(), fc_factors.as_ref()).for_each(|unzipped!(h, fc)| *h *= fc);
+        zip!(hifi.as_mut(), fc_factors.as_ref()).for_each(|unzip!(h, fc)| *h *= fc);
 
         let zeeman_prop = &*transf * zeeman_prop * transf.transpose();
 

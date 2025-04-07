@@ -319,6 +319,9 @@ impl<T, R: Repr<T>> PropagatorWatcher<T, R> for PropagatorLogging {
         println!("Calculated in {} steps.\n", self.steps_no);
 
         let elapsed = self.timer.elapsed();
+        if self.steps_no == 0 {
+            return
+        }
         let elapsed_step = Duration::from_secs_f64(elapsed.as_secs_f64() / self.steps_no as f64);
 
         println!("Calculated in time {}\n", elapsed.hhmmssxxx());
