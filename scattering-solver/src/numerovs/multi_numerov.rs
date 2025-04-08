@@ -14,6 +14,7 @@ use crate::{
 
 use super::{Numerov, Ratio, StepAction, StepRule, propagator_watcher::PropagatorWatcher};
 
+/// 10.1063/1.436421
 pub type MultiRNumerov<'a, S> = Numerov<'a, Mat<f64>, Ratio<Mat<f64>>, MultiRNumerovStep, S>;
 
 impl<'a, S: StepRule<Mat<f64>>> MultiRNumerov<'a, S> {

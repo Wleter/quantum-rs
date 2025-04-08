@@ -11,6 +11,7 @@ use crate::{
 
 use super::{Numerov, Ratio, StepAction, StepRule, propagator_watcher::PropagatorWatcher};
 
+/// doi: 10.1063/1.435384
 pub type SingleRNumerov<'a, S> = Numerov<'a, f64, Ratio<f64>, SingleRNumerovStep, S>;
 
 impl<'a, S: StepRule<f64>> SingleRNumerov<'a, S> {
