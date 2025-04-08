@@ -427,7 +427,7 @@ macro_rules! cached_mel {
 /// - `assert_approx_eq!(iter => x, y, err)` for elements in slice
 /// - `assert_approx_eq!(mat => x, y, err)` for elements in matrices
 macro_rules! assert_approx_eq {
-    ($x:expr, $y:expr, $err:expr) => {
+    ($x:expr, $y:expr, $err:expr $(, $message:expr)?) => {
         if ($x - $y).abs() > $x.abs() * $err {
             panic!(
                 "assertion failed\nleft side: {:e}\nright side: {:e}",

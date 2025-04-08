@@ -9,7 +9,7 @@ use crate::{
     boundary::Boundary,
     observables::s_matrix::SMatrix,
     propagator::{Equation, MultiStep, Propagator, Repr, Solution},
-    utility::{get_symmetric_inverse_buffer, inverse_symmetric_inplace, inverse_symmetric_inplace_nodes},
+    utility::{get_ldlt_inverse_buffer, inverse_ldlt_inplace, inverse_ldlt_inplace_nodes},
 };
 
 use super::{Numerov, Ratio, StepAction, StepRule, propagator_watcher::PropagatorWatcher};
@@ -55,7 +55,7 @@ impl<'a, S: StepRule<Mat<f64>>> MultiRNumerov<'a, S> {
             sol_last,
             buffer1: Mat::zeros(size, size),
             buffer2: Mat::zeros(size, size),
-            inverse_buffer: get_symmetric_inverse_buffer(size)
+            inverse_buffer: get_ldlt_inverse_buffer(size)
         };
 
         Self {
@@ -165,13 +165,13 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
         )
         .for_each(|unzip!(b1, u, c)| *b1 = u + sol.dr * sol.dr / 12. * c);
 
-        let artificial = inverse_symmetric_inplace_nodes(
+        let artificial = inverse_ldlt_inplace_nodes(
             self.buffer1.as_ref(),
             self.f3.as_mut(),
             &mut self.inverse_buffer
         );
 
-        sol.nodes += inverse_symmetric_inplace_nodes(
+        sol.nodes += inverse_ldlt_inplace_nodes(
             sol.sol.0.as_ref(),
             self.sol_last.0.as_mut(),
             &mut self.inverse_buffer
@@ -222,7 +222,7 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
         zip!(self.buffer1.as_mut(), eq.unit.as_ref())
             .for_each(|unzip!(b1, u)| *b1 = 2. * u - sol.dr * sol.dr * 10. / 12. * *b1);
 
-        inverse_symmetric_inplace(
+        inverse_ldlt_inplace(
             self.buffer1.as_ref(),
             self.buffer2.as_mut(),
             &mut self.inverse_buffer
@@ -249,7 +249,7 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
             Par::Seq,
         );
 
-        inverse_symmetric_inplace(
+        inverse_ldlt_inplace(
             self.sol_last.0.as_ref(),
             self.buffer1.as_mut(),
             &mut self.inverse_buffer

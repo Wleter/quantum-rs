@@ -15,7 +15,7 @@ use crate::{
     numerovs::{propagator_watcher::PropagatorWatcher, StepRule},
     observables::s_matrix::SMatrix,
     propagator::{Equation, Propagator, Repr, Solution},
-    utility::{get_symmetric_inverse_buffer, inverse_symmetric_inplace_nodes},
+    utility::{get_ldlt_inverse_buffer, inverse_ldlt_inplace_nodes},
 };
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -157,7 +157,7 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
             buffer2: Mat::zeros(size, size),
             buffer3: Mat::zeros(size, size),
             w_ref: Mat::zeros(size, size),
-            inverse_buffer: get_symmetric_inverse_buffer(size),
+            inverse_buffer: get_ldlt_inverse_buffer(size),
             reference: PhantomData,
         }
     }
@@ -184,7 +184,7 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
             *y1 += sol
         });
 
-        let mut nodes = inverse_symmetric_inplace_nodes(self.buffer2.as_ref(), sol.sol.0.as_mut(), &mut self.inverse_buffer);
+        let mut nodes = inverse_ldlt_inplace_nodes(self.buffer2.as_ref(), sol.sol.0.as_mut(), &mut self.inverse_buffer);
         // sol is now (Y(a) + y_1(a, c))^-1
 
         R::imbedding3(h, self.w_ref.as_ref(), self.buffer1.as_mut());
@@ -198,7 +198,7 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
             *b = u - h * h / 6. * (w - *b) // different sign since W(c) is -W(c) in our notation
         });
 
-        let k_count = inverse_symmetric_inplace_nodes(self.buffer3.as_ref(), self.buffer2.as_mut(), &mut self.inverse_buffer);
+        let k_count = inverse_ldlt_inplace_nodes(self.buffer3.as_ref(), self.buffer2.as_mut(), &mut self.inverse_buffer);
         // same as in molscat mdprop.f file
 
         zip!(self.buffer2.as_mut(), eq.unit.as_ref())
@@ -234,7 +234,7 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
         .for_each(|unzip!(y1, sol)| {
             *y1 += sol
         });
-        nodes += inverse_symmetric_inplace_nodes(self.buffer1.as_ref(), sol.sol.0.as_mut(), &mut self.inverse_buffer);
+        nodes += inverse_ldlt_inplace_nodes(self.buffer1.as_ref(), sol.sol.0.as_mut(), &mut self.inverse_buffer);
 
         // sol is now (Y(c) + y_1(c, b))^-1
 
