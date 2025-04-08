@@ -22,6 +22,7 @@ use crate::{
 pub struct LogDeriv<T>(pub T);
 impl<T> Repr<T> for LogDeriv<T> {}
 
+// doi: 10.1063/1.451472
 pub trait LogDerivativeReference {
     fn w_ref(w_c: MatRef<f64>, w_ref: MatMut<f64>);
 
