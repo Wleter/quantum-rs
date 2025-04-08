@@ -13,3 +13,6 @@ serde_json = { workspace = true }
 
 hhmmss = { workspace = true }
 indicatif = { workspace = true }
+
+[dev-dependencies]
+rand = "0.9"
