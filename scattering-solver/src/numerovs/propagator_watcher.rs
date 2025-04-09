@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use faer::Mat;
+use faer::{linalg::solvers::DenseSolveCore, Mat};
 use hhmmss::Hhmmss;
 use indicatif::{ProgressBar, ProgressStyle};
 
@@ -146,8 +146,14 @@ impl PropagatorWatcher<f64, Ratio<f64>> for WaveStorage<f64> {
         self.before_internal(sol.r, r_stop);
     }
 
-    fn after_step(&mut self, sol: &Solution<Ratio<f64>>, _eq: &Equation<f64>) {
-        self.last_value *= sol.sol.0;
+    fn after_step(&mut self, sol: &Solution<Ratio<f64>>, eq: &Equation<f64>) {
+        let r_last = sol.r + sol.dr;
+        let r_prev_last = sol.r;
+
+        let f_last = 1. + sol.dr * sol.dr / 12. * eq.w_matrix(r_last);
+        let f_prev_last = 1. + sol.dr * sol.dr / 12. * eq.w_matrix(r_prev_last);
+
+        self.last_value *= sol.sol.0 * f_prev_last / f_last;
 
         self.sample(sol.r, sol.nodes);
     }
@@ -158,8 +164,22 @@ impl PropagatorWatcher<Mat<f64>, Ratio<Mat<f64>>> for WaveStorage<Mat<f64>> {
         self.before_internal(sol.r, r_stop);
     }
 
-    fn after_step(&mut self, sol: &Solution<Ratio<Mat<f64>>>, _eq: &Equation<Mat<f64>>) {
-        self.last_value = &sol.sol.0 * &self.last_value;
+    fn after_step(&mut self, sol: &Solution<Ratio<Mat<f64>>>, eq: &Equation<Mat<f64>>) {
+        let size = eq.potential.size();
+        let r_last = sol.r + sol.dr;
+        let r_prev_last = sol.r;
+
+        let mut f_last = Mat::zeros(size, size);
+        eq.w_matrix(r_last, &mut f_last);
+        f_last *= sol.dr * sol.dr / 12.;
+        f_last += &eq.unit;
+
+        let mut f_prev_last = Mat::zeros(size, size);
+        eq.w_matrix(r_prev_last, &mut f_prev_last);
+        f_prev_last *= sol.dr * sol.dr / 12.;
+        f_prev_last += &eq.unit;
+
+        self.last_value = f_last.partial_piv_lu().inverse() * &sol.sol.0 * f_prev_last * &self.last_value;
 
         self.sample(sol.r, sol.nodes);
     }
