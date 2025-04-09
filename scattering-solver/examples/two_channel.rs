@@ -92,7 +92,7 @@ impl Problems {
         // let boundary = Boundary::new_multi_vanishing(6.5, Direction::Outwards, potential.size());
 
         let step_rule = LocalWavelengthStepRule::new(1e-4, 10., 500.);
-        let mut numerov = JohnsonLogDerivative::new(eq, boundary, step_rule);
+        let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
 
         let mut wave_storage = WaveStorage::new(Sampling::Uniform, 1e-50 * id, 500);
         let mut numerov_logging = PropagatorLogging::default();
