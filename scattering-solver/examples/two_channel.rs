@@ -16,7 +16,7 @@ use quantum::{
 };
 use scattering_solver::{
     boundary::{Asymptotic, Boundary, Direction},
-    log_derivatives::{diabatic::DiabaticLogDerivative, johnson::JohnsonLogDerivative},
+    log_derivatives::johnson::JohnsonLogDerivative,
     numerovs::{
         LocalWavelengthStepRule,
         multi_numerov::MultiRNumerov,
@@ -192,7 +192,7 @@ impl Problems {
 
                 let step_rule = LocalWavelengthStepRule::new(1e-4, 10., 500.);
 
-                let mut numerov = DiabaticLogDerivative::new(eq, boundary, step_rule);
+                let mut numerov = JohnsonLogDerivative::new(eq, boundary, step_rule);
 
                 numerov.propagate_to(6.5).nodes as f64
             })
