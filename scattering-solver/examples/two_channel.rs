@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use faer::Mat;
-use indicatif::ProgressIterator;
+use indicatif::ParallelProgressIterator;
 use num::Complex;
 use quantum::{
     params::{particle_factory::create_atom, particles::Particles},
@@ -17,7 +17,6 @@ use quantum::{
 };
 use scattering_solver::{
     boundary::{Asymptotic, Boundary, Direction},
-    log_derivatives::johnson::JohnsonLogDerivative,
     numerovs::{
         LocalWavelengthStepRule,
         multi_numerov::MultiRNumerov,
@@ -35,6 +34,8 @@ use scattering_solver::{
     propagator::{CoupledEquation, Propagator},
     utility::{AngMomentum, save_data},
 };
+
+use rayon::prelude::*;
 
 pub fn main() {
     Problems::select(&mut get_args());
@@ -89,7 +90,6 @@ impl Problems {
 
         let eq = CoupledEquation::from_particles(&potential, &particles);
 
-        // let boundary = Boundary::new_exponential_vanishing(500., &eq);
         let boundary = Boundary::new_multi_vanishing(6.5, Direction::Outwards, potential.size());
 
         let step_rule = LocalWavelengthStepRule::new(1e-4, 10., 500.);
@@ -120,12 +120,10 @@ impl Problems {
         let particles = Self::particles();
         let potential = Self::potential();
 
-        let id: Mat<f64> = Mat::identity(potential.size(), potential.size());
-        let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+        let boundary = Boundary::new_multi_vanishing(6.5, Direction::Outwards, potential.size());
 
         let eq = CoupledEquation::from_particles(&potential, &particles);
-        let mut numerov =
-            JohnsonLogDerivative::new(eq, boundary, LocalWavelengthStepRule::default());
+        let mut numerov = MultiRNumerov::new(eq, boundary, LocalWavelengthStepRule::default());
 
         let start = Instant::now();
         numerov.propagate_to(1e3);
@@ -146,8 +144,7 @@ impl Problems {
         let potential = Self::potential();
         let scalings = linspace(0.8, 1.2, 200);
 
-        let id: Mat<f64> = Mat::identity(potential.size(), potential.size());
-        let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+        let boundary = Boundary::new_multi_vanishing(6.5, Direction::Outwards, potential.size());
         let mass = particles.red_mass();
 
         let s_lengths: Vec<Complex<f64>> = scalings
@@ -183,7 +180,7 @@ impl Problems {
 
         let energies = linspace(Energy(-100.0, GHz).to_au(), Energy(0.0, GHz).to_au(), 1000);
         let data: Vec<f64> = energies
-            .iter()
+            .par_iter()
             .progress()
             .map(|&energy| {
                 let mut particles = particles.clone();
@@ -195,7 +192,7 @@ impl Problems {
 
                 let step_rule = LocalWavelengthStepRule::new(1e-4, 10., 500.);
 
-                let mut numerov = JohnsonLogDerivative::new(eq, boundary, step_rule);
+                let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
 
                 numerov.propagate_to(6.5).nodes as f64
             })
