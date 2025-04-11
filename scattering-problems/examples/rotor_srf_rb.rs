@@ -160,8 +160,7 @@ impl Problems {
         atoms.insert(asymptotic);
         let potential = &alkali_problem.potential;
 
-        let id = Mat::<f64>::identity(potential.size(), potential.size());
-        let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+        let boundary = Boundary::new_multi_vanishing(5.0, Direction::Outwards, potential.size());
         let step_rule = LocalWavelengthStepRule::new(4e-3, f64::INFINITY, 400.);
         let eq = CoupledEquation::from_particles(potential, &atoms);
         let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);

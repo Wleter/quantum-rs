@@ -186,9 +186,10 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
 
         assert!(sol.nodes >= artificial);
         sol.nodes += nodes - artificial;
-        // if nodes > 0 || artificial > 0 {
-        //     println!("r: {} {} {} {}", sol.r, sol.nodes, nodes, artificial);
-        // }
+        if artificial > 0 {
+            println!("r: {} {} {} {}", sol.r, sol.nodes, nodes, artificial);
+            panic!("testing panic")
+        }
 
         zip!(self.sol_last.0.as_mut(), self.buffer2.as_ref())
             .for_each(|unzip!(sol, u)| *sol = u - *sol);
