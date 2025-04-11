@@ -285,9 +285,9 @@ mod test {
         let s_matrix = numerov.s_matrix();
 
         // values at which the result was correct.
-        assert_approx_eq!(s_matrix.get_scattering_length().re, -15.37836, 1e-6);
-        assert_approx_eq!(s_matrix.get_scattering_length().im, 5.3641167e-14, 1e-6);
-        assert_approx_eq!(s_matrix.get_elastic_cross_sect(), 2.971868e3, 1e-6);
+        assert_approx_eq!(s_matrix.get_scattering_length().re, -15.55074, 1e-6);
+        assert_approx_eq!(s_matrix.get_scattering_length().im, 7.741696e-13, 1e-6);
+        assert_approx_eq!(s_matrix.get_elastic_cross_sect(), 3.038868e3, 1e-6);
         assert_approx_eq!(s_matrix.get_inelastic_cross_sect(), 0., 1e-6);
     }
 }

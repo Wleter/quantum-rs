@@ -195,7 +195,7 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
             &mut self.inverse_buffer,
         );
 
-        assert!(sol.nodes >= artificial);
+        assert!(nodes >= artificial);
         sol.nodes += nodes - artificial;
         if artificial > 0 {
             println!("r: {} {} {} {}", sol.r, sol.nodes, nodes, artificial);
@@ -569,8 +569,7 @@ mod test {
         let particles = particles();
         let potential = potential();
 
-        let id: Mat<f64> = Mat::identity(potential.size(), potential.size());
-        let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+        let boundary = Boundary::new_multi_vanishing(6.5, Direction::Outwards, potential.size());
 
         let eq = CoupledEquation::from_particles(&potential, &particles);
 
@@ -599,8 +598,7 @@ mod test {
         let particles = particles();
         let potential = potential();
 
-        let id: Mat<f64> = Mat::identity(potential.size(), potential.size());
-        let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
+        let boundary = Boundary::new_multi_vanishing(6.5, Direction::Outwards, potential.size());
         let eq = CoupledEquation::from_particles(&potential, &particles);
 
         let mut numerov = MultiRNumerov::new(eq, boundary, LocalWavelengthStepRule::default());
@@ -609,9 +607,9 @@ mod test {
         let s_matrix = numerov.s_matrix();
 
         // values at which the result was correct.
-        assert_approx_eq!(s_matrix.get_scattering_length().re, -36.8417479, 1e-6);
-        assert_approx_eq!(s_matrix.get_scattering_length().im, -8.92832e-13, 1e-6);
-        assert_approx_eq!(s_matrix.get_elastic_cross_sect(), 1.7056429e4, 1e-6);
-        assert_approx_eq!(s_matrix.get_inelastic_cross_sect(), 1.0356329e-23, 1e-6);
+        assert_approx_eq!(s_matrix.get_scattering_length().re, -37.07176, 1e-6);
+        assert_approx_eq!(s_matrix.get_scattering_length().im, -1.550004e-12, 1e-6);
+        assert_approx_eq!(s_matrix.get_elastic_cross_sect(), 1.7270067e4, 1e-6);
+        assert_approx_eq!(s_matrix.get_inelastic_cross_sect(), 4.1425318e-23, 1e-6);
     }
 }
