@@ -25,20 +25,23 @@ impl<'a, S: StepRule<f64>> SingleRNumerov<'a, S> {
             Direction::Step(dr) => dr,
         };
 
-        let f_before = 1. + dr * dr / 12. * eq.w_matrix(r - dr);
-        let f_after = 1. + dr * dr / 12. * eq.w_matrix(r + dr);
+        let f_prev_last = 1. + dr * dr / 12. * eq.w_matrix(r - 2. * dr);
+        let f_last = 1. + dr * dr / 12. * eq.w_matrix(r - dr);
         let f = 1. + dr * dr / 12. * eq.buffered_w_matrix();
 
         let sol = Solution {
             r,
             dr,
-            sol: Ratio(f_after * boundary.start_value / f),
+            sol: Ratio(f * boundary.start_value / f_last),
             nodes: 0
         };
 
-        let sol_last = Ratio(f * boundary.before_value / f_before);
+        let sol_last = Ratio(f_last * boundary.before_value / f_prev_last);
 
         let multi_step = SingleRNumerovStep {
+            f_prev_last,
+            f_last,
+            f,
             sol_last,
         };
 
@@ -115,6 +118,10 @@ where
 
 #[derive(Clone, Debug, Default)]
 pub struct SingleRNumerovStep {
+    f_prev_last: f64,
+    f_last: f64,
+    f: f64,
+
     sol_last: Ratio<f64>,
 }
 
@@ -133,15 +140,27 @@ impl MultiStep<f64, Ratio<f64>> for SingleRNumerovStep {
 
         self.sol_last = sol.sol;
         sol.sol.0 = sol_new;
+
+        self.f_prev_last = self.f_last;
+        self.f_last = self.f;
+        self.f = f;
     }
 
     fn halve_the_step(&mut self, sol: &mut Solution<Ratio<f64>>, eq: &Equation<f64>) {
         sol.dr /= 2.;
 
-        let f = 1.0 + sol.dr * sol.dr * eq.w_matrix(sol.r - sol.dr) / 12.0;
-        let u = (12.0 - 10.0 * f) / f;
+        sol.sol.0 *=  self.f_last / self.f;
+        self.f = self.f / 4.0 + 0.75;
+        self.f_last = self.f_last / 4.0 + 0.75;
+        sol.sol.0 *= self.f / self.f_last;
+
+        let f_last = 1.0 + sol.dr * sol.dr * eq.w_matrix(sol.r - sol.dr) / 12.0;
+        let u = (12.0 - 10.0 * f_last) / f_last;
 
         let sol_half = (sol.sol.0 + 1.) / u;
+
+        self.f_prev_last = self.f_last;
+        self.f_last = f_last;
 
         self.sol_last.0 = sol_half;
         sol.sol.0 /= sol_half;
@@ -149,8 +168,14 @@ impl MultiStep<f64, Ratio<f64>> for SingleRNumerovStep {
 
     fn double_the_step(&mut self, sol: &mut Solution<Ratio<f64>>, _eq: &Equation<f64>) {
         sol.dr *= 2.0;
-
         sol.sol.0 *= self.sol_last.0;
+
+        sol.sol.0 *= self.f_prev_last / self.f;
+
+        self.f = 4.0 * self.f_last - 3.0;
+        self.f_last = 4.0 * self.f_prev_last - 3.0;
+
+        sol.sol.0 *= self.f / self.f_last;
     }
 }
 
