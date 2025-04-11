@@ -1,10 +1,21 @@
+use core::slice;
 use faer::{
-    dyn_stack::{MemBuffer, MemStack, StackReq}, linalg::{self, cholesky::{self}, lu, temp_mat_scratch, temp_mat_uninit, temp_mat_zeroed}, mat, perm::PermRef, unzip, zip, MatMut, MatRef, Par
+    MatMut, MatRef, Par,
+    dyn_stack::{MemBuffer, MemStack, StackReq},
+    linalg::{
+        self,
+        cholesky::{self},
+        lu, temp_mat_scratch, temp_mat_uninit, temp_mat_zeroed,
+    },
+    mat,
+    perm::PermRef,
+    unzip, zip,
 };
 use serde::Serialize;
-use core::slice;
 use std::{
-    fs::{create_dir_all, File}, io::Write, path::Path
+    fs::{File, create_dir_all},
+    io::Write,
+    path::Path,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -74,10 +85,12 @@ pub fn get_ldlt_inverse_buffer(size: usize) -> MemBuffer {
                     size,
                     faer::Par::Seq,
                     Default::default(),
-                ).or(
-                    cholesky::ldlt::inverse::inverse_scratch::<f64>(size, faer::Par::Seq)
-                ),
-            )
+                )
+                .or(cholesky::ldlt::inverse::inverse_scratch::<f64>(
+                    size,
+                    faer::Par::Seq,
+                )),
+            ),
     )
 }
 
@@ -92,10 +105,12 @@ pub fn get_lblt_inverse_buffer(size: usize) -> MemBuffer {
                     size,
                     faer::Par::Seq,
                     Default::default(),
-                ).or(
-                    cholesky::bunch_kaufman::inverse::inverse_scratch::<usize, f64>(size, faer::Par::Seq)
-                ),
-            )
+                )
+                .or(cholesky::bunch_kaufman::inverse::inverse_scratch::<
+                    usize,
+                    f64,
+                >(size, faer::Par::Seq)),
+            ),
     )
 }
 
@@ -106,22 +121,22 @@ pub fn get_lu_inverse_buffer(size: usize) -> MemBuffer {
             .and(StackReq::new::<usize>(2 * size))
             .and(
                 lu::partial_pivoting::factor::lu_in_place_scratch::<usize, f64>(
-                size,
-                size,
-                faer::Par::Seq,
-                Default::default(),
-            ).or(
-                lu::partial_pivoting::inverse::inverse_scratch::<usize, f64>(size, faer::Par::Seq)
-            )
-        ),
+                    size,
+                    size,
+                    faer::Par::Seq,
+                    Default::default(),
+                )
+                .or(
+                    lu::partial_pivoting::inverse::inverse_scratch::<usize, f64>(
+                        size,
+                        faer::Par::Seq,
+                    ),
+                ),
+            ),
     )
 }
 
-pub fn inverse_lu_inplace(
-    mat: MatRef<f64>,
-    mut out: MatMut<f64>,
-    buffer: &mut MemBuffer,
-) {
+pub fn inverse_lu_inplace(mat: MatRef<f64>, mut out: MatMut<f64>, buffer: &mut MemBuffer) {
     assert!(mat.nrows() == mat.ncols());
     let dim: usize = mat.nrows();
     zip!(out.as_mut(), mat).for_each(|unzip!(o, m)| *o = *m);
@@ -167,19 +182,19 @@ pub fn inverse_lu_inplace(
 }
 
 /// Should be faster for symmetric matrices but did not observed that.
-pub fn inverse_lblt_inplace(
-    mat: MatRef<f64>,
-    mut out: MatMut<f64>,
-    buffer: &mut MemBuffer
-) {
+pub fn inverse_lblt_inplace(mat: MatRef<f64>, mut out: MatMut<f64>, buffer: &mut MemBuffer) {
     let dim: usize = mat.nrows();
     let stack = MemStack::new(buffer);
 
     let (mut diag, stack) = unsafe { temp_mat_uninit::<f64, _, _>(dim, 1, stack) };
-    let mut diag = mat::AsMatMut::as_mat_mut(&mut diag).col_mut(0).as_diagonal_mut();
+    let mut diag = mat::AsMatMut::as_mat_mut(&mut diag)
+        .col_mut(0)
+        .as_diagonal_mut();
 
     let (mut sub_diag, stack) = unsafe { temp_mat_uninit::<f64, _, _>(dim, 1, stack) };
-    let mut sub_diag = mat::AsMatMut::as_mat_mut(&mut sub_diag).col_mut(0).as_diagonal_mut();
+    let mut sub_diag = mat::AsMatMut::as_mat_mut(&mut sub_diag)
+        .col_mut(0)
+        .as_diagonal_mut();
 
     let (mut l, stack) = unsafe { temp_mat_uninit::<f64, _, _>(dim, dim, stack) };
     let mut l = mat::AsMatMut::as_mat_mut(&mut l);
@@ -218,25 +233,29 @@ pub fn inverse_lblt_inplace(
     );
 
     for j in 0..dim {
-		for i in 0..j {
-			out[(i, j)] = out[(j, i)];
-		}
-	}
+        for i in 0..j {
+            out[(i, j)] = out[(j, i)];
+        }
+    }
 }
 
 pub fn inverse_lblt_inplace_nodes(
     mat: MatRef<f64>,
     mut out: MatMut<f64>,
-    buffer: &mut MemBuffer
+    buffer: &mut MemBuffer,
 ) -> u64 {
     let dim: usize = mat.nrows();
     let stack = MemStack::new(buffer);
 
     let (mut diag, stack) = unsafe { temp_mat_uninit::<f64, _, _>(dim, 1, stack) };
-    let mut diag = mat::AsMatMut::as_mat_mut(&mut diag).col_mut(0).as_diagonal_mut();
+    let mut diag = mat::AsMatMut::as_mat_mut(&mut diag)
+        .col_mut(0)
+        .as_diagonal_mut();
 
     let (mut sub_diag, stack) = unsafe { temp_mat_uninit::<f64, _, _>(dim, 1, stack) };
-    let mut sub_diag = mat::AsMatMut::as_mat_mut(&mut sub_diag).col_mut(0).as_diagonal_mut();
+    let mut sub_diag = mat::AsMatMut::as_mat_mut(&mut sub_diag)
+        .col_mut(0)
+        .as_diagonal_mut();
 
     let (mut l, stack) = unsafe { temp_mat_uninit::<f64, _, _>(dim, dim, stack) };
     let mut l = mat::AsMatMut::as_mat_mut(&mut l);
@@ -276,17 +295,22 @@ pub fn inverse_lblt_inplace_nodes(
     );
 
     for j in 0..dim {
-		for i in 0..j {
-			out[(i, j)] = out[(j, i)];
-		}
-	}
+        for i in 0..j {
+            out[(i, j)] = out[(j, i)];
+        }
+    }
 
     let mut negatives = 0;
 
     let mut block = false;
     let mut a = 0.;
 
-    for (&d, &s) in diag.as_ref().column_vector().iter().zip(sub_diag.as_ref().column_vector().iter()) {
+    for (&d, &s) in diag
+        .as_ref()
+        .column_vector()
+        .iter()
+        .zip(sub_diag.as_ref().column_vector().iter())
+    {
         if s == 0. && d < 0. {
             negatives += 1;
         }
@@ -296,7 +320,7 @@ pub fn inverse_lblt_inplace_nodes(
         } else if block {
             if a * d > s * s && a + d < 0. {
                 negatives += 2
-            } 
+            }
             if a * d < s * s {
                 negatives += 1
             }
@@ -306,17 +330,15 @@ pub fn inverse_lblt_inplace_nodes(
     negatives
 }
 
-pub fn inverse_ldlt_inplace(
-    mat: MatRef<f64>,
-    mut out: MatMut<f64>,
-    buffer: &mut MemBuffer
-) {
+pub fn inverse_ldlt_inplace(mat: MatRef<f64>, mut out: MatMut<f64>, buffer: &mut MemBuffer) {
     let dim: usize = mat.nrows();
 
     let stack = MemStack::new(buffer);
 
     let (mut diag, stack) = unsafe { temp_mat_uninit::<f64, _, _>(dim, 1, stack) };
-    let mut diag = mat::AsMatMut::as_mat_mut(&mut diag).col_mut(0).as_diagonal_mut();
+    let mut diag = mat::AsMatMut::as_mat_mut(&mut diag)
+        .col_mut(0)
+        .as_diagonal_mut();
 
     let (mut l, stack) = unsafe { temp_mat_uninit::<f64, _, _>(dim, dim, stack) };
     let mut l = mat::AsMatMut::as_mat_mut(&mut l);
@@ -329,38 +351,35 @@ pub fn inverse_ldlt_inplace(
         faer::Par::Seq,
         stack,
         Default::default(),
-    ).unwrap_or_else(|_| panic!("Could not ldlt decomposition {:?}", mat));
+    )
+    .unwrap_or_else(|_| panic!("Could not ldlt decomposition {:?}", mat));
 
     diag.copy_from(l.as_ref().diagonal());
     l.as_mut().diagonal_mut().fill(1.);
     zip!(&mut l).for_each_triangular_upper(linalg::zip::Diag::Skip, |unzip!(x)| *x = 0.);
 
-    cholesky::ldlt::inverse::inverse(
-        out.as_mut(),
-        l.as_ref(),
-        diag.as_ref(),
-        Par::Seq,
-        stack,
-    );
+    cholesky::ldlt::inverse::inverse(out.as_mut(), l.as_ref(), diag.as_ref(), Par::Seq, stack);
 
     for j in 0..dim {
-		for i in 0..j {
-			out[(i, j)] = out[(j, i)];
-		}
-	}
+        for i in 0..j {
+            out[(i, j)] = out[(j, i)];
+        }
+    }
 }
 
 pub fn inverse_ldlt_inplace_nodes(
     mat: MatRef<f64>,
     mut out: MatMut<f64>,
-    buffer: &mut MemBuffer
+    buffer: &mut MemBuffer,
 ) -> u64 {
     let dim: usize = mat.nrows();
 
     let stack = MemStack::new(buffer);
 
     let (mut diag, stack) = unsafe { temp_mat_uninit::<f64, _, _>(dim, 1, stack) };
-    let mut diag = mat::AsMatMut::as_mat_mut(&mut diag).col_mut(0).as_diagonal_mut();
+    let mut diag = mat::AsMatMut::as_mat_mut(&mut diag)
+        .col_mut(0)
+        .as_diagonal_mut();
 
     let (mut l, stack) = unsafe { temp_mat_uninit::<f64, _, _>(dim, dim, stack) };
     let mut l = mat::AsMatMut::as_mat_mut(&mut l);
@@ -373,7 +392,8 @@ pub fn inverse_ldlt_inplace_nodes(
         faer::Par::Seq,
         stack,
         Default::default(),
-    ).unwrap_or_else(|_| panic!("Could not ldlt decomposition {:?}", mat));
+    )
+    .unwrap_or_else(|_| panic!("Could not ldlt decomposition {:?}", mat));
 
     diag.copy_from(l.as_ref().diagonal());
     l.as_mut().diagonal_mut().fill(1.);
@@ -386,29 +406,26 @@ pub fn inverse_ldlt_inplace_nodes(
         }
     }
 
-    cholesky::ldlt::inverse::inverse(
-        out.as_mut(),
-        l.as_ref(),
-        diag.as_ref(),
-        Par::Seq,
-        stack,
-    );
+    cholesky::ldlt::inverse::inverse(out.as_mut(), l.as_ref(), diag.as_ref(), Par::Seq, stack);
 
     for j in 0..dim {
-		for i in 0..j {
-			out[(i, j)] = out[(j, i)];
-		}
-	}
-    
+        for i in 0..j {
+            out[(i, j)] = out[(j, i)];
+        }
+    }
+
     negative
 }
 
 #[cfg(test)]
 mod test {
-    use faer::{linalg::solvers::DenseSolveCore, Mat};
-    use rand::{distr::Uniform, rng, Rng};
+    use faer::{Mat, linalg::solvers::DenseSolveCore};
+    use rand::{Rng, distr::Uniform, rng};
 
-    use crate::utility::{get_lblt_inverse_buffer, get_ldlt_inverse_buffer, inverse_lblt_inplace, inverse_ldlt_inplace};
+    use crate::utility::{
+        get_lblt_inverse_buffer, get_ldlt_inverse_buffer, inverse_lblt_inplace,
+        inverse_ldlt_inplace,
+    };
 
     use super::{get_lu_inverse_buffer, inverse_lu_inplace};
 
@@ -417,7 +434,9 @@ mod test {
         let mut rng = rng();
         let size = 10;
 
-        let mat = Mat::from_fn(size, size, |_, _| rng.sample(Uniform::new(-10., 10.).unwrap()));
+        let mat = Mat::from_fn(size, size, |_, _| {
+            rng.sample(Uniform::new(-10., 10.).unwrap())
+        });
         let mut buffer = get_lu_inverse_buffer(size);
         let mut out = Mat::zeros(size, size);
 
@@ -431,7 +450,9 @@ mod test {
         let mut rng = rng();
         let size = 10;
 
-        let mut mat = Mat::from_fn(size, size, |_, _| rng.sample(Uniform::new(-10., 10.).unwrap()));
+        let mut mat = Mat::from_fn(size, size, |_, _| {
+            rng.sample(Uniform::new(-10., 10.).unwrap())
+        });
         for j in 0..size {
             for i in 0..j {
                 mat[(i, j)] = mat[(j, i)];
@@ -451,7 +472,9 @@ mod test {
         let mut rng = rng();
         let size = 10;
 
-        let mut mat = Mat::from_fn(size, size, |_, _| rng.sample(Uniform::new(-10., 10.).unwrap()));
+        let mut mat = Mat::from_fn(size, size, |_, _| {
+            rng.sample(Uniform::new(-10., 10.).unwrap())
+        });
         for j in 0..size {
             for i in 0..j {
                 mat[(i, j)] = mat[(j, i)];

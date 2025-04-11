@@ -1,4 +1,4 @@
-use faer::{linalg::solvers::Solve, Col, Mat, Side};
+use faer::{Col, Mat, Side, linalg::solvers::Solve};
 use scattering_solver::potentials::potential::Potential;
 
 pub struct RKHSInterpolation {

@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use faer::{linalg::solvers::DenseSolveCore, Mat};
+use faer::{Mat, linalg::solvers::DenseSolveCore};
 use hhmmss::Hhmmss;
 use indicatif::{ProgressBar, ProgressStyle};
 
@@ -179,7 +179,8 @@ impl PropagatorWatcher<Mat<f64>, Ratio<Mat<f64>>> for WaveStorage<Mat<f64>> {
         f_prev_last *= sol.dr * sol.dr / 12.;
         f_prev_last += &eq.unit;
 
-        self.last_value = f_last.partial_piv_lu().inverse() * &sol.sol.0 * f_prev_last * &self.last_value;
+        self.last_value =
+            f_last.partial_piv_lu().inverse() * &sol.sol.0 * f_prev_last * &self.last_value;
 
         self.sample(sol.r, sol.nodes);
     }
@@ -340,7 +341,7 @@ impl<T, R: Repr<T>> PropagatorWatcher<T, R> for PropagatorLogging {
 
         let elapsed = self.timer.elapsed();
         if self.steps_no == 0 {
-            return
+            return;
         }
         let elapsed_step = Duration::from_secs_f64(elapsed.as_secs_f64() / self.steps_no as f64);
 

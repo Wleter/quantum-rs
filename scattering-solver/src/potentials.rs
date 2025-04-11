@@ -13,9 +13,13 @@ pub mod multi_diag_potential;
 
 #[cfg(test)]
 mod test {
-    use quantum::{assert_approx_eq, units::{
-        energy_units::{CmInv, Energy}, Au
-    }};
+    use quantum::{
+        assert_approx_eq,
+        units::{
+            Au,
+            energy_units::{CmInv, Energy},
+        },
+    };
 
     use crate::potentials::{
         dispersion_potential::Dispersion, function_potential::FunctionPotential,

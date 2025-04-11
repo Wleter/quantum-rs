@@ -46,7 +46,7 @@ impl<P: Potential<Space = f64>> Potential for MultiCoupling<Mat<f64>, P> {
 
     fn value_inplace(&self, r: f64, value: &mut Mat<f64>) {
         value.as_mut().fill(0.0);
-        
+
         for (p, i, j) in &self.potentials {
             p.value_inplace(r, value.get_mut(*i, *j));
         }

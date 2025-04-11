@@ -188,7 +188,8 @@ impl Problems {
 
                 let eq = CoupledEquation::from_particles(&potential, &particles);
                 // let boundary = Boundary::new_exponential_vanishing(500., &eq);
-                let boundary = Boundary::new_multi_vanishing(500., Direction::Inwards, potential.size());
+                let boundary =
+                    Boundary::new_multi_vanishing(500., Direction::Inwards, potential.size());
 
                 let step_rule = LocalWavelengthStepRule::new(1e-4, 10., 500.);
 

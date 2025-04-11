@@ -124,9 +124,14 @@ mod test {
     use faer::{Mat, mat};
 
     use crate::{
-        assert_approx_eq, cast_variant, states::{
-            braket::Braket, operator::Operator, spins::{get_spin_basis, get_summed_spin_basis}, state::{into_variant, StateBasis}, States
-        }
+        assert_approx_eq, cast_variant,
+        states::{
+            States,
+            braket::Braket,
+            operator::Operator,
+            spins::{get_spin_basis, get_summed_spin_basis},
+            state::{StateBasis, into_variant},
+        },
     };
 
     use super::{Spin, SpinOperators};

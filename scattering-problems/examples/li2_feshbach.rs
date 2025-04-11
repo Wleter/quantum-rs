@@ -17,11 +17,15 @@ use scattering_problems::{
     IndexBasisDescription, ScatteringProblem, alkali_atoms::AlkaliAtomsProblemBuilder,
 };
 use scattering_solver::{
-    boundary::{Boundary, Direction}, numerovs::{multi_numerov::MultiRNumerov, LocalWavelengthStepRule}, potentials::{
+    boundary::{Boundary, Direction},
+    numerovs::{LocalWavelengthStepRule, multi_numerov::MultiRNumerov},
+    potentials::{
         composite_potential::Composite,
         dispersion_potential::Dispersion,
         potential::{MatPotential, Potential},
-    }, propagator::{CoupledEquation, Propagator}, utility::save_data
+    },
+    propagator::{CoupledEquation, Propagator},
+    utility::save_data,
 };
 
 use rayon::prelude::*;
@@ -114,7 +118,8 @@ impl Problems {
                 let potential = &alkali_problem.potential;
                 li2.insert(alkali_problem.asymptotic);
 
-                let boundary = Boundary::new_multi_vanishing(4., Direction::Outwards, potential.size());
+                let boundary =
+                    Boundary::new_multi_vanishing(4., Direction::Outwards, potential.size());
                 let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
                 let eq = CoupledEquation::from_particles(potential, &li2);
                 let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);

@@ -757,7 +757,8 @@ mod test {
             &elements_sep,
             &elements_combined,
             transformation,
-        ).into_backed();
+        )
+        .into_backed();
 
         let expected = mat![
             [1.000, 0.000, 0.000, 0.000],

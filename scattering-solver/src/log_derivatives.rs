@@ -4,7 +4,11 @@ pub mod johnson;
 use std::marker::PhantomData;
 
 use faer::{
-    dyn_stack::MemBuffer, linalg::{matmul::matmul, solvers::DenseSolveCore}, prelude::c64, unzip, zip, Accum, Mat, MatMut, MatRef, Par
+    Accum, Mat, MatMut, MatRef, Par,
+    dyn_stack::MemBuffer,
+    linalg::{matmul::matmul, solvers::DenseSolveCore},
+    prelude::c64,
+    unzip, zip,
 };
 use quantum::utility::{
     ratio_riccati_i_deriv, ratio_riccati_k_deriv, riccati_j_deriv, riccati_n_deriv,
@@ -12,7 +16,7 @@ use quantum::utility::{
 
 use crate::{
     boundary::{Boundary, Direction},
-    numerovs::{propagator_watcher::PropagatorWatcher, StepRule},
+    numerovs::{StepRule, propagator_watcher::PropagatorWatcher},
     observables::s_matrix::SMatrix,
     propagator::{Equation, Propagator, Repr, Solution},
     utility::{get_ldlt_inverse_buffer, inverse_ldlt_inplace_nodes},
@@ -63,7 +67,7 @@ where
             r,
             dr,
             sol: LogDeriv(boundary.start_value),
-            nodes: 0
+            nodes: 0,
         };
 
         Self {

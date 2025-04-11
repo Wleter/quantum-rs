@@ -1,5 +1,5 @@
 use super::potential::{Dimension, Potential, SimplePotential, SubPotential};
-use faer::{Mat, zip, unzip};
+use faer::{Mat, unzip, zip};
 
 #[derive(Debug, Clone)]
 pub struct MaskedPotential<M, P: Potential> {

@@ -1,7 +1,10 @@
 use diol::prelude::*;
 use rand::Rng;
 use scattering_solver::faer::Mat;
-use scattering_solver::utility::{get_lblt_inverse_buffer, get_ldlt_inverse_buffer, get_lu_inverse_buffer, inverse_lblt_inplace, inverse_ldlt_inplace, inverse_lu_inplace};
+use scattering_solver::utility::{
+    get_lblt_inverse_buffer, get_ldlt_inverse_buffer, get_lu_inverse_buffer, inverse_lblt_inplace,
+    inverse_ldlt_inplace, inverse_lu_inplace,
+};
 
 fn main() -> eyre::Result<()> {
     let mut bench = Bench::new(BenchConfig::from_args()?);

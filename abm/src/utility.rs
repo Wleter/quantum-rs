@@ -7,7 +7,9 @@ use std::{
 use faer::{Mat, MatRef, Side};
 
 pub fn diagonalize(mat: MatRef<f64>) -> (Vec<f64>, Mat<f64>) {
-    let eigen = mat.self_adjoint_eigen(Side::Upper).expect("could not diagonalize matrix");
+    let eigen = mat
+        .self_adjoint_eigen(Side::Upper)
+        .expect("could not diagonalize matrix");
     let values = eigen.S().column_vector().iter().copied().collect();
 
     (values, eigen.U().to_owned())

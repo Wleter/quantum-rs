@@ -33,7 +33,7 @@ impl<'a, S: StepRule<f64>> SingleRNumerov<'a, S> {
             r,
             dr,
             sol: Ratio(f * boundary.start_value / f_last),
-            nodes: 0
+            nodes: 0,
         };
 
         let sol_last = Ratio(f_last * boundary.before_value / f_prev_last);
@@ -91,15 +91,15 @@ where
     }
 
     fn step(&mut self) -> &Solution<R> {
-        self.equation
-            .buffer_w_matrix(self.solution.r);
+        self.equation.buffer_w_matrix(self.solution.r);
 
         let mut action = self
             .step_rule
             .step_action(self.solution.dr, &self.equation.buffered_w_matrix());
 
         if let StepAction::Double = action {
-            self.multi_step.double_the_step(&mut self.solution, &self.equation);
+            self.multi_step
+                .double_the_step(&mut self.solution, &self.equation);
         }
 
         while let StepAction::Halve = action {
@@ -110,7 +110,8 @@ where
                 .step_action(self.solution.dr, &self.equation.buffered_w_matrix());
         }
 
-        self.multi_step.perform_step(&mut self.solution, &self.equation);
+        self.multi_step
+            .perform_step(&mut self.solution, &self.equation);
 
         &self.solution
     }
@@ -149,7 +150,7 @@ impl MultiStep<f64, Ratio<f64>> for SingleRNumerovStep {
     fn halve_the_step(&mut self, sol: &mut Solution<Ratio<f64>>, eq: &Equation<f64>) {
         sol.dr /= 2.;
 
-        sol.sol.0 *=  self.f_last / self.f;
+        sol.sol.0 *= self.f_last / self.f;
         self.f = self.f / 4.0 + 0.75;
         self.f_last = self.f_last / 4.0 + 0.75;
         sol.sol.0 *= self.f / self.f_last;

@@ -1,7 +1,11 @@
 use std::{marker::PhantomData, mem::swap};
 
 use faer::{
-    dyn_stack::MemBuffer, linalg::{matmul::matmul, solvers::DenseSolveCore}, prelude::c64, unzip, zip, Accum, Mat, Par
+    Accum, Mat, Par,
+    dyn_stack::MemBuffer,
+    linalg::{matmul::matmul, solvers::DenseSolveCore},
+    prelude::c64,
+    unzip, zip,
 };
 use quantum::utility::{ratio_riccati_i, ratio_riccati_k, riccati_j, riccati_n};
 
@@ -44,10 +48,11 @@ impl<'a, S: StepRule<Mat<f64>>> MultiRNumerov<'a, S> {
             r,
             dr,
             sol: Ratio(&f * boundary.start_value * f_last.partial_piv_lu().inverse()),
-            nodes: 0
+            nodes: 0,
         };
 
-        let sol_last = Ratio(&f_last * boundary.before_value * f_prev_last.partial_piv_lu().inverse());
+        let sol_last =
+            Ratio(&f_last * boundary.before_value * f_prev_last.partial_piv_lu().inverse());
 
         let multi_step = MultiRNumerovStep {
             sol_last,
@@ -57,7 +62,7 @@ impl<'a, S: StepRule<Mat<f64>>> MultiRNumerov<'a, S> {
             buffer1: Mat::zeros(size, size),
             buffer2: Mat::zeros(size, size),
             buffer3: Mat::zeros(size, size),
-            inverse_buffer: get_ldlt_inverse_buffer(size)
+            inverse_buffer: get_ldlt_inverse_buffer(size),
         };
 
         Self {
@@ -113,7 +118,8 @@ where
             .step_action(self.solution.dr, self.equation.buffered_w_matrix());
 
         if let StepAction::Double = action {
-            self.multi_step.double_the_step(&mut self.solution, &self.equation);
+            self.multi_step
+                .double_the_step(&mut self.solution, &self.equation);
         }
 
         while let StepAction::Halve = action {
@@ -125,7 +131,8 @@ where
                 .step_action(self.solution.dr, self.equation.buffered_w_matrix());
         }
 
-        self.multi_step.perform_step(&mut self.solution, &self.equation);
+        self.multi_step
+            .perform_step(&mut self.solution, &self.equation);
 
         &self.solution
     }
@@ -160,12 +167,16 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
         let artificial = inverse_ldlt_inplace_nodes(
             self.buffer1.as_ref(),
             self.sol_last.0.as_mut(),
-            &mut self.inverse_buffer
+            &mut self.inverse_buffer,
         );
         // sol_last is (1 - T_n)^-1
 
-        zip!(self.buffer3.as_mut(), eq.unit.as_ref(), self.buffer1.as_ref())
-            .for_each(|unzip!(b3, u, b1)| *b3 = 12. * u - 10. * *b1);
+        zip!(
+            self.buffer3.as_mut(),
+            eq.unit.as_ref(),
+            self.buffer1.as_ref()
+        )
+        .for_each(|unzip!(b3, u, b1)| *b3 = 12. * u - 10. * *b1);
         // buffer3 is (2 + 10T_n)
 
         matmul(
@@ -181,7 +192,7 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
         let nodes = inverse_ldlt_inplace_nodes(
             sol.sol.0.as_ref(),
             self.sol_last.0.as_mut(),
-            &mut self.inverse_buffer
+            &mut self.inverse_buffer,
         );
 
         assert!(sol.nodes >= artificial);
@@ -208,7 +219,7 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
         inverse_ldlt_inplace(
             self.f.as_ref(),
             self.buffer1.as_mut(),
-            &mut self.inverse_buffer
+            &mut self.inverse_buffer,
         );
 
         matmul(
@@ -229,8 +240,7 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
             Par::Seq,
         );
 
-        zip!(self.f.as_mut(), eq.unit.as_ref())
-            .for_each(|unzip!(f, u)| *f = *f / 4. + 0.75 * u);
+        zip!(self.f.as_mut(), eq.unit.as_ref()).for_each(|unzip!(f, u)| *f = *f / 4. + 0.75 * u);
 
         zip!(self.f_last.as_mut(), eq.unit.as_ref())
             .for_each(|unzip!(f, u)| *f = *f / 4. + 0.75 * u);
@@ -247,7 +257,7 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
         inverse_ldlt_inplace(
             self.f_last.as_ref(),
             self.buffer2.as_mut(),
-            &mut self.inverse_buffer
+            &mut self.inverse_buffer,
         );
 
         matmul(
@@ -273,12 +283,16 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
         inverse_ldlt_inplace(
             self.f_prev_last.as_ref(),
             self.buffer3.as_mut(),
-            &mut self.inverse_buffer
+            &mut self.inverse_buffer,
         );
         // buffer3 is (1 - T_n)^-1
 
-        zip!(self.buffer1.as_mut(), eq.unit.as_ref(), self.f_prev_last.as_ref())
-            .for_each(|unzip!(b1, u, f)| *b1 = 12. * u - 10. * f);
+        zip!(
+            self.buffer1.as_mut(),
+            eq.unit.as_ref(),
+            self.f_prev_last.as_ref()
+        )
+        .for_each(|unzip!(b1, u, f)| *b1 = 12. * u - 10. * f);
         // buffer1 is (2 + 10T_n)
 
         matmul(
@@ -294,7 +308,7 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
         inverse_ldlt_inplace(
             self.buffer2.as_ref(),
             self.buffer1.as_mut(),
-            &mut self.inverse_buffer
+            &mut self.inverse_buffer,
         );
         // buffer1 is U_n^-1
 
@@ -313,7 +327,7 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
         inverse_ldlt_inplace(
             self.sol_last.0.as_ref(),
             self.buffer1.as_mut(),
-            &mut self.inverse_buffer
+            &mut self.inverse_buffer,
         );
 
         matmul(
@@ -344,7 +358,7 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
         inverse_ldlt_inplace(
             self.f.as_ref(),
             self.buffer2.as_mut(),
-            &mut self.inverse_buffer
+            &mut self.inverse_buffer,
         );
 
         matmul(
@@ -365,11 +379,14 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
             Par::Seq,
         );
 
-        zip!(self.f.as_mut(), eq.unit.as_ref())
-            .for_each(|unzip!(f, u)| *f = 4. * *f - 3. * u);
+        zip!(self.f.as_mut(), eq.unit.as_ref()).for_each(|unzip!(f, u)| *f = 4. * *f - 3. * u);
 
-        zip!(self.f_last.as_mut(), eq.unit.as_ref(), self.f_prev_last.as_ref())
-            .for_each(|unzip!(f, u, f_prev)| *f = 4. * *f_prev - 3. * u);
+        zip!(
+            self.f_last.as_mut(),
+            eq.unit.as_ref(),
+            self.f_prev_last.as_ref()
+        )
+        .for_each(|unzip!(f, u, f_prev)| *f = 4. * *f_prev - 3. * u);
 
         matmul(
             self.buffer1.as_mut(),
@@ -383,7 +400,7 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
         inverse_ldlt_inplace(
             self.f_last.as_ref(),
             self.buffer2.as_mut(),
-            &mut self.inverse_buffer
+            &mut self.inverse_buffer,
         );
 
         matmul(
