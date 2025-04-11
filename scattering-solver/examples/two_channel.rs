@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use faer::Mat;
+use indicatif::ProgressIterator;
 use num::Complex;
 use quantum::{
     params::{particle_factory::create_atom, particles::Particles},
@@ -88,11 +89,11 @@ impl Problems {
 
         let eq = CoupledEquation::from_particles(&potential, &particles);
 
-        let boundary = Boundary::new_exponential_vanishing(500., &eq);
-        // let boundary = Boundary::new_multi_vanishing(6.5, Direction::Outwards, potential.size());
+        // let boundary = Boundary::new_exponential_vanishing(500., &eq);
+        let boundary = Boundary::new_multi_vanishing(6.5, Direction::Outwards, potential.size());
 
         let step_rule = LocalWavelengthStepRule::new(1e-4, 10., 500.);
-        let mut numerov = JohnsonLogDerivative::new(eq, boundary, step_rule);
+        let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
 
         let mut wave_storage = WaveStorage::new(Sampling::Uniform, 1e-50 * id, 500);
         let mut numerov_logging = PropagatorLogging::default();
@@ -100,7 +101,7 @@ impl Problems {
         let mut watchers =
             ManyPropagatorWatcher::new(vec![&mut wave_storage, &mut numerov_logging]);
 
-        numerov.propagate_to_with(6.5, &mut watchers);
+        numerov.propagate_to_with(100., &mut watchers);
 
         let chan1 = wave_storage.waves.iter().map(|wave| wave[(0, 0)]).collect();
         let chan2 = wave_storage.waves.iter().map(|wave| wave[(0, 1)]).collect();
@@ -183,12 +184,14 @@ impl Problems {
         let energies = linspace(Energy(-100.0, GHz).to_au(), Energy(0.0, GHz).to_au(), 1000);
         let data: Vec<f64> = energies
             .iter()
+            .progress()
             .map(|&energy| {
                 let mut particles = particles.clone();
                 particles.insert(Energy(energy, Au));
 
                 let eq = CoupledEquation::from_particles(&potential, &particles);
-                let boundary = Boundary::new_exponential_vanishing(500., &eq);
+                // let boundary = Boundary::new_exponential_vanishing(500., &eq);
+                let boundary = Boundary::new_multi_vanishing(500., Direction::Inwards, potential.size());
 
                 let step_rule = LocalWavelengthStepRule::new(1e-4, 10., 500.);
 

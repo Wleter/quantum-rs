@@ -70,7 +70,7 @@ impl Problems {
 
         let mut numerov = SingleRNumerov::new(
             eq,
-            Boundary::new(6.5, Direction::Outwards, (1.001, 1.002)),
+            Boundary::new_vanishing(6.5, Direction::Outwards),
             LocalWavelengthStepRule::default(),
         );
         let mut wave_storage = WaveStorage::new(Sampling::default(), 1e-50, 500);
@@ -86,9 +86,10 @@ impl Problems {
             .iter()
             .map(|&r| potential.value(r))
             .collect();
+        let nodes = wave_storage.nodes.iter().map(|&n| n as f64).collect();
 
         let header = "position\twave function\tpotential";
-        let data = vec![wave_storage.rs, wave_storage.waves, potential_values];
+        let data = vec![wave_storage.rs, wave_storage.waves, nodes, potential_values];
         save_data("single_chan/wave_function", header, &data).unwrap();
     }
 
@@ -99,7 +100,7 @@ impl Problems {
 
         let mut numerov = SingleRNumerov::new(
             eq,
-            Boundary::new(6.5, Direction::Outwards, (1.001, 1.002)),
+            Boundary::new_vanishing(6.5, Direction::Outwards),
             LocalWavelengthStepRule::default(),
         );
 
@@ -122,7 +123,7 @@ impl Problems {
 
         let mut numerov = SingleRNumerov::new(
             eq,
-            Boundary::new(6.5, Direction::Outwards, (1.001, 1.002)),
+            Boundary::new_vanishing(6.5, Direction::Outwards),
             LocalWavelengthStepRule::default(),
         );
         let mut scatterings = ScatteringVsDistance::new(120., 1000);
@@ -151,7 +152,7 @@ impl Problems {
 
         let scalings = linspace(0.8, 1.2, 1000);
 
-        let boundary = Boundary::new(6.5, Direction::Outwards, (1.001, 1.002));
+        let boundary = Boundary::new_vanishing(6.5, Direction::Outwards);
         let mass = particles.red_mass();
 
         let s_lengths: Vec<Complex<f64>> = scalings

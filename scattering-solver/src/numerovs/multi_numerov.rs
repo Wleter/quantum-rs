@@ -9,7 +9,7 @@ use crate::{
     boundary::Boundary,
     observables::s_matrix::SMatrix,
     propagator::{Equation, MultiStep, Propagator, Repr, Solution},
-    utility::{get_lu_inverse_buffer, inverse_lu_inplace},
+    utility::{get_ldlt_inverse_buffer, inverse_ldlt_inplace, inverse_ldlt_inplace_nodes},
 };
 
 use super::{Numerov, Ratio, StepAction, StepRule, propagator_watcher::PropagatorWatcher};
@@ -30,33 +30,34 @@ impl<'a, S: StepRule<Mat<f64>>> MultiRNumerov<'a, S> {
             crate::boundary::Direction::Step(dr) => dr,
         };
 
+        let mut f_last = Mat::zeros(size, size);
+        eq.w_matrix(r - dr, &mut f_last);
+
+        let mut f_prev_last = Mat::zeros(size, size);
+        eq.w_matrix(r - 2. * dr, &mut f_prev_last);
+
+        let f_last = eq.unit.as_ref() + dr * dr / 12. * f_last;
+        let f_prev_last = eq.unit.as_ref() + dr * dr / 12. * f_prev_last;
+        let f = eq.unit.as_ref() + dr * dr / 12. * eq.buffered_w_matrix();
+
         let sol = Solution {
             r,
             dr,
-            sol: Ratio(boundary.start_value),
+            sol: Ratio(&f * boundary.start_value * f_last.partial_piv_lu().inverse()),
             nodes: 0
         };
 
-        let mut f3 = Mat::zeros(size, size);
-        eq.w_matrix(r - 2. * dr, &mut f3);
-
-        let mut f2 = Mat::zeros(size, size);
-        eq.w_matrix(r - dr, &mut f2);
-
-        let f3 = eq.unit.as_ref() + dr * dr / 12. * f3;
-        let f2 = eq.unit.as_ref() + dr * dr / 12. * f2;
-        let f1 = eq.unit.as_ref() + dr * dr / 12. * eq.buffered_w_matrix();
-
-        let sol_last = Ratio(boundary.before_value);
+        let sol_last = Ratio(&f_last * boundary.before_value * f_prev_last.partial_piv_lu().inverse());
 
         let multi_step = MultiRNumerovStep {
-            f1,
-            f2,
-            f3,
             sol_last,
+            f,
+            f_last,
+            f_prev_last,
             buffer1: Mat::zeros(size, size),
             buffer2: Mat::zeros(size, size),
-            inverse_buffer: get_lu_inverse_buffer(size)
+            buffer3: Mat::zeros(size, size),
+            inverse_buffer: get_ldlt_inverse_buffer(size)
         };
 
         Self {
@@ -105,52 +106,41 @@ where
     }
 
     fn step(&mut self) -> &Solution<R> {
-        self.equation
-            .buffer_w_matrix(self.solution.r + self.solution.dr);
+        self.equation.buffer_w_matrix(self.solution.r);
 
         let mut action = self
             .step_rule
             .step_action(self.solution.dr, self.equation.buffered_w_matrix());
 
         if let StepAction::Double = action {
-            self.multi_step
-                .double_the_step(&mut self.solution, &self.equation);
-
-            self.equation
-                .buffer_w_matrix(self.solution.r + self.solution.dr);
+            self.multi_step.double_the_step(&mut self.solution, &self.equation);
         }
 
-        let mut halved = false;
         while let StepAction::Halve = action {
             self.multi_step
                 .halve_the_step(&mut self.solution, &self.equation);
+
             action = self
                 .step_rule
                 .step_action(self.solution.dr, self.equation.buffered_w_matrix());
-            halved = true;
         }
 
-        if halved {
-            self.equation
-                .buffer_w_matrix(self.solution.r + self.solution.dr);
-        }
-
-        self.multi_step
-            .perform_step(&mut self.solution, &self.equation);
+        self.multi_step.perform_step(&mut self.solution, &self.equation);
 
         &self.solution
     }
 }
 
 pub struct MultiRNumerovStep {
-    f1: Mat<f64>,
-    f2: Mat<f64>,
-    f3: Mat<f64>,
-
     sol_last: Ratio<Mat<f64>>,
+
+    f: Mat<f64>,
+    f_last: Mat<f64>,
+    f_prev_last: Mat<f64>,
 
     buffer1: Mat<f64>,
     buffer2: Mat<f64>,
+    buffer3: Mat<f64>,
     inverse_buffer: MemBuffer,
 }
 
@@ -165,92 +155,161 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
             eq.buffered_w_matrix().as_ref()
         )
         .for_each(|unzip!(b1, u, c)| *b1 = u + sol.dr * sol.dr / 12. * c);
+        // buffer1 is (1 - T_n)
 
-        inverse_lu_inplace(
+        let artificial = inverse_ldlt_inplace_nodes(
             self.buffer1.as_ref(),
-            self.f3.as_mut(),
+            self.sol_last.0.as_mut(),
             &mut self.inverse_buffer
         );
+        // sol_last is (1 - T_n)^-1
 
-        inverse_lu_inplace(
+        zip!(self.buffer3.as_mut(), eq.unit.as_ref(), self.buffer1.as_ref())
+            .for_each(|unzip!(b3, u, b1)| *b3 = 12. * u - 10. * *b1);
+        // buffer3 is (2 + 10T_n)
+
+        matmul(
+            self.buffer2.as_mut(),
+            Accum::Replace,
+            self.buffer3.as_ref(),
+            self.sol_last.0.as_ref(),
+            1.,
+            Par::Seq,
+        );
+        // buffer2 is U_n
+
+        let nodes = inverse_ldlt_inplace_nodes(
             sol.sol.0.as_ref(),
             self.sol_last.0.as_mut(),
             &mut self.inverse_buffer
         );
 
-        // assert!(sol.nodes >= artificial);
-        // sol.nodes -= artificial;
+        assert!(sol.nodes >= artificial);
+        sol.nodes += nodes - artificial;
+        // if nodes > 0 || artificial > 0 {
+        //     println!("r: {} {} {} {}", sol.r, sol.nodes, nodes, artificial);
+        // }
 
-        matmul(
-            self.buffer2.as_mut(),
-            Accum::Replace,
-            self.f2.as_ref(),
-            self.sol_last.0.as_ref(),
-            1.,
-            Par::Seq,
-        );
-
-        zip!(self.buffer2.as_mut(), eq.unit.as_ref(), self.f1.as_ref())
-            .for_each(|unzip!(b2, u, f1)| *b2 = 12. * u - 10. * f1 - *b2);
-
-        matmul(
-            self.sol_last.0.as_mut(),
-            Accum::Replace,
-            self.f3.as_ref(),
-            self.buffer2.as_ref(),
-            1.,
-            Par::Seq,
-        );
-
-        swap(&mut self.f3, &mut self.f2);
-        swap(&mut self.f2, &mut self.f1);
-        swap(&mut self.f1, &mut self.buffer1);
+        zip!(self.sol_last.0.as_mut(), self.buffer2.as_ref())
+            .for_each(|unzip!(sol, u)| *sol = u - *sol);
+        // sol_last is R_n
 
         swap(&mut self.sol_last, &mut sol.sol);
+
+        swap(&mut self.f_prev_last, &mut self.f_last);
+        swap(&mut self.f_last, &mut self.f);
+        swap(&mut self.f, &mut self.buffer1);
     }
 
-    // todo! check how to properly count nodes here
     fn halve_the_step(&mut self, sol: &mut Solution<Ratio<Mat<f64>>>, eq: &Equation<Mat<f64>>) {
         sol.dr /= 2.0;
 
-        zip!(self.f2.as_mut(), eq.unit.as_ref())
-            .for_each(|unzip!(f2, u)| *f2 = *f2 / 4. + 0.75 * u);
-
-        zip!(self.f1.as_mut(), eq.unit.as_ref())
-            .for_each(|unzip!(f1, u)| *f1 = *f1 / 4. + 0.75 * u);
-
-        eq.w_matrix(sol.r - sol.dr, &mut self.buffer1);
-        zip!(self.buffer1.as_mut(), eq.unit.as_ref())
-            .for_each(|unzip!(b1, u)| *b1 = 2. * u - sol.dr * sol.dr * 10. / 12. * *b1);
-
-        inverse_lu_inplace(
-            self.buffer1.as_ref(),
-            self.buffer2.as_mut(),
+        inverse_ldlt_inplace(
+            self.f.as_ref(),
+            self.buffer1.as_mut(),
             &mut self.inverse_buffer
         );
 
-        zip!(self.f2.as_mut(), eq.unit.as_ref(), self.buffer1.as_ref())
-            .for_each(|unzip!(f2, u, b1)| *f2 = 1.2 * u - b1 / 10.);
-
         matmul(
-            self.buffer1.as_mut(),
+            self.buffer2.as_mut(),
             Accum::Replace,
-            self.f1.as_ref(),
+            self.buffer1.as_ref(),
             sol.sol.0.as_ref(),
             1.,
             Par::Seq,
         );
-        self.buffer1 += self.f2.as_ref();
+
         matmul(
-            self.sol_last.0.as_mut(),
+            sol.sol.0.as_mut(),
             Accum::Replace,
             self.buffer2.as_ref(),
-            self.buffer1.as_ref(),
+            self.f_last.as_ref(),
             1.,
             Par::Seq,
         );
 
-        inverse_lu_inplace(
+        zip!(self.f.as_mut(), eq.unit.as_ref())
+            .for_each(|unzip!(f, u)| *f = *f / 4. + 0.75 * u);
+
+        zip!(self.f_last.as_mut(), eq.unit.as_ref())
+            .for_each(|unzip!(f, u)| *f = *f / 4. + 0.75 * u);
+
+        matmul(
+            self.buffer1.as_mut(),
+            Accum::Replace,
+            self.f.as_ref(),
+            sol.sol.0.as_ref(),
+            1.,
+            Par::Seq,
+        );
+
+        inverse_ldlt_inplace(
+            self.f_last.as_ref(),
+            self.buffer2.as_mut(),
+            &mut self.inverse_buffer
+        );
+
+        matmul(
+            sol.sol.0.as_mut(),
+            Accum::Replace,
+            self.buffer1.as_ref(),
+            self.buffer2.as_ref(),
+            1.,
+            Par::Seq,
+        );
+
+        ///////////////////////////////////////////////////////
+
+        eq.w_matrix(sol.r - sol.dr, &mut self.buffer2);
+        zip!(
+            self.f_prev_last.as_mut(),
+            eq.unit.as_ref(),
+            self.buffer2.as_ref()
+        )
+        .for_each(|unzip!(b1, u, c)| *b1 = u + sol.dr * sol.dr / 12. * c);
+        // f_prev_last is (1 - T_n)
+
+        inverse_ldlt_inplace(
+            self.f_prev_last.as_ref(),
+            self.buffer3.as_mut(),
+            &mut self.inverse_buffer
+        );
+        // buffer3 is (1 - T_n)^-1
+
+        zip!(self.buffer1.as_mut(), eq.unit.as_ref(), self.f_prev_last.as_ref())
+            .for_each(|unzip!(b1, u, f)| *b1 = 12. * u - 10. * f);
+        // buffer1 is (2 + 10T_n)
+
+        matmul(
+            self.buffer2.as_mut(),
+            Accum::Replace,
+            self.buffer1.as_ref(),
+            self.buffer3.as_ref(),
+            1.,
+            Par::Seq,
+        );
+        // buffer2 is U_n
+
+        inverse_ldlt_inplace(
+            self.buffer2.as_ref(),
+            self.buffer1.as_mut(),
+            &mut self.inverse_buffer
+        );
+        // buffer1 is U_n^-1
+
+        zip!(self.buffer2.as_mut(), sol.sol.0.as_ref(), eq.unit.as_ref())
+            .for_each(|unzip!(b2, sol, u)| *b2 = sol + u);
+
+        matmul(
+            self.sol_last.0.as_mut(),
+            Accum::Replace,
+            self.buffer1.as_ref(),
+            self.buffer2.as_ref(),
+            1.,
+            Par::Seq,
+        );
+
+        inverse_ldlt_inplace(
             self.sol_last.0.as_ref(),
             self.buffer1.as_mut(),
             &mut self.inverse_buffer
@@ -264,18 +323,14 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
             1.,
             Par::Seq,
         );
+
         swap(&mut sol.sol.0, &mut self.buffer2);
+        swap(&mut self.f_prev_last, &mut self.f_last)
     }
 
     fn double_the_step(&mut self, sol: &mut Solution<Ratio<Mat<f64>>>, eq: &Equation<Mat<f64>>) {
         sol.dr *= 2.;
 
-        zip!(self.f2.as_mut(), eq.unit.as_ref(), self.f3.as_ref())
-            .for_each(|unzip!(f2, u, f3)| *f2 = 4.0 * f3 - 3. * u);
-
-        zip!(self.f1.as_mut(), eq.unit.as_ref())
-            .for_each(|unzip!(f1, u)| *f1 = 4.0 * *f1 - 3. * u);
-
         matmul(
             self.buffer1.as_mut(),
             Accum::Replace,
@@ -284,7 +339,60 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
             1.,
             Par::Seq,
         );
-        swap(&mut self.buffer1, &mut sol.sol.0);
+
+        inverse_ldlt_inplace(
+            self.f.as_ref(),
+            self.buffer2.as_mut(),
+            &mut self.inverse_buffer
+        );
+
+        matmul(
+            self.buffer3.as_mut(),
+            Accum::Replace,
+            self.buffer2.as_ref(),
+            self.buffer1.as_ref(),
+            1.,
+            Par::Seq,
+        );
+
+        matmul(
+            sol.sol.0.as_mut(),
+            Accum::Replace,
+            self.buffer3.as_ref(),
+            self.f_prev_last.as_ref(),
+            1.,
+            Par::Seq,
+        );
+
+        zip!(self.f.as_mut(), eq.unit.as_ref())
+            .for_each(|unzip!(f, u)| *f = 4. * *f - 3. * u);
+
+        zip!(self.f_last.as_mut(), eq.unit.as_ref(), self.f_prev_last.as_ref())
+            .for_each(|unzip!(f, u, f_prev)| *f = 4. * *f_prev - 3. * u);
+
+        matmul(
+            self.buffer1.as_mut(),
+            Accum::Replace,
+            self.f.as_ref(),
+            sol.sol.0.as_ref(),
+            1.,
+            Par::Seq,
+        );
+
+        inverse_ldlt_inplace(
+            self.f_last.as_ref(),
+            self.buffer2.as_mut(),
+            &mut self.inverse_buffer
+        );
+
+        matmul(
+            sol.sol.0.as_mut(),
+            Accum::Replace,
+            self.buffer1.as_ref(),
+            self.buffer2.as_ref(),
+            1.,
+            Par::Seq,
+        );
     }
 }
 
@@ -293,7 +401,18 @@ impl Solution<Ratio<Mat<f64>>> {
         let size = eq.potential.size();
         let r_last = self.r;
         let r_prev_last = self.r - self.dr;
-        let wave_ratio = self.sol.0.as_ref();
+
+        let mut f_last = Mat::zeros(size, size);
+        eq.w_matrix(r_last, &mut f_last);
+        f_last *= self.dr * self.dr / 12.;
+        f_last += &eq.unit;
+
+        let mut f_prev_last = Mat::zeros(size, size);
+        eq.w_matrix(r_prev_last, &mut f_prev_last);
+        f_prev_last *= self.dr * self.dr / 12.;
+        f_prev_last += &eq.unit;
+
+        let wave_ratio = f_last.partial_piv_lu().inverse() * self.sol.0.as_ref() * f_prev_last;
 
         let asymptotic = &eq.asymptotic(r_last);
 
@@ -327,7 +446,7 @@ impl Solution<Ratio<Mat<f64>>> {
             }
         }
 
-        let denominator = (wave_ratio * n_prev_last - n_last).partial_piv_lu();
+        let denominator = (&wave_ratio * n_prev_last - n_last).partial_piv_lu();
         let denominator = denominator.inverse();
 
         let k_matrix = -denominator * (wave_ratio * j_prev_last - j_last);
@@ -447,14 +566,14 @@ mod test {
         numerov.step();
 
         assert_approx_eq!(numerov.solution.sol.0[(0, 0)], 1.001175827, 1e-6);
-        assert_approx_eq!(numerov.solution.sol.0[(1, 0)], 6.264251e-9, 1e-6);
+        assert_approx_eq!(numerov.solution.sol.0[(1, 0)], 6.26398e-9, 1e-6);
 
         numerov.step();
         numerov.step();
         numerov.step();
 
         assert_approx_eq!(numerov.solution.sol.0[(0, 0)], 1.0016997, 1e-6);
-        assert_approx_eq!(numerov.solution.sol.0[(1, 0)], 2.49725e-8, 1e-6);
+        assert_approx_eq!(numerov.solution.sol.0[(1, 0)], 2.497223e-8, 1e-6);
     }
 
     #[test]
@@ -472,9 +591,9 @@ mod test {
         let s_matrix = numerov.s_matrix();
 
         // values at which the result was correct.
-        assert_approx_eq!(s_matrix.get_scattering_length().re, -37.0230987, 1e-6);
-        assert_approx_eq!(s_matrix.get_scattering_length().im, -1.6974e-13, 1e-6);
-        assert_approx_eq!(s_matrix.get_elastic_cross_sect(), 17224.7595, 1e-6);
+        assert_approx_eq!(s_matrix.get_scattering_length().re, -36.8417479, 1e-6);
+        assert_approx_eq!(s_matrix.get_scattering_length().im, -8.92832e-13, 1e-6);
+        assert_approx_eq!(s_matrix.get_elastic_cross_sect(), 1.7056429e4, 1e-6);
         assert_approx_eq!(s_matrix.get_inelastic_cross_sect(), 1.0356329e-23, 1e-6);
     }
 }
