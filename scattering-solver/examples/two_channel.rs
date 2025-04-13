@@ -16,13 +16,9 @@ use quantum::{
     utility::linspace,
 };
 use scattering_solver::{
-    boundary::{Asymptotic, Boundary, Direction},
-    numerovs::{
-        LocalWavelengthStepRule,
-        multi_numerov::MultiRNumerov,
-        propagator_watcher::{ManyPropagatorWatcher, PropagatorLogging, Sampling, WaveStorage},
-    },
-    potentials::{
+    boundary::{Asymptotic, Boundary, Direction}, log_derivatives::johnson::JohnsonLogDerivative, numerovs::{
+        multi_numerov::MultiRNumerov, propagator_watcher::{ManyPropagatorWatcher, PropagatorLogging, Sampling, WaveStorage}, LocalWavelengthStepRule
+    }, potentials::{
         dispersion_potential::Dispersion,
         gaussian_coupling::GaussianCoupling,
         multi_coupling::MultiCoupling,
@@ -30,9 +26,7 @@ use scattering_solver::{
         pair_potential::PairPotential,
         potential::{MatPotential, Potential},
         potential_factory::create_lj,
-    },
-    propagator::{CoupledEquation, Propagator},
-    utility::{AngMomentum, save_data},
+    }, propagator::{CoupledEquation, Propagator}, utility::{save_data, save_spectrum, AngMomentum}
 };
 
 use rayon::prelude::*;
@@ -178,38 +172,52 @@ impl Problems {
         let particles = Self::particles();
         let potential = Self::potential();
 
+        let r_match = 20.;
+
         let energies = linspace(Energy(-100.0, GHz).to_au(), Energy(0.0, GHz).to_au(), 1000);
-        let data: Vec<f64> = energies
+        let data: Vec<(u64, Vec<f64>)> = energies
             .par_iter()
             .progress()
             .map(|&energy| {
                 let mut particles = particles.clone();
                 particles.insert(Energy(energy, Au));
 
-                let eq = CoupledEquation::from_particles(&potential, &particles);
-                // let boundary = Boundary::new_exponential_vanishing(500., &eq);
-                let boundary =
-                    Boundary::new_multi_vanishing(500., Direction::Inwards, potential.size());
-
                 let step_rule = LocalWavelengthStepRule::new(1e-4, 10., 500.);
+                let eq = CoupledEquation::from_particles(&potential, &particles);
+                let boundary = Boundary::new_exponential_vanishing(500., &eq);
 
-                let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
+                let mut propagator = JohnsonLogDerivative::new(eq.clone(), boundary, step_rule.clone());
+                let solution_in = propagator.propagate_to(r_match);
 
-                numerov.propagate_to(6.5).nodes as f64
+                let boundary = Boundary::new_multi_vanishing(6.5, Direction::Outwards, potential.size());
+                let mut propagator = JohnsonLogDerivative::new(eq, boundary, step_rule);
+                let solution_out = propagator.propagate_to(r_match);
+
+                let matching_matrix = &solution_out.sol.0 - &solution_in.sol.0;
+                let nodes = solution_in.nodes + solution_out.nodes;
+
+                let eigenvalues = matching_matrix.self_adjoint_eigenvalues(faer::Side::Lower)
+                    .expect("could not diagonalize matching matrix");
+
+                let nodes = nodes + eigenvalues.iter().fold(0, |acc, &x| if x < 0. { acc + 1 } else { acc });
+
+                (nodes, eigenvalues)
             })
             .collect();
 
-        // let bound_diffs = data.iter().map(|n| n.diff as f64).collect();
-        // let node_counts = data.iter().map(|n| n as f64).collect();
+        let node_counts = data.iter().map(|x| x.0 as f64).collect();
+        let mismatch: Vec<Vec<f64>> = data.into_iter().map(|x| x.1).collect();
+
         let energies = energies
             .into_iter()
             .map(|x| Energy(x, Au).to(GHz).value())
-            .collect();
+            .collect::<Vec<f64>>();
 
         let header = "energy\tnode_count";
-        let data = vec![energies, data];
+        let data = vec![energies.clone(), node_counts];
 
         save_data("two_chan/node_count", header, &data).unwrap();
+        save_spectrum("two_chan/bound_mismatch", "energy\tmismatches", &energies, &mismatch).unwrap()
 
         // let bound_states = vec![0, 1, 3, -1, -2, -5];
         // for n in bound_states {

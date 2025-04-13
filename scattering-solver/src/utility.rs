@@ -75,6 +75,46 @@ pub fn save_serialize(filename: &str, data: &impl Serialize) -> Result<(), std::
     Ok(())
 }
 
+pub fn save_spectrum(
+    filename: &str,
+    header: &str,
+    parameter: &[f64],
+    energies: &[Vec<f64>],
+) -> Result<(), std::io::Error> {
+    assert_eq!(
+        parameter.len(),
+        energies.len(),
+        "parameters and energies have to have the same length"
+    );
+
+    let mut path = std::env::current_dir().unwrap();
+    path.push("data");
+    path.push(filename);
+    path.set_extension("dat");
+    let filepath = path.parent().unwrap();
+
+    let mut buf = header.to_string();
+
+    for (p, e) in parameter.iter().zip(energies.iter()) {
+        let line = e
+            .iter()
+            .fold(format!("{:e}", p), |s, val| s + &format!("\t{:e}", val));
+
+        buf.push_str(&format!("\n{line}"))
+    }
+
+    if !Path::new(filepath).exists() {
+        create_dir_all(filepath)?;
+        println!("created path {}", filepath.display());
+    }
+
+    let mut file = File::create(&path)?;
+    file.write_all(buf.as_bytes())?;
+
+    println!("saved data on {}", path.display());
+    Ok(())
+}
+
 pub fn get_ldlt_inverse_buffer(size: usize) -> MemBuffer {
     MemBuffer::new(
         temp_mat_scratch::<f64>(size, 1)

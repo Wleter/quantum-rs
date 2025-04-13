@@ -1,33 +1,28 @@
 use std::time::Instant;
 
 use faer::Mat;
+use indicatif::ParallelProgressIterator;
 use quantum::{
     params::{particle_factory::create_atom, particles::Particles},
-    problem_selector::{ProblemSelector, get_args},
+    problem_selector::{get_args, ProblemSelector},
     problems_impl,
     units::{
-        Au,
-        distance_units::Distance,
-        energy_units::{Energy, Kelvin},
+        distance_units::Distance, energy_units::{Energy, Kelvin}, Au, GHz
     },
     utility::linspace,
 };
+use rayon::prelude::*;
 use scattering_solver::{
-    boundary::{Asymptotic, Boundary, Direction},
-    numerovs::{
-        LocalWavelengthStepRule, multi_numerov::MultiRNumerov,
-        propagator_watcher::PropagatorLogging,
-    },
-    potentials::{
+    boundary::{Asymptotic, Boundary, Direction}, log_derivatives::johnson::JohnsonLogDerivative, numerovs::{
+        multi_numerov::MultiRNumerov, propagator_watcher::PropagatorLogging, LocalWavelengthStepRule
+    }, potentials::{
         dispersion_potential::Dispersion,
         multi_coupling::MultiCoupling,
         multi_diag_potential::Diagonal,
         pair_potential::PairPotential,
         potential::{MatPotential, Potential},
         potential_factory::create_lj,
-    },
-    propagator::{CoupledEquation, Propagator},
-    utility::AngMomentum,
+    }, propagator::{CoupledEquation, Propagator}, utility::{save_data, save_spectrum, AngMomentum}
 };
 
 pub fn main() {
@@ -121,39 +116,54 @@ impl Problems {
     }
 
     fn bound_states() {
-        // let particles = Self::particles();
-        // let potential = Self::potential();
+        let particles = Self::particles();
+        let potential = Self::potential();
 
-        // let energies = linspace(Energy(-100.0, GHz).to_au(), Energy(0.0, GHz).to_au(), 100);
-        // let data: Vec<BoundDiff> = energies.iter()
-        //     .map(|&energy| {
-        //         let mut particles = particles.clone();
-        //         particles.insert(Energy(energy, Au));
+        let r_match = 20.;
 
-        //         MultiBoundRatioNumerov::new(MultiStepRule::new(1e-4, 10., 500.))
-        //             .bound_diff(&potential, &particles, (6.5, 20.0, 500.))
-        //     })
-        //     .collect();
+        let energies = linspace(Energy(-100.0, GHz).to_au(), Energy(0.0, GHz).to_au(), 1000);
+        let data: Vec<(u64, Vec<f64>)> = energies
+            .par_iter()
+            .progress()
+            .map(|&energy| {
+                let mut particles = particles.clone();
+                particles.insert(Energy(energy, Au));
 
-        //     let bound_diffs = data.iter().map(|n| n.diff as f64).collect();
-        //     let node_counts = data.iter().map(|n| n.nodes as f64).collect();
-        //     let energies = energies.into_iter().map(|x| Energy(x, Au).to(GHz).value()).collect();
+                let step_rule = LocalWavelengthStepRule::new(1e-4, 10., 500.);
+                let eq = CoupledEquation::from_particles(&potential, &particles);
+                let boundary = Boundary::new_exponential_vanishing(500., &eq);
 
-        //     let header = "energy\tbound_diff\tnode_count";
-        //     let data = vec![energies, bound_diffs, node_counts];
+                let mut propagator = JohnsonLogDerivative::new(eq.clone(), boundary, step_rule.clone());
+                let solution_in = propagator.propagate_to(r_match);
 
-        // save_data("many_chan/bound_diffs", header, &data).unwrap();
+                let boundary = Boundary::new_multi_vanishing(6.5, Direction::Outwards, potential.size());
+                let mut propagator = JohnsonLogDerivative::new(eq, boundary, step_rule);
+                let solution_out = propagator.propagate_to(r_match);
 
-        // let bound_states = vec![0, 1, 3, -1, -2, -5];
-        // for n in bound_states {
-        //     let bound_energy = bounds.n_bound_energy(n, Energy(0.1, CmInv));
-        //     println!("n = {}, bound energy: {:.4e} cm^-1", n, bound_energy.to(CmInv).value());
+                let matching_matrix = &solution_out.sol.0 - &solution_in.sol.0;
+                let nodes = solution_in.nodes + solution_out.nodes;
 
-        //     let (rs, wave) = bounds.bound_wave(Sampling::Variable(1000));
+                let eigenvalues = matching_matrix.self_adjoint_eigenvalues(faer::Side::Lower)
+                    .expect("could not diagonalize matching matrix");
 
-        //     let header = vec!["position", "wave function"];
-        //     let data = vec![rs, wave];
-        //     save_data("many_chan", &format!("bound_wave_{}", n), header, data).unwrap();
-        // }
+                let nodes = nodes + eigenvalues.iter().fold(0, |acc, &x| if x < 0. { acc + 1 } else { acc });
+
+                (nodes, eigenvalues)
+            })
+            .collect();
+
+        let node_counts = data.iter().map(|x| x.0 as f64).collect();
+        let mismatch: Vec<Vec<f64>> = data.into_iter().map(|x| x.1).collect();
+
+        let energies = energies
+            .into_iter()
+            .map(|x| Energy(x, Au).to(GHz).value())
+            .collect::<Vec<f64>>();
+
+        let header = "energy\tnode_count";
+        let data = vec![energies.clone(), node_counts];
+
+        save_data("many_chan/node_count", header, &data).unwrap();
+        save_spectrum("many_chan/bound_mismatch", "energy\tmismatches", &energies, &mismatch).unwrap()
     }
 }
