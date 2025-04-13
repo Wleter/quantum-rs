@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+import json
 from typing import Iterable
 import numpy as np
 import numpy.typing as npt
@@ -5,6 +7,30 @@ import numpy.typing as npt
 class BoundsDependence:
     def __init__(self, filename):
         self.data = np.loadtxt(filename, delimiter="\t", skiprows=1)
+
+    @staticmethod
+    def parse_json(filename: str) -> 'BoundsDependence':
+        with open(filename, "r") as file:
+            data = json.load(file)
+
+        parameters = data['parameters']
+        bound_states = [
+            BoundStates(
+                item['energies'],
+                item['nodes']
+            )
+            for item in data['bound_states']
+        ]
+
+        data = np.zeros((0, 3))
+        for parameter, bounds in zip(parameters, bound_states):
+            for node, energy in zip(bounds.nodes, bounds.energies):
+                data = np.append(data, np.array([parameter, node, energy]).reshape((1, 3)), axis=0)
+
+        instance = BoundsDependence.__new__(BoundsDependence)
+        instance.data = data
+
+        return instance
 
     def dependence(self) -> npt.NDArray[np.float64]:
         return self.data[:, [0,2]]
@@ -44,6 +70,11 @@ class BoundsDependence:
             sorted_indices = np.argsort(filtered[:, 0])[::-1]
 
             yield filtered[sorted_indices]
+
+@dataclass
+class BoundStates:
+    energies: list[float]
+    nodes: list[int]
 
 if __name__ == "__main__":
     for s in BoundsDependence(f"data/srf_rb_bounds_2.dat").states():

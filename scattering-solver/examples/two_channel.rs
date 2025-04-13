@@ -16,9 +16,9 @@ use quantum::{
     utility::linspace,
 };
 use scattering_solver::{
-    boundary::{Asymptotic, Boundary, Direction}, log_derivatives::johnson::JohnsonLogDerivative, numerovs::{
+    boundary::{Asymptotic, Boundary, Direction}, log_derivatives::johnson::Johnson, numerovs::{
         multi_numerov::MultiRNumerov, propagator_watcher::{ManyPropagatorWatcher, PropagatorLogging, Sampling, WaveStorage}, LocalWavelengthStepRule
-    }, potentials::{
+    }, observables::bound_states::BoundProblemBuilder, potentials::{
         dispersion_potential::Dispersion,
         gaussian_coupling::GaussianCoupling,
         multi_coupling::MultiCoupling,
@@ -172,36 +172,19 @@ impl Problems {
         let particles = Self::particles();
         let potential = Self::potential();
 
-        let r_match = 20.;
+        let bound_problem = BoundProblemBuilder::new(&particles, &potential)
+            .with_propagation(LocalWavelengthStepRule::new(1e-4, 10., 500.), Johnson)
+            .with_range(6.5, 20., 500.)
+            .build();
 
         let energies = linspace(Energy(-100.0, GHz).to_au(), Energy(0.0, GHz).to_au(), 1000);
         let data: Vec<(u64, Vec<f64>)> = energies
             .par_iter()
             .progress()
             .map(|&energy| {
-                let mut particles = particles.clone();
-                particles.insert(Energy(energy, Au));
+                let bound_mismatch = bound_problem.bound_mismatch(Energy(energy, Au));
 
-                let step_rule = LocalWavelengthStepRule::new(1e-4, 10., 500.);
-                let eq = CoupledEquation::from_particles(&potential, &particles);
-                let boundary = Boundary::new_exponential_vanishing(500., &eq);
-
-                let mut propagator = JohnsonLogDerivative::new(eq.clone(), boundary, step_rule.clone());
-                let solution_in = propagator.propagate_to(r_match);
-
-                let boundary = Boundary::new_multi_vanishing(6.5, Direction::Outwards, potential.size());
-                let mut propagator = JohnsonLogDerivative::new(eq, boundary, step_rule);
-                let solution_out = propagator.propagate_to(r_match);
-
-                let matching_matrix = &solution_out.sol.0 - &solution_in.sol.0;
-                let nodes = solution_in.nodes + solution_out.nodes;
-
-                let eigenvalues = matching_matrix.self_adjoint_eigenvalues(faer::Side::Lower)
-                    .expect("could not diagonalize matching matrix");
-
-                let nodes = nodes + eigenvalues.iter().fold(0, |acc, &x| if x < 0. { acc + 1 } else { acc });
-
-                (nodes, eigenvalues)
+                (bound_mismatch.nodes, bound_mismatch.matching_eigenvalues)
             })
             .collect();
 

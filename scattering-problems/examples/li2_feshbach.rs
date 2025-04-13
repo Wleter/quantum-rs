@@ -8,24 +8,20 @@ use indicatif::{ParallelProgressIterator, ProgressIterator};
 use num::complex::Complex64;
 use quantum::{
     params::{particle_factory, particles::Particles},
-    problem_selector::{ProblemSelector, get_args},
+    problem_selector::{get_args, ProblemSelector},
     problems_impl,
-    units::energy_units::{Energy, Kelvin, MHz},
+    units::{energy_units::{Energy, Kelvin, MHz}, GHz},
     utility::linspace,
 };
 use scattering_problems::{
     IndexBasisDescription, ScatteringProblem, alkali_atoms::AlkaliAtomsProblemBuilder,
 };
 use scattering_solver::{
-    boundary::{Boundary, Direction},
-    numerovs::{LocalWavelengthStepRule, multi_numerov::MultiRNumerov},
-    potentials::{
+    boundary::{Boundary, Direction}, log_derivatives::johnson::Johnson, numerovs::{multi_numerov::MultiRNumerov, LocalWavelengthStepRule}, observables::bound_states::{BoundProblemBuilder, BoundStates, BoundStatesDependence}, potentials::{
         composite_potential::Composite,
         dispersion_potential::Dispersion,
         potential::{MatPotential, Potential},
-    },
-    propagator::{CoupledEquation, Propagator},
-    utility::save_data,
+    }, propagator::{CoupledEquation, Propagator}, utility::{save_data, save_serialize}
 };
 
 use rayon::prelude::*;
@@ -38,7 +34,8 @@ pub struct Problems;
 
 problems_impl!(Problems, "Li2 Feshbach",
     "potential values" => |_| Self::potential_values(),
-    "feshbach resonance" => |_| Self::feshbach()
+    "feshbach resonance" => |_| Self::feshbach(),
+    "bound states" => |_| Self::bound_states()
 );
 
 impl Problems {
@@ -139,5 +136,48 @@ impl Problems {
         let data = vec![mag_fields, scatterings_re, scatterings_im];
 
         save_data("li2_scatterings", header, &data).unwrap()
+    }
+
+    fn bound_states() {
+        ///////////////////////////////////
+
+        let projection = hi32!(0);
+        let mag_fields = linspace(0., 1200., 1200);
+        let energy_range = (Energy(-12., GHz), Energy(0., MHz));
+        let err = Energy(1., MHz);
+        let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
+
+        ///////////////////////////////////
+
+        let start = Instant::now();
+        let bound_states = mag_fields
+            .par_iter()
+            .progress()
+            .map(|&mag_field| {
+                let alkali_problem = Self::get_problem(projection, mag_field);
+
+                let mut particles = Self::get_particles();
+                let potential = &alkali_problem.potential;
+                particles.insert(alkali_problem.asymptotic);
+
+                let bound_problem = BoundProblemBuilder::new(&particles, potential)
+                    .with_propagation(step_rule.clone(), Johnson)
+                    .with_range(4., 20., 500.)
+                    .build();
+
+                bound_problem.bound_states(energy_range, err)
+                    .with_energy_units(GHz)
+            })
+            .collect::<Vec<BoundStates>>();
+
+        let elapsed = start.elapsed();
+        println!("calculated in {}", elapsed.hhmmssxxx());
+
+        let bound_dependence = BoundStatesDependence {
+            parameters: mag_fields,
+            bound_states,
+        };
+
+        save_serialize("li2_bound_states", &bound_dependence).unwrap()
     }
 }
