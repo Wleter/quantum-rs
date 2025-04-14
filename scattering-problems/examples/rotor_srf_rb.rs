@@ -15,18 +15,12 @@ use indicatif::{ParallelProgressIterator, ProgressIterator};
 
 use quantum::{
     params::{
-        Params,
-        particle::Particle,
-        particle_factory::{RotConst, create_atom},
-        particles::Particles,
+        particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles, Params
     },
-    problem_selector::{ProblemSelector, get_args},
+    problem_selector::{get_args, ProblemSelector},
     problems_impl,
     units::{
-        Au, Unit,
-        distance_units::{Angstrom, Distance},
-        energy_units::{CmInv, Energy, EnergyUnit, GHz, Kelvin},
-        mass_units::{Dalton, Mass},
+        distance_units::{Angstrom, Distance}, energy_units::{CmInv, Energy, EnergyUnit, GHz, Kelvin}, mass_units::{Dalton, Mass}, Au, MHz, Unit
     },
     utility::{legendre_polynomials, linspace},
 };
@@ -42,19 +36,13 @@ use scattering_problems::{
     utility::{AnisoHifi, GammaSpinRot},
 };
 use scattering_solver::{
-    boundary::{Boundary, Direction},
-    numerovs::{
-        LocalWavelengthStepRule, multi_numerov::MultiRNumerov,
-        propagator_watcher::PropagatorLogging,
-    },
-    observables::s_matrix::{ScatteringDependence, ScatteringObservables},
-    potentials::{
+    boundary::{Boundary, Direction}, log_derivatives::johnson::Johnson, numerovs::{
+        multi_numerov::MultiRNumerov, propagator_watcher::PropagatorLogging, LocalWavelengthStepRule
+    }, observables::{bound_states::{BoundProblemBuilder, BoundStates, BoundStatesDependence}, s_matrix::{ScatteringDependence, ScatteringObservables}}, potentials::{
         composite_potential::Composite,
         dispersion_potential::Dispersion,
         potential::{Potential, ScaledPotential, SimplePotential},
-    },
-    propagator::{CoupledEquation, Propagator},
-    utility::{save_data, save_serialize},
+    }, propagator::{CoupledEquation, Propagator}, utility::{save_data, save_serialize}
 };
 
 use rayon::prelude::*;
@@ -72,7 +60,8 @@ problems_impl!(Problems, "CaF + Rb Feshbach",
     "cross sections calculation" => |_| Self::cross_sections(),
     "a_length potential scaling" => |_| Self::potential_scaling_propagation(),
     "spinless convergence" => |_| Self::spinless_convergence(),
-    "potential scaled scattering calculation" => |_| Self::scattering_scaled()
+    "potential scaled scattering calculation" => |_| Self::scattering_scaled(),
+    "bound states" => |_| Self::bound_states()
 );
 
 impl Problems {
@@ -564,6 +553,67 @@ impl Problems {
         };
 
         save_serialize(&format!("SrF_Rb_scaled_scattering_n_{n_max}_v4"), &data).unwrap()
+    }
+
+    fn bound_states() {
+        let entrance = 0;
+
+        let projection = hi32!(1);
+        let energy_relative = Energy(1e-7, Kelvin);
+        let mag_fields = linspace(0., 1000., 500);
+        let basis_recipe = TramBasisRecipe {
+            l_max: 0,
+            n_max: 0,
+            n_tot_max: 0,
+            ..Default::default()
+        };
+
+        let atoms = get_particles(energy_relative, projection);
+        let alkali_problem = get_problem(&atoms, &basis_recipe);
+        let step_rule = LocalWavelengthStepRule::new(4e-3, f64::INFINITY, 400.);
+
+        let energy_range = (Energy(-12., GHz), Energy(0., GHz));
+        let err = Energy(1., MHz);
+
+        ///////////////////////////////////
+
+        let start = Instant::now();
+        let bound_states = mag_fields
+            .par_iter()
+            .progress()
+            .map(|&mag_field| {
+                let mut atoms = atoms.clone();
+
+                let alkali_problem = alkali_problem.scattering_for(mag_field);
+                let mut asymptotic = alkali_problem.asymptotic;
+                asymptotic.entrance = entrance;
+                atoms.insert(asymptotic);
+                let potential = &alkali_problem.potential;
+
+                let bound_problem = BoundProblemBuilder::new(&atoms, potential)
+                    .with_propagation(step_rule.clone(), Johnson)
+                    .with_range(5., 20., 500.)
+                    .build();
+
+                bound_problem.bound_states(energy_range, err)
+                    .with_energy_units(GHz)
+            })
+            .collect::<Vec<BoundStates>>();
+
+        let elapsed = start.elapsed();
+        println!("calculated in {}", elapsed.hhmmssxxx());
+
+        let data = BoundStatesDependence {
+            parameters: mag_fields,
+            bound_states,
+        };
+
+        let filename = format!(
+            "SrF_Rb_bound_states_n_max_{}_n_tot_max_{}",
+            basis_recipe.n_max, basis_recipe.n_tot_max
+        );
+
+        save_serialize(&filename, &data).unwrap()
     }
 }
 
