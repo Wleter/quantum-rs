@@ -145,7 +145,6 @@ impl Problems {
         let mag_fields = linspace(0., 1200., 1200);
         let energy_range = (Energy(-12., GHz), Energy(0., MHz));
         let err = Energy(1., MHz);
-        let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
 
         ///////////////////////////////////
 
@@ -161,7 +160,7 @@ impl Problems {
                 particles.insert(alkali_problem.asymptotic);
 
                 let bound_problem = BoundProblemBuilder::new(&particles, potential)
-                    .with_propagation(step_rule.clone(), Johnson)
+                    .with_propagation(LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.), Johnson)
                     .with_range(4., 20., 500.)
                     .build();
 

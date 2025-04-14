@@ -201,7 +201,7 @@ where
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BoundStates {
     pub energies: Vec<f64>,
-    pub nodes: Vec<u64>
+    pub nodes: Vec<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -211,6 +211,7 @@ pub struct BoundStatesDependence {
 }
 
 impl BoundStates {
+    // todo! fix dubious unit casting, which works only once
     pub fn with_energy_units(mut self, unit: impl EnergyUnit) -> Self {
         for energy in &mut self.energies {
             *energy = Energy(*energy, Au).to(unit).value()

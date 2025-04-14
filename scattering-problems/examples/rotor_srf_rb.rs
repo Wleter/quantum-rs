@@ -39,9 +39,7 @@ use scattering_solver::{
     boundary::{Boundary, Direction}, log_derivatives::johnson::Johnson, numerovs::{
         multi_numerov::MultiRNumerov, propagator_watcher::PropagatorLogging, LocalWavelengthStepRule
     }, observables::{bound_states::{BoundProblemBuilder, BoundStates, BoundStatesDependence}, s_matrix::{ScatteringDependence, ScatteringObservables}}, potentials::{
-        composite_potential::Composite,
-        dispersion_potential::Dispersion,
-        potential::{Potential, ScaledPotential, SimplePotential},
+        composite_potential::Composite, dispersion_potential::Dispersion, multi_coupling::MultiCoupling, pair_potential::PairPotential, potential::{Potential, ScaledPotential, SimplePotential}
     }, propagator::{CoupledEquation, Propagator}, utility::{save_data, save_serialize}
 };
 
@@ -61,7 +59,9 @@ problems_impl!(Problems, "CaF + Rb Feshbach",
     "a_length potential scaling" => |_| Self::potential_scaling_propagation(),
     "spinless convergence" => |_| Self::spinless_convergence(),
     "potential scaled scattering calculation" => |_| Self::scattering_scaled(),
-    "bound states" => |_| Self::bound_states()
+    "bound states" => |_| Self::bound_states(),
+    "bound states potential scaling singlet" => |_| Self::bounds_singlet_scaling(),
+    "bound states potential scaling triplet" => |_| Self::bounds_triplet_scaling(),
 );
 
 impl Problems {
@@ -562,24 +562,23 @@ impl Problems {
         let energy_relative = Energy(1e-7, Kelvin);
         let mag_fields = linspace(0., 1000., 500);
         let basis_recipe = TramBasisRecipe {
-            l_max: 0,
-            n_max: 0,
+            l_max: 10,
+            n_max: 10,
             n_tot_max: 0,
             ..Default::default()
         };
 
         let atoms = get_particles(energy_relative, projection);
         let alkali_problem = get_problem(&atoms, &basis_recipe);
-        let step_rule = LocalWavelengthStepRule::new(4e-3, f64::INFINITY, 400.);
 
-        let energy_range = (Energy(-12., GHz), Energy(0., GHz));
+        let energy_range = (Energy(-1., GHz), Energy(0., GHz));
         let err = Energy(1., MHz);
 
         ///////////////////////////////////
 
         let start = Instant::now();
         let bound_states = mag_fields
-            .par_iter()
+            .iter()
             .progress()
             .map(|&mag_field| {
                 let mut atoms = atoms.clone();
@@ -591,7 +590,7 @@ impl Problems {
                 let potential = &alkali_problem.potential;
 
                 let bound_problem = BoundProblemBuilder::new(&atoms, potential)
-                    .with_propagation(step_rule.clone(), Johnson)
+                    .with_propagation(LocalWavelengthStepRule::new(4e-3, f64::INFINITY, 400.), Johnson)
                     .with_range(5., 20., 500.)
                     .build();
 
@@ -612,6 +611,147 @@ impl Problems {
             "SrF_Rb_bound_states_n_max_{}_n_tot_max_{}",
             basis_recipe.n_max, basis_recipe.n_tot_max
         );
+
+        save_serialize(&filename, &data).unwrap()
+    }
+
+    fn bounds_singlet_scaling() {
+        let energy_relative = Energy(1e-7, Kelvin);
+
+        let atoms = get_particles(energy_relative, hi32!(0));
+
+        let [singlet, _] = read_extended(25);
+        let singlets = get_interpolated(&singlet);
+        
+        let basis_recipe = RotorAtomBasisRecipe {
+            l_max: 10,
+            n_max: 10,
+            ..Default::default()
+        };
+        let scalings = linspace(0., 1e7, 100);
+
+        let energy_range = (Energy(-12., GHz), Energy(0., GHz));
+        let err = Energy(1., MHz);
+
+        ///////////////////////////////////
+
+        let start = Instant::now();
+        let singlet_bounds = scalings
+            .par_iter()
+            .progress()
+            .map_with(atoms.clone(), |atoms, &scaling| {
+                let singlets = singlets.clone();
+                // let singlets = singlets 
+                    // .iter()
+                    // .map(|(lambda, p)| {
+                    //     (
+                    //         *lambda,
+                    //         ScaledPotential {
+                    //             potential: p.clone(),
+                    //             scaling,
+                    //         },
+                    //     )
+                    // })
+                    // .collect();
+
+                let problem = RotorAtomProblemBuilder::new(singlets)
+                    .build(&atoms, &basis_recipe);
+
+                let asymptotic = problem.asymptotic;
+                atoms.insert(asymptotic);
+                let potential = problem.potential;
+
+                let dispersion = Dispersion::new(scaling, -12);
+                let potential_shift = MultiCoupling::new(potential.size(), vec![(dispersion, 2, 2)]);
+
+                let potential = PairPotential::new(potential, potential_shift);
+    
+                let bound_problem = BoundProblemBuilder::new(&atoms, &potential)
+                    .with_propagation(LocalWavelengthStepRule::new(4e-3, f64::INFINITY, 400.), Johnson)
+                    .with_range(5., 20., 500.)
+                    .build();
+
+                bound_problem.bound_states(energy_range, err)
+                    .with_energy_units(GHz)
+            })
+            .collect();
+
+        let elapsed = start.elapsed();
+        println!("calculated in {}", elapsed.hhmmssxxx());
+
+        let data = BoundStatesDependence {
+            parameters: scalings,
+            bound_states: singlet_bounds,
+        }; 
+        let filename = format!("SrF_Rb_singlet_bound_states_n_max_{}_shift_2", basis_recipe.n_max);
+
+        save_serialize(&filename, &data).unwrap()
+    }
+
+    fn bounds_triplet_scaling() {
+        let energy_relative = Energy(1e-7, Kelvin);
+
+        let atoms = get_particles(energy_relative, hi32!(0));
+
+        let [_, triplet] = read_extended(25);
+        let triplets = get_interpolated(&triplet);
+        
+        let basis_recipe = RotorAtomBasisRecipe {
+            l_max: 10,
+            n_max: 10,
+            ..Default::default()
+        };
+        let scalings = linspace(1., 1.1, 500);
+
+        let energy_range = (Energy(-12., GHz), Energy(0., GHz));
+        let err = Energy(1., MHz);
+
+        ///////////////////////////////////
+
+        let start = Instant::now();
+        let triplet_bounds = scalings
+            .par_iter()
+            .progress()
+            .map_with(atoms.clone(), |atoms, &scaling| {
+                let triplets = triplets
+                    .iter()
+                    .map(|(lambda, p)| {
+                        (
+                            *lambda,
+                            ScaledPotential {
+                                potential: p.clone(),
+                                scaling,
+                            },
+                        )
+                    })
+                    .collect();
+
+                let problem = RotorAtomProblemBuilder::new(triplets)
+                    .build(&atoms, &basis_recipe);
+
+                let asymptotic = problem.asymptotic;
+                atoms.insert(asymptotic);
+                let potential = &problem.potential;
+    
+                let bound_problem = BoundProblemBuilder::new(&atoms, potential)
+                    .with_propagation(LocalWavelengthStepRule::new(4e-3, f64::INFINITY, 400.), Johnson)
+                    .with_range(5., 20., 500.)
+                    .build();
+
+                bound_problem.bound_states(energy_range, err)
+                    .with_energy_units(GHz)
+            })
+            .collect();
+
+        let elapsed = start.elapsed();
+        println!("calculated in {}", elapsed.hhmmssxxx());
+
+        let data = BoundStatesDependence {
+            parameters: scalings,
+            bound_states: triplet_bounds,
+        };
+
+        let filename = format!("SrF_Rb_triplet_bound_states_n_max_{}", basis_recipe.n_max);
 
         save_serialize(&filename, &data).unwrap()
     }

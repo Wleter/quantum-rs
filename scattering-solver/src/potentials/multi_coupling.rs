@@ -12,7 +12,7 @@ pub struct MultiCoupling<A, P: Potential> {
 
 impl<A, P: Potential> MultiCoupling<A, P> {
     /// Creates new multi coupling potential with given vector of potentials with their coupling indices in potential matrix.
-    /// If `symmetric` is true, the coupling matrix will be symmetric.
+    /// The potential matrix is symmetrized.
     pub fn new(size: usize, potentials: Vec<(P, usize, usize)>) -> Self {
         for p in &potentials {
             assert!(p.1 < size);

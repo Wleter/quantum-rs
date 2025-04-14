@@ -15,7 +15,7 @@ use scattering_solver::{
         dispersion_potential::Dispersion,
         masked_potential::MaskedPotential,
         pair_potential::PairPotential,
-        potential::{MatPotential, SimplePotential},
+        potential::{MatPotential, SimplePotential, SubPotential},
     },
     utility::AngMomentum,
 };
@@ -60,7 +60,7 @@ where
         self,
         params: &Params,
         basis_recipe: &RotorAtomBasisRecipe,
-    ) -> ScatteringProblem<impl MatPotential + use<P>, RotorAtomBasisDescription> {
+    ) -> ScatteringProblem<impl MatPotential + SubPotential + use<P>, RotorAtomBasisDescription> {
         let rot_const = params
             .get::<RotConst>()
             .expect("Did not find RotConst parameter in the params")
