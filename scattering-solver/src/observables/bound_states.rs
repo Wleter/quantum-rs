@@ -150,21 +150,21 @@ where
         }
     }
 
+    // todo! optimize finding bound states
     pub fn bound_states(&self, energy_range: (Energy<impl EnergyUnit>, Energy<impl EnergyUnit>), err: Energy<impl EnergyUnit>) -> BoundStates {
         let lower_mismatch = self.bound_mismatch(energy_range.0);
         let upper_mismatch = self.bound_mismatch(energy_range.1);
         
         let mut bound_energies = vec![];
         let mut bound_nodes = vec![];
-        let mut lower_energy = energy_range.0.to(Au);
+        let lower_energy = energy_range.0.to(Au);
         let mut upper_energy = energy_range.1.to(Au);
 
         let mut target_node = upper_mismatch.nodes;
         while target_node > lower_mismatch.nodes {
-            let (bound_energy, lower_en) = self.bin_search(target_node, lower_energy, upper_energy, err.to(Au));
+            let bound_energy = self.bin_search(target_node, lower_energy, upper_energy, err.to(Au));
 
             upper_energy = bound_energy;
-            lower_energy = lower_en;
 
             bound_energies.push(bound_energy.to_au());
             bound_nodes.push(target_node);
@@ -178,19 +178,14 @@ where
         }
     }
 
-    fn bin_search(&self, target_node: u64, lower: Energy<Au>, upper: Energy<Au>, err: Energy<Au>) -> (Energy<Au>, Energy<Au>) {
+    fn bin_search(&self, target_node: u64, lower: Energy<Au>, upper: Energy<Au>, err: Energy<Au>) -> Energy<Au> {
         let mut lower = lower.to_au();
         let mut upper = upper.to_au();
         let err = err.to_au();
 
-        let mut before_lower = lower;
         while upper - lower > err {
             let energy_mid = (lower + upper) / 2.;
             let mid_mismatch = self.bound_mismatch(Energy(energy_mid, Au));
-
-            if mid_mismatch.nodes + 1 < target_node {
-                before_lower = energy_mid
-            }
 
             if mid_mismatch.nodes >= target_node {
                 upper = energy_mid
@@ -199,7 +194,7 @@ where
             }
         }
 
-        (Energy((lower + upper) / 2., Au), Energy(before_lower, Au))
+        Energy((lower + upper) / 2., Au)
     }
 }
 
