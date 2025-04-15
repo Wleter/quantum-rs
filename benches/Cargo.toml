@@ -7,7 +7,7 @@ edition = "2021"
 scattering-solver = { path = "../scattering-solver/" }
 quantum = { path = "../quantum", features = ["spins"] }
 dhat = { version = "0.3", optional = true }
-diol = { version = "0.10", default-features = false }
+diol = { version = "0.13", default-features = false }
 rand = "0.9"
 
 [features]
