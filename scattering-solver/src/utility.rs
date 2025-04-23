@@ -141,12 +141,12 @@ pub fn get_lblt_inverse_buffer(size: usize) -> MemBuffer {
             .and(temp_mat_scratch::<f64>(size, 1))
             .and(StackReq::new::<usize>(2 * size))
             .and(
-                cholesky::bunch_kaufman::factor::cholesky_in_place_scratch::<usize, f64>(
+                cholesky::lblt::factor::cholesky_in_place_scratch::<usize, f64>(
                     size,
                     faer::Par::Seq,
                     Default::default(),
                 )
-                .or(cholesky::bunch_kaufman::inverse::inverse_scratch::<
+                .or(cholesky::lblt::inverse::inverse_scratch::<
                     usize,
                     f64,
                 >(size, faer::Par::Seq)),
@@ -245,10 +245,9 @@ pub fn inverse_lblt_inplace(mat: MatRef<f64>, mut out: MatMut<f64>, buffer: &mut
     let perm_inv = unsafe { slice::from_raw_parts_mut(perm_inv.as_mut_ptr() as *mut usize, dim) };
 
     zip!(&mut l, &mat).for_each(|unzip!(l, m)| *l = *m);
-    cholesky::bunch_kaufman::factor::cholesky_in_place(
+    cholesky::lblt::factor::cholesky_in_place(
         l.as_mut(),
         sub_diag.as_mut(),
-        Default::default(),
         perm,
         perm_inv,
         faer::Par::Seq,
@@ -262,7 +261,7 @@ pub fn inverse_lblt_inplace(mat: MatRef<f64>, mut out: MatMut<f64>, buffer: &mut
 
     let perm_ref = unsafe { PermRef::new_unchecked(perm, perm_inv, dim) };
 
-    cholesky::bunch_kaufman::inverse::inverse(
+    cholesky::lblt::inverse::inverse(
         out.as_mut(),
         l.as_ref(),
         diag.as_ref(),
@@ -307,10 +306,9 @@ pub fn inverse_lblt_inplace_nodes(
 
     zip!(&mut l, &mat).for_each(|unzip!(l, m)| *l = *m);
 
-    cholesky::bunch_kaufman::factor::cholesky_in_place(
+    cholesky::lblt::factor::cholesky_in_place(
         l.as_mut(),
         sub_diag.as_mut(),
-        Default::default(),
         perm,
         perm_inv,
         faer::Par::Seq,
@@ -324,7 +322,7 @@ pub fn inverse_lblt_inplace_nodes(
 
     let perm_ref = unsafe { PermRef::new_unchecked(perm, perm_inv, dim) };
 
-    cholesky::bunch_kaufman::inverse::inverse(
+    cholesky::lblt::inverse::inverse(
         out.as_mut(),
         l.as_ref(),
         diag.as_ref(),

@@ -562,8 +562,8 @@ impl Problems {
         let energy_relative = Energy(1e-7, Kelvin);
         let mag_fields = linspace(0., 1000., 500);
         let basis_recipe = TramBasisRecipe {
-            l_max: 10,
-            n_max: 10,
+            l_max: 0,
+            n_max: 0,
             n_tot_max: 0,
             ..Default::default()
         };

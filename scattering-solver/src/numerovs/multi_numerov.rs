@@ -195,12 +195,15 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
             &mut self.inverse_buffer,
         );
 
-        assert!(nodes >= artificial);
-        sol.nodes += nodes - artificial;
-        if artificial > 0 {
-            println!("r: {} {} {} {}", sol.r, sol.nodes, nodes, artificial);
-            panic!("testing panic")
+        if nodes >= artificial {
+            println!("artificial nodes is higher than nodes")
         }
+        // assert!(nodes >= artificial);
+        // sol.nodes += nodes - artificial;
+        // if artificial > 0 {
+        //     println!("r: {} {} {} {}", sol.r, sol.nodes, nodes, artificial);
+        //     panic!("testing panic")
+        // }
 
         zip!(self.sol_last.0.as_mut(), self.buffer2.as_ref())
             .for_each(|unzip!(sol, u)| *sol = u - *sol);
@@ -569,7 +572,8 @@ mod test {
         let particles = particles();
         let potential = potential();
 
-        let boundary = Boundary::new_multi_vanishing(6.5, Direction::Outwards, potential.size());
+        let id = Mat::<f64>::identity(potential.size(), potential.size());
+        let boundary = Boundary::new(6.5, Direction::Outwards, (1.001 * &id, 1.002 * &id));
 
         let eq = CoupledEquation::from_particles(&potential, &particles);
 

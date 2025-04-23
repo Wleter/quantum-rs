@@ -15,7 +15,7 @@ pub trait Unit: Copy {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Au;
 
 impl Unit for Au {
