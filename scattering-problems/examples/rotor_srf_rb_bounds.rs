@@ -114,11 +114,11 @@ impl Problems {
         let err = Energy(1., MHz);
 
         let basis_recipe = RotorAtomBasisRecipe {
-            l_max: 10,
-            n_max: 10,
+            l_max: 1,
+            n_max: 1,
             ..Default::default()
         };
-        let scalings = linspace(0.95, 1.05, 200);
+        let scalings = linspace(0.8, 1.2, 200);
 
         ///////////////////////////////////
 
