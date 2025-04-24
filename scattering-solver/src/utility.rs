@@ -146,10 +146,10 @@ pub fn get_lblt_inverse_buffer(size: usize) -> MemBuffer {
                     faer::Par::Seq,
                     Default::default(),
                 )
-                .or(cholesky::lblt::inverse::inverse_scratch::<
-                    usize,
-                    f64,
-                >(size, faer::Par::Seq)),
+                .or(cholesky::lblt::inverse::inverse_scratch::<usize, f64>(
+                    size,
+                    faer::Par::Seq,
+                )),
             ),
     )
 }

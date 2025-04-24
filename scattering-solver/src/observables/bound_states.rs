@@ -1,24 +1,33 @@
 use std::marker::PhantomData;
 
 use faer::Mat;
-use quantum::{params::particles::Particles, units::{Au, Energy, EnergyUnit}};
+use quantum::{
+    params::particles::Particles,
+    units::{Au, Energy, EnergyUnit},
+};
 use serde::{Deserialize, Serialize};
 
-use crate::{boundary::{Boundary, Direction}, log_derivatives::{LogDerivative, LogDerivativeReference}, numerovs::StepRule, potentials::potential::MatPotential, propagator::{CoupledEquation, Propagator}};
+use crate::{
+    boundary::{Boundary, Direction},
+    log_derivatives::{LogDerivative, LogDerivativeReference},
+    numerovs::StepRule,
+    potentials::potential::MatPotential,
+    propagator::{CoupledEquation, Propagator},
+};
 
 #[derive(Clone, Debug)]
 pub struct BoundMismatch {
     pub nodes: u64,
     pub matching_matrix: Mat<f64>,
     pub matching_eigenvalues: Vec<f64>,
-    pub energy: Energy<Au>
+    pub energy: Energy<Au>,
 }
 
 pub struct BoundProblemBuilder<'a, P, S, Prop>
 where
     P: MatPotential,
     S: StepRule<Mat<f64>>,
-    Prop: LogDerivativeReference
+    Prop: LogDerivativeReference,
 {
     particles: Option<&'a Particles>,
     potential: Option<&'a P>,
@@ -33,10 +42,10 @@ impl<'a, P, S, Prop> Default for BoundProblemBuilder<'a, P, S, Prop>
 where
     P: MatPotential,
     S: StepRule<Mat<f64>>,
-    Prop: LogDerivativeReference
+    Prop: LogDerivativeReference,
 {
     fn default() -> Self {
-        Self { 
+        Self {
             particles: Default::default(),
             potential: Default::default(),
 
@@ -52,7 +61,7 @@ impl<'a, P, S, Prop> BoundProblemBuilder<'a, P, S, Prop>
 where
     P: MatPotential,
     S: StepRule<Mat<f64>>,
-    Prop: LogDerivativeReference
+    Prop: LogDerivativeReference,
 {
     pub fn new(particles: &'a Particles, potential: &'a P) -> Self {
         let mut problem = BoundProblemBuilder::default();
@@ -83,28 +92,34 @@ where
     }
 
     pub fn build(self) -> BoundProblem<'a, P, S, Prop> {
-        let particles = self.particles.expect("Did not found particles in BoundBuilder");
-        let potential = self.potential.expect("Did not found potential in BoundBuilder");
+        let particles = self
+            .particles
+            .expect("Did not found particles in BoundBuilder");
+        let potential = self
+            .potential
+            .expect("Did not found potential in BoundBuilder");
 
-        let step_rule = self.step_rule.expect("Did not found step rule in BoundBuilder");
+        let step_rule = self
+            .step_rule
+            .expect("Did not found step rule in BoundBuilder");
 
-        BoundProblem { 
-            particles: particles, 
-            potential: potential, 
-            step_rule: step_rule, 
-            phantom: self.phantom, 
-            r_min: self.r_range[0], 
-            r_match: self.r_range[1], 
-            r_max: self.r_range[2]
+        BoundProblem {
+            particles: particles,
+            potential: potential,
+            step_rule: step_rule,
+            phantom: self.phantom,
+            r_min: self.r_range[0],
+            r_match: self.r_range[1],
+            r_max: self.r_range[2],
         }
     }
 }
 
-pub struct BoundProblem<'a, P, S, Prop> 
+pub struct BoundProblem<'a, P, S, Prop>
 where
     P: MatPotential,
     S: StepRule<Mat<f64>>,
-    Prop: LogDerivativeReference
+    Prop: LogDerivativeReference,
 {
     particles: &'a Particles,
     potential: &'a P,
@@ -114,14 +129,14 @@ where
 
     r_min: f64,
     r_match: f64,
-    r_max: f64
+    r_max: f64,
 }
 
-impl<'a, P, S, Prop> BoundProblem<'a, P, S, Prop> 
+impl<'a, P, S, Prop> BoundProblem<'a, P, S, Prop>
 where
     P: MatPotential,
     S: StepRule<Mat<f64>> + Clone,
-    Prop: LogDerivativeReference
+    Prop: LogDerivativeReference,
 {
     pub fn bound_mismatch(&self, energy: Energy<impl EnergyUnit>) -> BoundMismatch {
         let mut particles = self.particles.clone();
@@ -130,34 +145,44 @@ where
         let eq = CoupledEquation::from_particles(self.potential, &particles);
         let boundary = Boundary::new_exponential_vanishing(self.r_max, &eq);
 
-        let mut propagator = LogDerivative::<_, Prop>::new(eq.clone(), boundary, self.step_rule.clone());
+        let mut propagator =
+            LogDerivative::<_, Prop>::new(eq.clone(), boundary, self.step_rule.clone());
         let solution_in = propagator.propagate_to(self.r_match);
 
-        let boundary = Boundary::new_multi_vanishing(self.r_min, Direction::Outwards, self.potential.size());
+        let boundary =
+            Boundary::new_multi_vanishing(self.r_min, Direction::Outwards, self.potential.size());
         let mut propagator = LogDerivative::<_, Prop>::new(eq, boundary, self.step_rule.clone());
         let solution_out = propagator.propagate_to(self.r_match);
 
         let matching_matrix = &solution_out.sol.0 - &solution_in.sol.0;
         let nodes = solution_in.nodes + solution_out.nodes;
 
-        let eigenvalues = matching_matrix.self_adjoint_eigenvalues(faer::Side::Lower)
+        let eigenvalues = matching_matrix
+            .self_adjoint_eigenvalues(faer::Side::Lower)
             .expect("could not diagonalize matching matrix");
 
-        let nodes = nodes + eigenvalues.iter().fold(0, |acc, &x| if x < 0. { acc + 1 } else { acc });
+        let nodes = nodes
+            + eigenvalues
+                .iter()
+                .fold(0, |acc, &x| if x < 0. { acc + 1 } else { acc });
 
         BoundMismatch {
             nodes,
             matching_matrix,
             matching_eigenvalues: eigenvalues,
-            energy: energy.to(Au)
+            energy: energy.to(Au),
         }
     }
 
-    pub fn bound_states(&self, energy_range: (Energy<impl EnergyUnit>, Energy<impl EnergyUnit>), err: Energy<impl EnergyUnit>) -> BoundStates {
+    pub fn bound_states(
+        &self,
+        energy_range: (Energy<impl EnergyUnit>, Energy<impl EnergyUnit>),
+        err: Energy<impl EnergyUnit>,
+    ) -> BoundStates {
         let lower_mismatch = self.bound_mismatch(energy_range.0);
         let upper_mismatch = self.bound_mismatch(energy_range.1);
         let err = err.to(Au);
-        
+
         let mut bound_energies = vec![];
         let mut bound_nodes = vec![];
 
@@ -179,18 +204,25 @@ where
             target_nodes -= 1;
         }
 
-        BoundStates { 
-            energies: bound_energies, 
-            nodes: bound_nodes 
+        BoundStates {
+            energies: bound_energies,
+            nodes: bound_nodes,
         }
     }
 
-    fn search_state(&self, index_offset: u64, target_nodes: u64, mismatch_node: &mut Vec<Option<BoundMismatch>>, err: Energy<Au>) -> Energy<Au> {
+    fn search_state(
+        &self,
+        index_offset: u64,
+        target_nodes: u64,
+        mismatch_node: &mut Vec<Option<BoundMismatch>>,
+        err: Energy<Au>,
+    ) -> Energy<Au> {
         let err = err.to_au();
 
         let node_index = (target_nodes - index_offset) as usize;
 
-        let mut lower_bound = mismatch_node.iter()
+        let mut lower_bound = mismatch_node
+            .iter()
             .take(node_index + 1)
             .filter(|&x| x.is_some())
             .last()
@@ -211,10 +243,14 @@ where
 
         while upper_bound.energy.to_au() - lower_bound.energy.to_au() > err {
             if upper_bound.nodes == target_nodes + 1 && lower_bound.nodes == target_nodes {
-                let index = lower_bound.matching_eigenvalues.partition_point(|&x| x < 0.);
+                let index = lower_bound
+                    .matching_eigenvalues
+                    .partition_point(|&x| x < 0.);
                 let lower_eigenvalue = lower_bound.matching_eigenvalues.get(index);
 
-                let index = upper_bound.matching_eigenvalues.partition_point(|&x| x < 0.);
+                let index = upper_bound
+                    .matching_eigenvalues
+                    .partition_point(|&x| x < 0.);
                 let upper_eigenvalue = upper_bound.matching_eigenvalues.get(index - 1);
 
                 let energy_mid = if lower_eigenvalue.is_none() || upper_eigenvalue.is_none() {
@@ -223,7 +259,8 @@ where
                     let lower_eigenvalue = *lower_eigenvalue.unwrap();
                     let upper_eigenvalue = *upper_eigenvalue.unwrap();
 
-                    let s = (upper_bound.energy.to_au() * lower_eigenvalue - lower_bound.energy.to_au() * upper_eigenvalue)
+                    let s = (upper_bound.energy.to_au() * lower_eigenvalue
+                        - lower_bound.energy.to_au() * upper_eigenvalue)
                         / (lower_eigenvalue - upper_eigenvalue);
 
                     let m = (upper_bound.energy.to_au() + lower_bound.energy.to_au()) / 2.;
@@ -261,7 +298,10 @@ where
             }
         }
 
-        Energy((lower_bound.energy.to_au() + upper_bound.energy.to_au()) / 2., Au)
+        Energy(
+            (lower_bound.energy.to_au() + upper_bound.energy.to_au()) / 2.,
+            Au,
+        )
     }
 }
 

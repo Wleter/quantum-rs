@@ -16,9 +16,15 @@ use quantum::{
     utility::linspace,
 };
 use scattering_solver::{
-    boundary::{Asymptotic, Boundary, Direction}, log_derivatives::johnson::Johnson, numerovs::{
-        multi_numerov::MultiRNumerov, propagator_watcher::{ManyPropagatorWatcher, PropagatorLogging, Sampling, WaveStorage}, LocalWavelengthStepRule
-    }, observables::bound_states::BoundProblemBuilder, potentials::{
+    boundary::{Asymptotic, Boundary, Direction},
+    log_derivatives::johnson::Johnson,
+    numerovs::{
+        LocalWavelengthStepRule,
+        multi_numerov::MultiRNumerov,
+        propagator_watcher::{ManyPropagatorWatcher, PropagatorLogging, Sampling, WaveStorage},
+    },
+    observables::bound_states::BoundProblemBuilder,
+    potentials::{
         dispersion_potential::Dispersion,
         gaussian_coupling::GaussianCoupling,
         multi_coupling::MultiCoupling,
@@ -26,7 +32,9 @@ use scattering_solver::{
         pair_potential::PairPotential,
         potential::{MatPotential, Potential},
         potential_factory::create_lj,
-    }, propagator::{CoupledEquation, Propagator}, utility::{save_data, save_spectrum, AngMomentum}
+    },
+    propagator::{CoupledEquation, Propagator},
+    utility::{AngMomentum, save_data, save_spectrum},
 };
 
 use rayon::prelude::*;
@@ -200,7 +208,13 @@ impl Problems {
         let data = vec![energies.clone(), node_counts];
 
         save_data("two_chan/node_count", header, &data).unwrap();
-        save_spectrum("two_chan/bound_mismatch", "energy\tmismatches", &energies, &mismatch).unwrap()
+        save_spectrum(
+            "two_chan/bound_mismatch",
+            "energy\tmismatches",
+            &energies,
+            &mismatch,
+        )
+        .unwrap()
 
         // let bound_states = vec![0, 1, 3, -1, -2, -5];
         // for n in bound_states {

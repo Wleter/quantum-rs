@@ -9,7 +9,11 @@ use scattering_solver::utility::{
 fn main() -> eyre::Result<()> {
     let bench = Bench::new(Config::from_args()?);
 
-    bench.register("piv_lu inverse", bench_inverse_piv_lu, [4, 32, 128, 512, 1024]);
+    bench.register(
+        "piv_lu inverse",
+        bench_inverse_piv_lu,
+        [4, 32, 128, 512, 1024],
+    );
     bench.register("ldlt inverse", bench_inverse_ldlt, [4, 32, 128, 512, 1024]);
     bench.register("lblt inverse", bench_inverse_lblt, [4, 32, 128, 512, 1024]);
 

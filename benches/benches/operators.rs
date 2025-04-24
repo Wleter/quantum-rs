@@ -16,11 +16,23 @@ use scattering_solver::faer::Mat;
 fn main() -> eyre::Result<()> {
     let bench = Bench::new(Config::from_args()?);
 
-    bench.register("simple operator", simple_operator, [32, 128, 512, 1024, 2048]);
-    bench.register("simple operator manual", simple_manual_operator, [32, 128, 512, 1024, 2048]);
+    bench.register(
+        "simple operator",
+        simple_operator,
+        [32, 128, 512, 1024, 2048],
+    );
+    bench.register(
+        "simple operator manual",
+        simple_manual_operator,
+        [32, 128, 512, 1024, 2048],
+    );
 
     bench.register("simple operator", complex_operator, [2, 4, 8, 16]);
-    bench.register("simple operator manual", complex_manual_operator, [2, 4, 8, 16]);
+    bench.register(
+        "simple operator manual",
+        complex_manual_operator,
+        [2, 4, 8, 16],
+    );
 
     bench.run()?;
     Ok(())

@@ -4,25 +4,34 @@ use faer::Mat;
 use indicatif::ParallelProgressIterator;
 use quantum::{
     params::{particle_factory::create_atom, particles::Particles},
-    problem_selector::{get_args, ProblemSelector},
+    problem_selector::{ProblemSelector, get_args},
     problems_impl,
     units::{
-        distance_units::Distance, energy_units::{Energy, Kelvin}, Au, GHz
+        Au, GHz,
+        distance_units::Distance,
+        energy_units::{Energy, Kelvin},
     },
     utility::linspace,
 };
 use rayon::prelude::*;
 use scattering_solver::{
-    boundary::{Asymptotic, Boundary, Direction}, log_derivatives::johnson::Johnson, numerovs::{
-        multi_numerov::MultiRNumerov, propagator_watcher::PropagatorLogging, LocalWavelengthStepRule
-    }, observables::bound_states::BoundProblemBuilder, potentials::{
+    boundary::{Asymptotic, Boundary, Direction},
+    log_derivatives::johnson::Johnson,
+    numerovs::{
+        LocalWavelengthStepRule, multi_numerov::MultiRNumerov,
+        propagator_watcher::PropagatorLogging,
+    },
+    observables::bound_states::BoundProblemBuilder,
+    potentials::{
         dispersion_potential::Dispersion,
         multi_coupling::MultiCoupling,
         multi_diag_potential::Diagonal,
         pair_potential::PairPotential,
         potential::{MatPotential, Potential},
         potential_factory::create_lj,
-    }, propagator::{CoupledEquation, Propagator}, utility::{save_data, save_spectrum, AngMomentum}
+    },
+    propagator::{CoupledEquation, Propagator},
+    utility::{AngMomentum, save_data, save_spectrum},
 };
 
 pub fn main() {
@@ -147,6 +156,12 @@ impl Problems {
         let data = vec![energies.clone(), node_counts];
 
         save_data("many_chan/node_count", header, &data).unwrap();
-        save_spectrum("many_chan/bound_mismatch", "energy\tmismatches", &energies, &mismatch).unwrap()
+        save_spectrum(
+            "many_chan/bound_mismatch",
+            "energy\tmismatches",
+            &energies,
+            &mismatch,
+        )
+        .unwrap()
     }
 }

@@ -7,10 +7,11 @@ use hhmmss::Hhmmss;
 use indicatif::{ParallelProgressIterator, ProgressIterator};
 
 use quantum::{
-    problem_selector::{get_args, ProblemSelector},
+    problem_selector::{ProblemSelector, get_args},
     problems_impl,
     units::{
-        energy_units::{Energy, GHz, Kelvin}, MHz
+        MHz,
+        energy_units::{Energy, GHz, Kelvin},
     },
     utility::linspace,
 };
@@ -20,8 +21,11 @@ use scattering_problems::{
     rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder},
 };
 use scattering_solver::{
-    log_derivatives::johnson::Johnson, numerovs::LocalWavelengthStepRule, observables::bound_states::{BoundProblemBuilder, BoundStates, BoundStatesDependence}, potentials::
-        potential::ScaledPotential, utility::save_serialize
+    log_derivatives::johnson::Johnson,
+    numerovs::LocalWavelengthStepRule,
+    observables::bound_states::{BoundProblemBuilder, BoundStates, BoundStatesDependence},
+    potentials::potential::ScaledPotential,
+    utility::save_serialize,
 };
 
 use rayon::prelude::*;
@@ -81,7 +85,8 @@ impl Problems {
                     .with_range(5., 20., 500.)
                     .build();
 
-                bound_problem.bound_states(energy_range, err)
+                bound_problem
+                    .bound_states(energy_range, err)
                     .with_energy_units(GHz)
             })
             .collect::<Vec<BoundStates>>();
@@ -109,7 +114,7 @@ impl Problems {
 
         let [singlet, _] = read_extended(25);
         let singlets = get_interpolated(&singlet);
-        
+
         let basis_recipe = RotorAtomBasisRecipe {
             l_max: 10,
             n_max: 10,
@@ -140,19 +145,19 @@ impl Problems {
                     })
                     .collect();
 
-                let problem = RotorAtomProblemBuilder::new(singlets)
-                    .build(&atoms, &basis_recipe);
+                let problem = RotorAtomProblemBuilder::new(singlets).build(&atoms, &basis_recipe);
 
                 let asymptotic = problem.asymptotic;
                 atoms.insert(asymptotic);
                 let potential = problem.potential;
-    
+
                 let bound_problem = BoundProblemBuilder::new(&atoms, &potential)
                     .with_propagation(LocalWavelengthStepRule::new(4e-3, 10., 400.), Johnson)
                     .with_range(5., 20., 500.)
                     .build();
 
-                bound_problem.bound_states(energy_range, err)
+                bound_problem
+                    .bound_states(energy_range, err)
                     .with_energy_units(GHz)
             })
             .collect();
@@ -163,7 +168,7 @@ impl Problems {
         let data = BoundStatesDependence {
             parameters: scalings,
             bound_states: singlet_bounds,
-        }; 
+        };
         let filename = format!("SrF_Rb_singlet_bound_states_n_max_{}", basis_recipe.n_max);
 
         save_serialize(&filename, &data).unwrap()
@@ -176,7 +181,7 @@ impl Problems {
 
         let [_, triplet] = read_extended(25);
         let triplets = get_interpolated(&triplet);
-        
+
         let basis_recipe = RotorAtomBasisRecipe {
             l_max: 10,
             n_max: 10,
@@ -207,19 +212,19 @@ impl Problems {
                     })
                     .collect();
 
-                let problem = RotorAtomProblemBuilder::new(triplets)
-                    .build(&atoms, &basis_recipe);
+                let problem = RotorAtomProblemBuilder::new(triplets).build(&atoms, &basis_recipe);
 
                 let asymptotic = problem.asymptotic;
                 atoms.insert(asymptotic);
                 let potential = &problem.potential;
-    
+
                 let bound_problem = BoundProblemBuilder::new(&atoms, potential)
                     .with_propagation(LocalWavelengthStepRule::new(4e-3, 10., 400.), Johnson)
                     .with_range(5., 20., 500.)
                     .build();
 
-                bound_problem.bound_states(energy_range, err)
+                bound_problem
+                    .bound_states(energy_range, err)
                     .with_energy_units(GHz)
             })
             .collect();

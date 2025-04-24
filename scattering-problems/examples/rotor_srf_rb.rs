@@ -9,27 +9,27 @@ use hhmmss::Hhmmss;
 use indicatif::{ParallelProgressIterator, ProgressIterator};
 
 use quantum::{
-    problem_selector::{get_args, ProblemSelector},
+    problem_selector::{ProblemSelector, get_args},
     problems_impl,
-    units::
-        energy_units::{Energy, Kelvin}
-    ,
+    units::energy_units::{Energy, Kelvin},
     utility::linspace,
 };
 use scattering_problems::{
     FieldScatteringProblem,
     alkali_atoms::AlkaliAtomsProblemBuilder,
-    alkali_rotor_atom::{
-        AlkaliRotorAtomProblemBuilder, TramBasisRecipe,
-    },
+    alkali_rotor_atom::{AlkaliRotorAtomProblemBuilder, TramBasisRecipe},
     rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder},
 };
 use scattering_solver::{
-    boundary::{Boundary, Direction}, numerovs::{
-        multi_numerov::MultiRNumerov, propagator_watcher::PropagatorLogging, LocalWavelengthStepRule
-    }, observables::s_matrix::{ScatteringDependence, ScatteringObservables}, potentials::
-        potential::{Potential, ScaledPotential, SimplePotential}
-    , propagator::{CoupledEquation, Propagator}, utility::{save_data, save_serialize}
+    boundary::{Boundary, Direction},
+    numerovs::{
+        LocalWavelengthStepRule, multi_numerov::MultiRNumerov,
+        propagator_watcher::PropagatorLogging,
+    },
+    observables::s_matrix::{ScatteringDependence, ScatteringObservables},
+    potentials::potential::{Potential, ScaledPotential, SimplePotential},
+    propagator::{CoupledEquation, Propagator},
+    utility::{save_data, save_serialize},
 };
 
 use rayon::prelude::*;

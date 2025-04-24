@@ -60,7 +60,8 @@ where
         self,
         params: &Params,
         basis_recipe: &RotorAtomBasisRecipe,
-    ) -> ScatteringProblem<impl MatPotential + SubPotential + use<P>, RotorAtomBasisDescription> {
+    ) -> ScatteringProblem<impl MatPotential + SubPotential + use<P>, RotorAtomBasisDescription>
+    {
         let rot_const = params
             .get::<RotConst>()
             .expect("Did not find RotConst parameter in the params")

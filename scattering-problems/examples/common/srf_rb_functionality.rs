@@ -13,13 +13,20 @@ use indicatif::{ParallelProgressIterator, ProgressIterator};
 
 use quantum::{
     params::{
-        particle::Particle, particle_factory::{create_atom, RotConst}, particles::Particles, Params
+        Params,
+        particle::Particle,
+        particle_factory::{RotConst, create_atom},
+        particles::Particles,
     },
     units::{
-        distance_units::{Angstrom, Distance}, energy_units::{CmInv, Energy, EnergyUnit, GHz}, mass_units::{Dalton, Mass}, Au, Unit
+        Au, Unit,
+        distance_units::{Angstrom, Distance},
+        energy_units::{CmInv, Energy, EnergyUnit, GHz},
+        mass_units::{Dalton, Mass},
     },
     utility::{legendre_polynomials, linspace},
 };
+use rayon::prelude::*;
 use scattering_problems::{
     alkali_rotor_atom::{
         AlkaliRotorAtomProblem, AlkaliRotorAtomProblemBuilder, TramBasisRecipe, TramStates,
@@ -29,10 +36,8 @@ use scattering_problems::{
     utility::{AnisoHifi, GammaSpinRot},
 };
 use scattering_solver::potentials::{
-        composite_potential::Composite, dispersion_potential::Dispersion, potential::SimplePotential
-    };
-use rayon::prelude::*;
-
+    composite_potential::Composite, dispersion_potential::Dispersion, potential::SimplePotential,
+};
 
 pub fn get_particles(energy: Energy<impl EnergyUnit>, projection: HalfI32) -> Particles {
     let rb = create_atom("Rb87").unwrap();

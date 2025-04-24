@@ -8,20 +8,29 @@ use indicatif::{ParallelProgressIterator, ProgressIterator};
 use num::complex::Complex64;
 use quantum::{
     params::{particle_factory, particles::Particles},
-    problem_selector::{get_args, ProblemSelector},
+    problem_selector::{ProblemSelector, get_args},
     problems_impl,
-    units::{energy_units::{Energy, Kelvin, MHz}, GHz},
+    units::{
+        GHz,
+        energy_units::{Energy, Kelvin, MHz},
+    },
     utility::linspace,
 };
 use scattering_problems::{
     IndexBasisDescription, ScatteringProblem, alkali_atoms::AlkaliAtomsProblemBuilder,
 };
 use scattering_solver::{
-    boundary::{Boundary, Direction}, log_derivatives::johnson::Johnson, numerovs::{multi_numerov::MultiRNumerov, LocalWavelengthStepRule}, observables::bound_states::{BoundProblemBuilder, BoundStates, BoundStatesDependence}, potentials::{
+    boundary::{Boundary, Direction},
+    log_derivatives::johnson::Johnson,
+    numerovs::{LocalWavelengthStepRule, multi_numerov::MultiRNumerov},
+    observables::bound_states::{BoundProblemBuilder, BoundStates, BoundStatesDependence},
+    potentials::{
         composite_potential::Composite,
         dispersion_potential::Dispersion,
         potential::{MatPotential, Potential},
-    }, propagator::{CoupledEquation, Propagator}, utility::{save_data, save_serialize}
+    },
+    propagator::{CoupledEquation, Propagator},
+    utility::{save_data, save_serialize},
 };
 
 use rayon::prelude::*;
@@ -160,11 +169,15 @@ impl Problems {
                 particles.insert(alkali_problem.asymptotic);
 
                 let bound_problem = BoundProblemBuilder::new(&particles, potential)
-                    .with_propagation(LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.), Johnson)
+                    .with_propagation(
+                        LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.),
+                        Johnson,
+                    )
                     .with_range(4., 20., 500.)
                     .build();
 
-                bound_problem.bound_states(energy_range, err)
+                bound_problem
+                    .bound_states(energy_range, err)
                     .with_energy_units(GHz)
             })
             .collect::<Vec<BoundStates>>();
