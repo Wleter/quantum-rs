@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{fmt::Display, time::Instant};
 
 use clebsch_gordan::hi32;
 use hhmmss::Hhmmss;
@@ -24,7 +24,7 @@ use scattering_solver::{
     log_derivatives::johnson::Johnson,
     numerovs::LocalWavelengthStepRule,
     observables::bound_states::{BoundProblemBuilder, BoundStates, BoundStatesDependence},
-    potentials::potential::ScaledPotential,
+    potentials::potential::{ScaledPotential, SimplePotential},
     utility::save_serialize,
 };
 
@@ -39,14 +39,13 @@ pub fn main() {
 
 struct Problems;
 
-problems_impl!(Problems, "CaF + Rb Feshbach",
-    "bound states" => |_| Self::bound_states(),
-    "bound states potential scaling singlet" => |_| Self::bounds_singlet_scaling(),
-    "bound states potential scaling triplet" => |_| Self::bounds_triplet_scaling(),
+problems_impl!(Problems, "CaF + Rb Bounds",
+    "magnetic field bounds" => |_| Self::magnetic_field_bounds(),
+    "potential surface scaling" => |_| Self::potential_surface_scaling(),
 );
 
 impl Problems {
-    fn bound_states() {
+    fn magnetic_field_bounds() {
         let entrance = 0;
 
         let projection = hi32!(1);
@@ -107,13 +106,12 @@ impl Problems {
         save_serialize(&filename, &data).unwrap()
     }
 
-    fn bounds_singlet_scaling() {
-        let energy_relative = Energy(1e-7, Kelvin);
+    fn potential_surface_scaling() {
+        let potential_type = PotentialType::Triplet;
+        let scaling_type = ScalingType::Full;
 
-        let atoms = get_particles(energy_relative, hi32!(0));
-
-        let [singlet, _] = read_extended(25);
-        let singlets = get_interpolated(&singlet);
+        let energy_range = (Energy(-12., GHz), Energy(0., GHz));
+        let err = Energy(1., MHz);
 
         let basis_recipe = RotorAtomBasisRecipe {
             l_max: 10,
@@ -122,30 +120,27 @@ impl Problems {
         };
         let scalings = linspace(0.95, 1.05, 200);
 
-        let energy_range = (Energy(-12., GHz), Energy(0., GHz));
-        let err = Energy(1., MHz);
-
         ///////////////////////////////////
+
+        let energy_relative = Energy(1e-7, Kelvin);
+
+        let atoms = get_particles(energy_relative, hi32!(0));
+
+        let [singlet, triplet] = read_extended(25);
+        let pes = match potential_type {
+            PotentialType::Singlet => singlet,
+            PotentialType::Triplet => triplet,
+        };
+        let pes = get_interpolated(&pes);
 
         let start = Instant::now();
         let singlet_bounds = scalings
             .par_iter()
             .progress()
             .map_with(atoms, |atoms, &scaling| {
-                let singlets = singlets
-                    .iter()
-                    .map(|(lambda, p)| {
-                        (
-                            *lambda,
-                            ScaledPotential {
-                                potential: p.clone(),
-                                scaling,
-                            },
-                        )
-                    })
-                    .collect();
+                let pes = scaling_type.scale(&pes, scaling);
 
-                let problem = RotorAtomProblemBuilder::new(singlets).build(&atoms, &basis_recipe);
+                let problem = RotorAtomProblemBuilder::new(pes).build(&atoms, &basis_recipe);
 
                 let asymptotic = problem.asymptotic;
                 atoms.insert(asymptotic);
@@ -169,76 +164,63 @@ impl Problems {
             parameters: scalings,
             bound_states: singlet_bounds,
         };
-        let filename = format!("SrF_Rb_singlet_bound_states_n_max_{}", basis_recipe.n_max);
+        let filename = format!("SrF_Rb_bounds_{potential_type}_scaling_{scaling_type}_n_max_{}", basis_recipe.n_max);
 
         save_serialize(&filename, &data).unwrap()
     }
+}
 
-    fn bounds_triplet_scaling() {
-        let energy_relative = Energy(1e-7, Kelvin);
+#[allow(unused)]
+enum ScalingType {
+    Full,
+    Isotropic,
+    Anisotropic,
+    Legendre(u32)
+}
 
-        let atoms = get_particles(energy_relative, hi32!(0));
+impl Display for ScalingType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ScalingType::Full => write!(f, "full"),
+            ScalingType::Isotropic => write!(f, "isotropic"),
+            ScalingType::Anisotropic => write!(f, "anisotropic"),
+            ScalingType::Legendre(lambda) => write!(f, "legendre_{lambda}"),
+        }
+    }
+}
 
-        let [_, triplet] = read_extended(25);
-        let triplets = get_interpolated(&triplet);
-
-        let basis_recipe = RotorAtomBasisRecipe {
-            l_max: 10,
-            n_max: 10,
-            ..Default::default()
-        };
-        let scalings = linspace(0.95, 1.05, 200);
-
-        let energy_range = (Energy(-12., GHz), Energy(0., GHz));
-        let err = Energy(1., MHz);
-
-        ///////////////////////////////////
-
-        let start = Instant::now();
-        let triplet_bounds = scalings
-            .par_iter()
-            .progress()
-            .map_with(atoms.clone(), |atoms, &scaling| {
-                let triplets = triplets
-                    .iter()
-                    .map(|(lambda, p)| {
-                        (
-                            *lambda,
-                            ScaledPotential {
-                                potential: p.clone(),
-                                scaling,
-                            },
-                        )
-                    })
-                    .collect();
-
-                let problem = RotorAtomProblemBuilder::new(triplets).build(&atoms, &basis_recipe);
-
-                let asymptotic = problem.asymptotic;
-                atoms.insert(asymptotic);
-                let potential = &problem.potential;
-
-                let bound_problem = BoundProblemBuilder::new(&atoms, potential)
-                    .with_propagation(LocalWavelengthStepRule::new(4e-3, 10., 400.), Johnson)
-                    .with_range(5., 20., 500.)
-                    .build();
-
-                bound_problem
-                    .bound_states(energy_range, err)
-                    .with_energy_units(GHz)
+impl ScalingType {
+    pub fn scale(&self, pes: &[(u32, impl SimplePotential + Clone)], scaling: f64) -> Vec<(u32, impl SimplePotential + Clone)> {
+        pes.iter()
+            .map(|(lambda, p)| {
+                (
+                    *lambda,
+                    ScaledPotential {
+                        potential: p.clone(),
+                        scaling: match self {
+                            ScalingType::Full => scaling,
+                            ScalingType::Isotropic => if *lambda == 0 { scaling } else { 1. },
+                            ScalingType::Anisotropic => if *lambda != 0 { scaling } else { 1. },
+                            ScalingType::Legendre(l) => if lambda == l { scaling } else { 1. },
+                        },
+                    }
+                )
             })
-            .collect();
+            .collect()
+    }
+}
 
-        let elapsed = start.elapsed();
-        println!("calculated in {}", elapsed.hhmmssxxx());
+#[allow(unused)]
+enum PotentialType {
+    Singlet,
+    Triplet
+}
 
-        let data = BoundStatesDependence {
-            parameters: scalings,
-            bound_states: triplet_bounds,
-        };
-
-        let filename = format!("SrF_Rb_triplet_bound_states_n_max_{}", basis_recipe.n_max);
-
-        save_serialize(&filename, &data).unwrap()
+impl Display for PotentialType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PotentialType::Singlet => write!(f, "singlet"),
+            PotentialType::Triplet => write!(f, "triplet"),
+        }
     }
 }
