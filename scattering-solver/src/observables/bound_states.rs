@@ -6,10 +6,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::{boundary::{Boundary, Direction}, log_derivatives::{LogDerivative, LogDerivativeReference}, numerovs::StepRule, potentials::potential::MatPotential, propagator::{CoupledEquation, Propagator}};
 
+#[derive(Clone, Debug)]
 pub struct BoundMismatch {
     pub nodes: u64,
     pub matching_matrix: Mat<f64>,
     pub matching_eigenvalues: Vec<f64>,
+    pub energy: Energy<Au>
 }
 
 pub struct BoundProblemBuilder<'a, P, S, Prop>
@@ -146,30 +148,35 @@ where
         BoundMismatch {
             nodes,
             matching_matrix,
-            matching_eigenvalues: eigenvalues
+            matching_eigenvalues: eigenvalues,
+            energy: energy.to(Au)
         }
     }
 
-    // todo! optimize finding bound states
     pub fn bound_states(&self, energy_range: (Energy<impl EnergyUnit>, Energy<impl EnergyUnit>), err: Energy<impl EnergyUnit>) -> BoundStates {
         let lower_mismatch = self.bound_mismatch(energy_range.0);
         let upper_mismatch = self.bound_mismatch(energy_range.1);
+        let err = err.to(Au);
         
         let mut bound_energies = vec![];
         let mut bound_nodes = vec![];
-        let lower_energy = energy_range.0.to(Au);
-        let mut upper_energy = energy_range.1.to(Au);
 
-        let mut target_node = upper_mismatch.nodes;
-        while target_node > lower_mismatch.nodes {
-            let bound_energy = self.bin_search(target_node, lower_energy, upper_energy, err.to(Au));
+        let upper_node = upper_mismatch.nodes;
+        let lower_node = lower_mismatch.nodes;
+        let states_no = (upper_node - lower_node) as usize;
 
-            upper_energy = bound_energy;
+        let mut mismatch_node = vec![None; states_no + 1];
+        mismatch_node[0] = Some(lower_mismatch);
+        mismatch_node[states_no] = Some(upper_mismatch);
+
+        let mut target_nodes = upper_node - 1;
+        while target_nodes >= lower_node {
+            let bound_energy = self.search_state(lower_node, target_nodes, &mut mismatch_node, err);
 
             bound_energies.push(bound_energy.to_au());
-            bound_nodes.push(target_node);
+            bound_nodes.push(target_nodes);
 
-            target_node -= 1;
+            target_nodes -= 1;
         }
 
         BoundStates { 
@@ -178,23 +185,83 @@ where
         }
     }
 
-    fn bin_search(&self, target_node: u64, lower: Energy<Au>, upper: Energy<Au>, err: Energy<Au>) -> Energy<Au> {
-        let mut lower = lower.to_au();
-        let mut upper = upper.to_au();
+    fn search_state(&self, index_offset: u64, target_nodes: u64, mismatch_node: &mut Vec<Option<BoundMismatch>>, err: Energy<Au>) -> Energy<Au> {
         let err = err.to_au();
 
-        while upper - lower > err {
-            let energy_mid = (lower + upper) / 2.;
-            let mid_mismatch = self.bound_mismatch(Energy(energy_mid, Au));
+        let node_index = (target_nodes - index_offset) as usize;
 
-            if mid_mismatch.nodes >= target_node {
-                upper = energy_mid
-            } else if mid_mismatch.nodes < target_node {
-                lower = energy_mid
+        let mut lower_bound = mismatch_node.iter()
+            .take(node_index + 1)
+            .filter(|&x| x.is_some())
+            .last()
+            .expect("Expected at least one some element in energy node")
+            .as_ref()
+            .unwrap()
+            .clone();
+
+        let mut upper_bound = mismatch_node
+            .iter()
+            .skip(node_index + 1)
+            .filter(|&x| x.is_some())
+            .next()
+            .expect("Expected at least one some element in energy node")
+            .as_ref()
+            .unwrap()
+            .clone();
+
+        while upper_bound.energy.to_au() - lower_bound.energy.to_au() > err {
+            if upper_bound.nodes == target_nodes + 1 && lower_bound.nodes == target_nodes {
+                let index = lower_bound.matching_eigenvalues.partition_point(|&x| x < 0.);
+                let lower_eigenvalue = lower_bound.matching_eigenvalues.get(index);
+
+                let index = upper_bound.matching_eigenvalues.partition_point(|&x| x < 0.);
+                let upper_eigenvalue = upper_bound.matching_eigenvalues.get(index - 1);
+
+                let energy_mid = if lower_eigenvalue.is_none() || upper_eigenvalue.is_none() {
+                    (upper_bound.energy.to_au() + lower_bound.energy.to_au()) / 2.
+                } else {
+                    let lower_eigenvalue = *lower_eigenvalue.unwrap();
+                    let upper_eigenvalue = *upper_eigenvalue.unwrap();
+
+                    let s = (upper_bound.energy.to_au() * lower_eigenvalue - lower_bound.energy.to_au() * upper_eigenvalue)
+                        / (lower_eigenvalue - upper_eigenvalue);
+
+                    let m = (upper_bound.energy.to_au() + lower_bound.energy.to_au()) / 2.;
+
+                    let is_lower_closer = lower_eigenvalue.abs() < upper_eigenvalue.abs();
+
+                    if (is_lower_closer && m > s) || (!is_lower_closer && m < s) {
+                        m
+                    } else {
+                        s
+                    }
+                };
+                let mid_mismatch = self.bound_mismatch(Energy(energy_mid, Au));
+
+                if mid_mismatch.nodes > target_nodes {
+                    upper_bound = mid_mismatch
+                } else {
+                    lower_bound = mid_mismatch
+                }
+            } else {
+                let energy_mid = (upper_bound.energy.to_au() + lower_bound.energy.to_au()) / 2.;
+                let mid_mismatch = self.bound_mismatch(Energy(energy_mid, Au));
+
+                let index = (mid_mismatch.nodes - index_offset) as usize;
+
+                if mismatch_node[index].is_none() {
+                    mismatch_node[index] = Some(mid_mismatch.clone());
+                }
+
+                if mid_mismatch.nodes > target_nodes {
+                    upper_bound = mid_mismatch
+                } else {
+                    lower_bound = mid_mismatch
+                }
             }
         }
 
-        Energy((lower + upper) / 2., Au)
+        Energy((lower_bound.energy.to_au() + upper_bound.energy.to_au()) / 2., Au)
     }
 }
 

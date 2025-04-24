@@ -17,7 +17,7 @@ edition = "2024"
 
 [workspace.dependencies]
 num = {version = "0.4.3", features = ["serde"]}
-faer = "0.22"
+faer = "0.22.4"
 rayon = "1.6.0"
 indicatif = { version = "0.17", features = ["rayon"] }
 clebsch-gordan = { git = "https://github.com/Wleter/clebsch-gordan", branch = "master" }

@@ -571,14 +571,14 @@ impl Problems {
         let atoms = get_particles(energy_relative, projection);
         let alkali_problem = get_problem(&atoms, &basis_recipe);
 
-        let energy_range = (Energy(-1., GHz), Energy(0., GHz));
+        let energy_range = (Energy(-12., GHz), Energy(0., GHz));
         let err = Energy(1., MHz);
 
         ///////////////////////////////////
 
         let start = Instant::now();
         let bound_states = mag_fields
-            .iter()
+            .par_iter()
             .progress()
             .map(|&mag_field| {
                 let mut atoms = atoms.clone();
