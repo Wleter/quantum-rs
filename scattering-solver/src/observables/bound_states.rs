@@ -312,8 +312,8 @@ pub struct BoundStates {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct BoundStatesDependence {
-    pub parameters: Vec<f64>,
+pub struct BoundStatesDependence<T> {
+    pub parameters: Vec<T>,
     pub bound_states: Vec<BoundStates>,
 }
 

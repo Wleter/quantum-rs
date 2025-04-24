@@ -16,14 +16,41 @@ def plot() -> tuple[Figure, Axes]:
 @dataclass
 class AxesArray:
     array: Any
-
+    ncols: int
+    nrows: int
+    
     def __getitem__(self, key) -> Axes:
         return self.array[key]
+    
+    def __iter__(self):
+        return AxesIter(self, 0)
+@dataclass
+class AxesIter:
+    axes: AxesArray
+    current: int
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.current >= self.axes.ncols * self.axes.nrows:
+            raise StopIteration
+        else:
+            if self.axes.ncols == 1 or self.axes.nrows == 1:
+                self.current += 1
+
+                return self.axes[self.current - 1]
+            else:
+                j = self.current % self.axes.nrows
+                i = self.current // self.axes.nrows
+
+                self.current += 1
+                return self.axes[i, j]
 
 def plot_many(ncols: int, nrows: int, shape = None) -> tuple[Figure, AxesArray]:
     fig, axes = plt.subplots(ncols, nrows, figsize=shape)
 
-    axes: AxesArray = AxesArray(axes)
+    axes: AxesArray = AxesArray(axes, ncols, nrows)
     if ncols == 1 or nrows == 1:
         for i in range(ncols * nrows):
             axes[i].grid()

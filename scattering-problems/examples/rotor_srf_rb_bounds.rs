@@ -42,6 +42,7 @@ struct Problems;
 problems_impl!(Problems, "CaF + Rb Bounds",
     "magnetic field bounds" => |_| Self::magnetic_field_bounds(),
     "potential surface scaling" => |_| Self::potential_surface_scaling(),
+    "potential surface 2d scaling" => |_| Self::potential_surface_2d_scaling(),
 );
 
 impl Problems {
@@ -108,7 +109,7 @@ impl Problems {
 
     fn potential_surface_scaling() {
         let potential_type = PotentialType::Triplet;
-        let scaling_type = ScalingType::Full;
+        let scaling_type = ScalingType::Anisotropic;
 
         let energy_range = (Energy(-12., GHz), Energy(0., GHz));
         let err = Energy(1., MHz);
@@ -168,9 +169,82 @@ impl Problems {
 
         save_serialize(&filename, &data).unwrap()
     }
+
+    fn potential_surface_2d_scaling() {
+        let potential_type = PotentialType::Triplet;
+        let scaling_types = vec![ScalingType::Isotropic, ScalingType::Anisotropic];
+
+        let energy_range = (Energy(-12., GHz), Energy(0., GHz));
+        let err = Energy(1., MHz);
+
+        let basis_recipe = RotorAtomBasisRecipe {
+            l_max: 1,
+            n_max: 1,
+            ..Default::default()
+        };
+        let scalings1 = linspace(0.95, 1.05, 10);
+        let scalings2 = linspace(0.95, 1.05, 10);
+
+        ///////////////////////////////////
+
+        let energy_relative = Energy(1e-7, Kelvin);
+
+        let atoms = get_particles(energy_relative, hi32!(0));
+
+        let [singlet, triplet] = read_extended(25);
+        let pes = match potential_type {
+            PotentialType::Singlet => singlet,
+            PotentialType::Triplet => triplet,
+        };
+        let pes = get_interpolated(&pes);
+
+        let scalings: Vec<(f64, f64)> = scalings1.iter()
+            .flat_map(|s1| scalings2.iter().map(|s2| (*s1, *s2)))
+            .collect();
+
+        let start = Instant::now();
+        let pes_bounds = scalings
+            .par_iter()
+            .progress()
+            .map_with(atoms, |atoms, &(s1, s2)| {
+                let scalings = Scalings {
+                    scalings: vec![s1, s2],
+                    scaling_types: scaling_types.clone(),
+                };
+                let pes = scalings.scale(&pes);
+
+                let problem = RotorAtomProblemBuilder::new(pes).build(&atoms, &basis_recipe);
+
+                let asymptotic = problem.asymptotic;
+                atoms.insert(asymptotic);
+                let potential = problem.potential;
+
+                let bound_problem = BoundProblemBuilder::new(&atoms, &potential)
+                    .with_propagation(LocalWavelengthStepRule::new(4e-3, 10., 400.), Johnson)
+                    .with_range(5., 20., 500.)
+                    .build();
+
+                bound_problem
+                    .bound_states(energy_range, err)
+                    .with_energy_units(GHz)
+            })
+            .collect();
+
+        let elapsed = start.elapsed();
+        println!("calculated in {}", elapsed.hhmmssxxx());
+
+        let data = BoundStatesDependence {
+            parameters: scalings,
+            bound_states: pes_bounds,
+        };
+        let filename = format!("SrF_Rb_bounds_{potential_type}_2d_scaling_{}_{}_n_max_{}", scaling_types[0], scaling_types[1], basis_recipe.n_max);
+
+        save_serialize(&filename, &data).unwrap()
+    }
 }
 
 #[allow(unused)]
+#[derive(Clone)]
 enum ScalingType {
     Full,
     Isotropic,
@@ -197,12 +271,40 @@ impl ScalingType {
                     *lambda,
                     ScaledPotential {
                         potential: p.clone(),
-                        scaling: match self {
-                            ScalingType::Full => scaling,
-                            ScalingType::Isotropic => if *lambda == 0 { scaling } else { 1. },
-                            ScalingType::Anisotropic => if *lambda != 0 { scaling } else { 1. },
-                            ScalingType::Legendre(l) => if lambda == l { scaling } else { 1. },
-                        },
+                        scaling: self.scaling(*lambda, scaling)
+                    }
+                )
+            })
+            .collect()
+    }
+
+    fn scaling(&self, lambda: u32, scaling: f64) -> f64 {
+        match self {
+            ScalingType::Full => scaling,
+            ScalingType::Isotropic => if lambda == 0 { scaling } else { 1. },
+            ScalingType::Anisotropic => if lambda != 0 { scaling } else { 1. },
+            ScalingType::Legendre(l) => if lambda == *l { scaling } else { 1. },
+        }
+    }
+}
+
+struct Scalings {
+    pub scalings: Vec<f64>,
+    pub scaling_types: Vec<ScalingType>
+}
+
+impl Scalings {
+    pub fn scale(&self, pes: &[(u32, impl SimplePotential + Clone)]) -> Vec<(u32, impl SimplePotential + Clone)> {
+        pes.iter()
+            .map(|(lambda, p)| {
+                (
+                    *lambda,
+                    ScaledPotential {
+                        potential: p.clone(),
+                        scaling: self.scaling_types.iter()
+                            .zip(self.scalings.iter())
+                            .map(|(t, s)| t.scaling(*lambda, *s))
+                            .fold(1., |acc, x| acc * x)
                     }
                 )
             })
