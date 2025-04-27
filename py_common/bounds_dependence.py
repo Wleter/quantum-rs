@@ -71,6 +71,67 @@ class BoundsDependence:
 
             yield filtered[sorted_indices]
 
+class BoundsDependence2D:
+    def __init__(self, data):
+        self.data = data
+
+    @staticmethod
+    def parse_json(filename: str) -> 'BoundsDependence2D':
+        with open(filename, "r") as file:
+            data = json.load(file)
+
+        parameters = data['parameters']
+        bound_states = [
+            BoundStates(
+                item['energies'],
+                item['nodes']
+            )
+            for item in data['bound_states']
+        ]
+
+        data = np.zeros((0, 4))
+        for parameter, bounds in zip(parameters, bound_states):
+            for node, energy in zip(bounds.nodes, bounds.energies):
+                data = np.append(data, np.array([parameter[0], parameter[1], node, energy]).reshape((1, 4)), axis=0)
+
+        return BoundsDependence2D(data)
+
+    def dependence(self) -> npt.NDArray[np.float64]:
+        return self.data[:, [0, 1, 3]]
+    
+    def states(self) -> Iterable[npt.NDArray[np.float64]]:
+        states = np.unique(self.data[:, 2])
+        for s in states:
+            mask = self.data[:, 2] == s
+            
+            if not np.any(mask):
+                continue
+
+            filtered = self.data[mask]
+            filtered = filtered[:, [0, 1, 3]]
+            if len(filtered.shape) == 1:
+                yield filtered
+                continue
+
+            yield filtered
+
+    def slice_len(self, axis: int = 1) -> int:
+        grid = np.unique(self.data[:, axis])
+        return len(grid)
+
+    def slice(self, index: int, axis: int = 1) -> BoundsDependence:
+        assert axis == 0 or axis == 1
+
+        grid = np.unique(self.data[:, axis])
+        assert index < len(grid)
+
+        slice = grid[index]
+        filtering = self.data[:, axis] == slice
+
+        instance = BoundsDependence.__new__(BoundsDependence)
+        instance.data = (self.data[filtering, :])[:, [(axis + 1) % 2, 2, 3]]
+
+        return instance
 @dataclass
 class BoundStates:
     energies: list[float]

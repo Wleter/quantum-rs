@@ -109,17 +109,17 @@ impl Problems {
 
     fn potential_surface_scaling() {
         let potential_type = PotentialType::Triplet;
-        let scaling_type = ScalingType::Anisotropic;
+        let scaling_type = ScalingType::Isotropic;
 
         let energy_range = (Energy(-12., GHz), Energy(0., GHz));
         let err = Energy(1., MHz);
 
         let basis_recipe = RotorAtomBasisRecipe {
-            l_max: 1,
-            n_max: 1,
+            l_max: 10,
+            n_max: 10,
             ..Default::default()
         };
-        let scalings = linspace(0.8, 1.2, 200);
+        let scalings = linspace(0.95, 1.05, 200);
 
         ///////////////////////////////////
 
@@ -178,12 +178,12 @@ impl Problems {
         let err = Energy(1., MHz);
 
         let basis_recipe = RotorAtomBasisRecipe {
-            l_max: 1,
-            n_max: 1,
+            l_max: 10,
+            n_max: 10,
             ..Default::default()
         };
-        let scalings1 = linspace(0.95, 1.05, 10);
-        let scalings2 = linspace(0.95, 1.05, 10);
+        let scalings1 = linspace(0.95, 1.05, 200);
+        let scalings2 = linspace(0.6, 1.0, 100);
 
         ///////////////////////////////////
 
