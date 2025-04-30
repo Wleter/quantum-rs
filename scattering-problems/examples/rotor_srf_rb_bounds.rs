@@ -171,7 +171,7 @@ impl Problems {
     }
 
     fn potential_surface_2d_scaling() {
-        let potential_type = PotentialType::Triplet;
+        let potential_type = PotentialType::Singlet;
         let scaling_types = vec![ScalingType::Isotropic, ScalingType::Anisotropic];
 
         let energy_range = (Energy(-12., GHz), Energy(0., GHz));
@@ -182,7 +182,7 @@ impl Problems {
             n_max: 10,
             ..Default::default()
         };
-        let scalings1 = linspace(0.95, 1.05, 200);
+        let scalings1 = linspace(0.98, 1.02, 200);
         let scalings2 = linspace(0.6, 1.0, 100);
 
         ///////////////////////////////////
