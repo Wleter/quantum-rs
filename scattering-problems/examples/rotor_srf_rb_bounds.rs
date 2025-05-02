@@ -119,7 +119,7 @@ impl Problems {
             n_max: 10,
             ..Default::default()
         };
-        let scalings = linspace(0.95, 1.05, 200);
+        let scalings = linspace(0.90, 1.0, 200);
 
         ///////////////////////////////////
 
@@ -165,7 +165,7 @@ impl Problems {
             parameters: scalings,
             bound_states: singlet_bounds,
         };
-        let filename = format!("SrF_Rb_bounds_{potential_type}_scaling_{scaling_type}_n_max_{}", basis_recipe.n_max);
+        let filename = format!("SrF_Rb_bounds_{potential_type}_scaling_{scaling_type}_n_max_{}_ext", basis_recipe.n_max);
 
         save_serialize(&filename, &data).unwrap()
     }
