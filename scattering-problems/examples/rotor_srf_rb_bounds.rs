@@ -1,4 +1,4 @@
-use std::{fmt::Display, time::Instant};
+use std::time::Instant;
 
 use clebsch_gordan::hi32;
 use hhmmss::Hhmmss;
@@ -16,22 +16,19 @@ use quantum::{
     utility::linspace,
 };
 use scattering_problems::{
-    FieldScatteringProblem,
-    alkali_rotor_atom::TramBasisRecipe,
-    rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder},
+    alkali_rotor_atom::{AlkaliRotorAtomProblemBuilder, TramBasisRecipe}, rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder}, FieldScatteringProblem
 };
 use scattering_solver::{
     log_derivatives::johnson::Johnson,
     numerovs::LocalWavelengthStepRule,
     observables::bound_states::{BoundProblemBuilder, BoundStates, BoundStatesDependence},
-    potentials::potential::{ScaledPotential, SimplePotential},
     utility::save_serialize,
 };
 
 use rayon::prelude::*;
 mod common;
 
-use common::srf_rb_functionality::*;
+use common::{srf_rb_functionality::*, PotentialType, ScalingType, Scalings};
 
 pub fn main() {
     Problems::select(&mut get_args());
@@ -47,25 +44,44 @@ problems_impl!(Problems, "CaF + Rb Bounds",
 
 impl Problems {
     fn magnetic_field_bounds() {
-        let entrance = 0;
-
         let projection = hi32!(1);
         let energy_relative = Energy(1e-7, Kelvin);
         let mag_fields = linspace(0., 1000., 500);
         let basis_recipe = TramBasisRecipe {
             l_max: 0,
             n_max: 0,
-            n_tot_max: 0,
             ..Default::default()
         };
 
-        let atoms = get_particles(energy_relative, projection);
-        let alkali_problem = get_problem(&atoms, &basis_recipe);
-
-        let energy_range = (Energy(-12., GHz), Energy(0., GHz));
+        let energy_range = (Energy(-1., GHz), Energy(0., GHz));
         let err = Energy(1., MHz);
 
+        let scaling_singlet: Option<(ScalingType, f64)> = Some((ScalingType::Full, 1.0042));
+        let scaling_triplet: Option<(ScalingType, f64)> = Some((ScalingType::Full, 1.016));
+        let suffix = "unscaled";
+
         ///////////////////////////////////
+
+        let atoms = get_particles(energy_relative, projection);
+
+        let [singlet, triplet] = read_extended(25);
+        let singlet = get_interpolated(&singlet);
+        let triplet = get_interpolated(&triplet);
+
+        let triplet = if let Some((scaling_type, scaling)) = &scaling_triplet {
+            scaling_type.scale(&triplet, *scaling)
+        } else {
+            ScalingType::Full.scale(&triplet, 1.)
+        };
+
+        let singlet = if let Some((scaling_type, scaling)) = &scaling_singlet {
+            scaling_type.scale(&singlet, *scaling)
+        } else {
+            ScalingType::Full.scale(&singlet, 1.)
+        };
+        
+        let alkali_problem = AlkaliRotorAtomProblemBuilder::new(triplet, singlet)
+            .build(&atoms, &basis_recipe);
 
         let start = Instant::now();
         let bound_states = mag_fields
@@ -75,8 +91,8 @@ impl Problems {
                 let mut atoms = atoms.clone();
 
                 let alkali_problem = alkali_problem.scattering_for(mag_field);
-                let mut asymptotic = alkali_problem.asymptotic;
-                asymptotic.entrance = entrance;
+
+                let asymptotic = alkali_problem.asymptotic;
                 atoms.insert(asymptotic);
                 let potential = &alkali_problem.potential;
 
@@ -100,26 +116,26 @@ impl Problems {
         };
 
         let filename = format!(
-            "SrF_Rb_bound_states_n_max_{}_n_tot_max_{}",
-            basis_recipe.n_max, basis_recipe.n_tot_max
+            "SrF_Rb_bound_states_n_max_{}_{}",
+            basis_recipe.n_max, suffix
         );
 
         save_serialize(&filename, &data).unwrap()
     }
 
     fn potential_surface_scaling() {
-        let potential_type = PotentialType::Triplet;
-        let scaling_type = ScalingType::Isotropic;
+        let potential_type = PotentialType::Singlet;
+        let scaling_type = ScalingType::Full;
 
         let energy_range = (Energy(-12., GHz), Energy(0., GHz));
         let err = Energy(1., MHz);
 
         let basis_recipe = RotorAtomBasisRecipe {
-            l_max: 10,
-            n_max: 10,
+            l_max: 0,
+            n_max: 0,
             ..Default::default()
         };
-        let scalings = linspace(0.90, 1.0, 200);
+        let scalings = linspace(0.95, 1.05, 200);
 
         ///////////////////////////////////
 
@@ -165,7 +181,7 @@ impl Problems {
             parameters: scalings,
             bound_states: singlet_bounds,
         };
-        let filename = format!("SrF_Rb_bounds_{potential_type}_scaling_{scaling_type}_n_max_{}_ext", basis_recipe.n_max);
+        let filename = format!("SrF_Rb_bounds_{potential_type}_scaling_{scaling_type}_n_max_{}", basis_recipe.n_max);
 
         save_serialize(&filename, &data).unwrap()
     }
@@ -240,89 +256,5 @@ impl Problems {
         let filename = format!("SrF_Rb_bounds_{potential_type}_2d_scaling_{}_{}_n_max_{}", scaling_types[0], scaling_types[1], basis_recipe.n_max);
 
         save_serialize(&filename, &data).unwrap()
-    }
-}
-
-#[allow(unused)]
-#[derive(Clone)]
-enum ScalingType {
-    Full,
-    Isotropic,
-    Anisotropic,
-    Legendre(u32)
-}
-
-impl Display for ScalingType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ScalingType::Full => write!(f, "full"),
-            ScalingType::Isotropic => write!(f, "isotropic"),
-            ScalingType::Anisotropic => write!(f, "anisotropic"),
-            ScalingType::Legendre(lambda) => write!(f, "legendre_{lambda}"),
-        }
-    }
-}
-
-impl ScalingType {
-    pub fn scale(&self, pes: &[(u32, impl SimplePotential + Clone)], scaling: f64) -> Vec<(u32, impl SimplePotential + Clone)> {
-        pes.iter()
-            .map(|(lambda, p)| {
-                (
-                    *lambda,
-                    ScaledPotential {
-                        potential: p.clone(),
-                        scaling: self.scaling(*lambda, scaling)
-                    }
-                )
-            })
-            .collect()
-    }
-
-    fn scaling(&self, lambda: u32, scaling: f64) -> f64 {
-        match self {
-            ScalingType::Full => scaling,
-            ScalingType::Isotropic => if lambda == 0 { scaling } else { 1. },
-            ScalingType::Anisotropic => if lambda != 0 { scaling } else { 1. },
-            ScalingType::Legendre(l) => if lambda == *l { scaling } else { 1. },
-        }
-    }
-}
-
-struct Scalings {
-    pub scalings: Vec<f64>,
-    pub scaling_types: Vec<ScalingType>
-}
-
-impl Scalings {
-    pub fn scale(&self, pes: &[(u32, impl SimplePotential + Clone)]) -> Vec<(u32, impl SimplePotential + Clone)> {
-        pes.iter()
-            .map(|(lambda, p)| {
-                (
-                    *lambda,
-                    ScaledPotential {
-                        potential: p.clone(),
-                        scaling: self.scaling_types.iter()
-                            .zip(self.scalings.iter())
-                            .map(|(t, s)| t.scaling(*lambda, *s))
-                            .fold(1., |acc, x| acc * x)
-                    }
-                )
-            })
-            .collect()
-    }
-}
-
-#[allow(unused)]
-enum PotentialType {
-    Singlet,
-    Triplet
-}
-
-impl Display for PotentialType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PotentialType::Singlet => write!(f, "singlet"),
-            PotentialType::Triplet => write!(f, "triplet"),
-        }
     }
 }

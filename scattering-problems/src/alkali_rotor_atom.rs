@@ -294,8 +294,8 @@ where
 pub struct AlkaliRotorAtomProblem<T, P: SimplePotential, V: SimplePotential> {
     pub basis: StatesBasis<T>,
     pub angular_blocks: AngularBlocks,
-    pub(super) triplets: Vec<(P, Mat<f64>)>,
-    pub(super) singlets: Vec<(V, Mat<f64>)>,
+    pub triplets: Vec<(P, Mat<f64>)>,
+    pub singlets: Vec<(V, Mat<f64>)>,
 }
 
 impl<T, P, V> FieldScatteringProblem<IndexBasisDescription> for AlkaliRotorAtomProblem<T, P, V>

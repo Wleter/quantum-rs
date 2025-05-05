@@ -64,6 +64,7 @@ pub fn get_particles(energy: Energy<impl EnergyUnit>, projection: HalfI32) -> Pa
     particles
 }
 
+#[allow(unused)]
 pub fn get_problem(
     params: &Params,
     basis_recipe: &TramBasisRecipe,

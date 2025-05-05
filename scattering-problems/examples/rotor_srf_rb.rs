@@ -21,21 +21,15 @@ use scattering_problems::{
     rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder},
 };
 use scattering_solver::{
-    boundary::{Boundary, Direction},
-    numerovs::{
-        LocalWavelengthStepRule, multi_numerov::MultiRNumerov,
-        propagator_watcher::PropagatorLogging,
-    },
-    observables::s_matrix::{ScatteringDependence, ScatteringObservables},
-    potentials::potential::{Potential, ScaledPotential, SimplePotential},
-    propagator::{CoupledEquation, Propagator},
-    utility::{save_data, save_serialize},
+    boundary::{Boundary, Direction}, log_derivatives::johnson::JohnsonLogDerivative, numerovs::{
+        multi_numerov::MultiRNumerov, propagator_watcher::PropagatorLogging, LocalWavelengthStepRule
+    }, observables::s_matrix::{ScatteringDependence, ScatteringObservables}, potentials::potential::{Potential, ScaledPotential, SimplePotential}, propagator::{CoupledEquation, Propagator}, utility::{save_data, save_serialize}
 };
 
 use rayon::prelude::*;
 mod common;
 
-use common::srf_rb_functionality::*;
+use common::{srf_rb_functionality::*, ScalingType};
 
 pub fn main() {
     Problems::select(&mut get_args());
@@ -454,63 +448,41 @@ impl Problems {
     }
 
     fn scattering_scaled() {
-        let n_max = 5;
-        let singlet_scaling = 1.0174797334102; // #1 a_0 = -50 Angstrom,
-        let triplet_scaling = 0.9587806804328; // #1 a_0 = 0,
-
-        // let n_max = 5;
-        // let singlet_scaling = 1.0349451752971;   // #2 a_0 = -50 Angstrom,
-        // let triplet_scaling = 1.0657638160382;   // #2 a_0 = 0,
-
-        // let n_max = 0;
-        // let singlet_scaling = 1.0056292421443;
-        // let triplet_scaling = 1.0234326602081;
-
         let projection = hi32!(1);
         let energy_relative = Energy(1e-7, Kelvin);
-        let mag_fields = linspace(0., 2000., 1000);
+        let mag_fields = linspace(0., 1000., 500);
         let basis_recipe = TramBasisRecipe {
-            l_max: n_max,
-            n_max: n_max,
+            l_max: 0,
+            n_max: 0,
             ..Default::default()
         };
+
+        let scaling_singlet: Option<(ScalingType, f64)> = Some((ScalingType::Full, 1.0042));
+        let scaling_triplet: Option<(ScalingType, f64)> = Some((ScalingType::Full, 1.016));
+        let suffix = "unscaled";
+
+        ///////////////////////////////////
 
         let atoms = get_particles(energy_relative, projection);
 
         let [singlet, triplet] = read_extended(25);
-        let singlets = get_interpolated(&singlet);
-        let triplets = get_interpolated(&triplet);
+        let singlet = get_interpolated(&singlet);
+        let triplet = get_interpolated(&triplet);
 
-        let triplets = triplets
-            .into_iter()
-            .map(|(lambda, p)| {
-                (
-                    lambda,
-                    ScaledPotential {
-                        potential: p,
-                        scaling: triplet_scaling,
-                    },
-                )
-            })
-            .collect();
+        let triplet = if let Some((scaling_type, scaling)) = &scaling_triplet {
+            scaling_type.scale(&triplet, *scaling)
+        } else {
+            ScalingType::Full.scale(&triplet, 1.)
+        };
 
-        let singlets = singlets
-            .into_iter()
-            .map(|(lambda, p)| {
-                (
-                    lambda,
-                    ScaledPotential {
-                        potential: p,
-                        scaling: singlet_scaling,
-                    },
-                )
-            })
-            .collect();
-
-        let alkali_problem =
-            AlkaliRotorAtomProblemBuilder::new(triplets, singlets).build(&atoms, &basis_recipe);
-
-        /////////////////////////////////////////////////
+        let singlet = if let Some((scaling_type, scaling)) = &scaling_singlet {
+            scaling_type.scale(&singlet, *scaling)
+        } else {
+            ScalingType::Full.scale(&singlet, 1.)
+        };
+        
+        let alkali_problem = AlkaliRotorAtomProblemBuilder::new(triplet, singlet)
+            .build(&atoms, &basis_recipe);
 
         let start = Instant::now();
         let scatterings = mag_fields
@@ -521,11 +493,10 @@ impl Problems {
                 atoms.insert(alkali_problem.asymptotic);
                 let potential = &alkali_problem.potential;
 
-                let id = Mat::<f64>::identity(potential.size(), potential.size());
-                let boundary = Boundary::new(5.0, Direction::Outwards, (1.001 * &id, 1.002 * &id));
-                let step_rule = LocalWavelengthStepRule::new(4e-3, f64::INFINITY, 400.);
+                let boundary = Boundary::new_multi_vanishing(5.0, Direction::Outwards, potential.size());
+                let step_rule = LocalWavelengthStepRule::new(4e-3, 10., 400.);
                 let eq = CoupledEquation::from_particles(potential, &atoms);
-                let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
+                let mut numerov = JohnsonLogDerivative::new(eq, boundary, step_rule);
 
                 numerov.propagate_to(1500.);
 
@@ -541,6 +512,11 @@ impl Problems {
             observables: scatterings,
         };
 
-        save_serialize(&format!("SrF_Rb_scaled_scattering_n_{n_max}_v4"), &data).unwrap()
+        let filename = format!(
+            "SrF_Rb_scattering_n_max_{}_{}",
+            basis_recipe.n_max, suffix
+        );
+
+        save_serialize(&filename, &data).unwrap()
     }
 }
