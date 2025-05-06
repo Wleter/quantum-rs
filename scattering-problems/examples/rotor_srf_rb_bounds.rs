@@ -16,7 +16,9 @@ use quantum::{
     utility::linspace,
 };
 use scattering_problems::{
-    alkali_rotor_atom::{AlkaliRotorAtomProblemBuilder, TramBasisRecipe}, rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder}, FieldScatteringProblem
+    FieldScatteringProblem,
+    alkali_rotor_atom::{AlkaliRotorAtomProblemBuilder, TramBasisRecipe},
+    rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder},
 };
 use scattering_solver::{
     log_derivatives::johnson::Johnson,
@@ -28,7 +30,7 @@ use scattering_solver::{
 use rayon::prelude::*;
 mod common;
 
-use common::{srf_rb_functionality::*, PotentialType, ScalingType, Scalings};
+use common::{PotentialType, ScalingType, Scalings, srf_rb_functionality::*};
 
 pub fn main() {
     Problems::select(&mut get_args());
@@ -79,9 +81,9 @@ impl Problems {
         } else {
             ScalingType::Full.scale(&singlet, 1.)
         };
-        
-        let alkali_problem = AlkaliRotorAtomProblemBuilder::new(triplet, singlet)
-            .build(&atoms, &basis_recipe);
+
+        let alkali_problem =
+            AlkaliRotorAtomProblemBuilder::new(triplet, singlet).build(&atoms, &basis_recipe);
 
         let start = Instant::now();
         let bound_states = mag_fields
@@ -181,7 +183,10 @@ impl Problems {
             parameters: scalings,
             bound_states: singlet_bounds,
         };
-        let filename = format!("SrF_Rb_bounds_{potential_type}_scaling_{scaling_type}_n_max_{}", basis_recipe.n_max);
+        let filename = format!(
+            "SrF_Rb_bounds_{potential_type}_scaling_{scaling_type}_n_max_{}",
+            basis_recipe.n_max
+        );
 
         save_serialize(&filename, &data).unwrap()
     }
@@ -214,7 +219,8 @@ impl Problems {
         };
         let pes = get_interpolated(&pes);
 
-        let scalings: Vec<(f64, f64)> = scalings1.iter()
+        let scalings: Vec<(f64, f64)> = scalings1
+            .iter()
             .flat_map(|s1| scalings2.iter().map(|s2| (*s1, *s2)))
             .collect();
 
@@ -253,7 +259,10 @@ impl Problems {
             parameters: scalings,
             bound_states: pes_bounds,
         };
-        let filename = format!("SrF_Rb_bounds_{potential_type}_2d_scaling_{}_{}_n_max_{}", scaling_types[0], scaling_types[1], basis_recipe.n_max);
+        let filename = format!(
+            "SrF_Rb_bounds_{potential_type}_2d_scaling_{}_{}_n_max_{}",
+            scaling_types[0], scaling_types[1], basis_recipe.n_max
+        );
 
         save_serialize(&filename, &data).unwrap()
     }

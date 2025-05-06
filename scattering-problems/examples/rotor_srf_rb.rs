@@ -1,6 +1,5 @@
 use std::time::Instant;
 
-use abm::DoubleHifiProblemBuilder;
 use clebsch_gordan::hi32;
 use faer::Mat;
 use hhmmss::Hhmmss;
@@ -16,20 +15,26 @@ use quantum::{
 };
 use scattering_problems::{
     FieldScatteringProblem,
-    alkali_atoms::AlkaliAtomsProblemBuilder,
     alkali_rotor_atom::{AlkaliRotorAtomProblemBuilder, TramBasisRecipe},
     rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder},
 };
 use scattering_solver::{
-    boundary::{Boundary, Direction}, log_derivatives::johnson::JohnsonLogDerivative, numerovs::{
-        multi_numerov::MultiRNumerov, propagator_watcher::PropagatorLogging, LocalWavelengthStepRule
-    }, observables::s_matrix::{ScatteringDependence, ScatteringObservables}, potentials::potential::{Potential, ScaledPotential, SimplePotential}, propagator::{CoupledEquation, Propagator}, utility::{save_data, save_serialize}
+    boundary::{Boundary, Direction},
+    log_derivatives::johnson::JohnsonLogDerivative,
+    numerovs::{
+        LocalWavelengthStepRule, multi_numerov::MultiRNumerov,
+        propagator_watcher::PropagatorLogging,
+    },
+    observables::s_matrix::{ScatteringDependence, ScatteringObservables},
+    potentials::potential::{Potential, ScaledPotential, SimplePotential},
+    propagator::{CoupledEquation, Propagator},
+    utility::{save_data, save_serialize},
 };
 
 use rayon::prelude::*;
 mod common;
 
-use common::{srf_rb_functionality::*, ScalingType};
+use common::{ScalingType, srf_rb_functionality::*};
 
 pub fn main() {
     Problems::select(&mut get_args());
@@ -40,7 +45,6 @@ struct Problems;
 problems_impl!(Problems, "CaF + Rb Feshbach",
     "potentials" => |_| Self::potentials(),
     "single cross section calculation" => |_| Self::single_cross_sections(),
-    "atom approximation cross section calculation" => |_| Self::atom_approximation_cross_sections(),
     "cross sections calculation" => |_| Self::cross_sections(),
     "a_length potential scaling" => |_| Self::potential_scaling_propagation(),
     "spinless convergence" => |_| Self::spinless_convergence(),
@@ -142,64 +146,6 @@ impl Problems {
         let scattering = numerov.s_matrix().observables();
 
         println!("{:?}", scattering);
-    }
-
-    fn atom_approximation_cross_sections() {
-        let entrance = 4;
-        let mag_fields = linspace(0., 2000., 1000);
-
-        let projection = hi32!(-1);
-        let energy_relative = Energy(1e-7, Kelvin);
-
-        ////////////////////////////////////
-
-        let [singlet, triplet] = read_extended(25);
-
-        let singlets = get_interpolated(&singlet);
-        let triplets = get_interpolated(&triplet);
-        let singlet = singlets[0].1.clone();
-        let triplet = triplets[0].1.clone();
-
-        let atoms = get_particles(energy_relative, projection);
-        let hifi_problem = atoms.get::<DoubleHifiProblemBuilder>().unwrap();
-
-        let alkali_problem =
-            AlkaliAtomsProblemBuilder::new(hifi_problem.to_owned(), singlet, triplet);
-
-        ///////////////////////////////////
-
-        let start = Instant::now();
-        let scatterings = mag_fields
-            .par_iter()
-            .progress()
-            .map_with(atoms, |atoms, &mag_field| {
-                let alkali_problem = alkali_problem.clone().build(mag_field);
-                let mut asymptotic = alkali_problem.asymptotic;
-                asymptotic.entrance = entrance;
-                atoms.insert(asymptotic);
-                let potential = &alkali_problem.potential;
-
-                let boundary =
-                    Boundary::new_multi_vanishing(5.0, Direction::Outwards, potential.size());
-                let step_rule = LocalWavelengthStepRule::new(4e-3, f64::INFINITY, 400.);
-                let eq = CoupledEquation::from_particles(potential, &atoms);
-                let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
-
-                numerov.propagate_to(1500.);
-
-                numerov.s_matrix().observables()
-            })
-            .collect::<Vec<ScatteringObservables>>();
-
-        let elapsed = start.elapsed();
-        println!("calculated in {}", elapsed.hhmmssxxx());
-
-        let data = ScatteringDependence {
-            parameters: mag_fields,
-            observables: scatterings,
-        };
-
-        save_serialize("SrF_Rb_scatterings_n_0", &data).unwrap()
     }
 
     fn cross_sections() {
@@ -480,9 +426,9 @@ impl Problems {
         } else {
             ScalingType::Full.scale(&singlet, 1.)
         };
-        
-        let alkali_problem = AlkaliRotorAtomProblemBuilder::new(triplet, singlet)
-            .build(&atoms, &basis_recipe);
+
+        let alkali_problem =
+            AlkaliRotorAtomProblemBuilder::new(triplet, singlet).build(&atoms, &basis_recipe);
 
         let start = Instant::now();
         let scatterings = mag_fields
@@ -493,7 +439,8 @@ impl Problems {
                 atoms.insert(alkali_problem.asymptotic);
                 let potential = &alkali_problem.potential;
 
-                let boundary = Boundary::new_multi_vanishing(5.0, Direction::Outwards, potential.size());
+                let boundary =
+                    Boundary::new_multi_vanishing(5.0, Direction::Outwards, potential.size());
                 let step_rule = LocalWavelengthStepRule::new(4e-3, 10., 400.);
                 let eq = CoupledEquation::from_particles(potential, &atoms);
                 let mut numerov = JohnsonLogDerivative::new(eq, boundary, step_rule);
@@ -512,10 +459,7 @@ impl Problems {
             observables: scatterings,
         };
 
-        let filename = format!(
-            "SrF_Rb_scattering_n_max_{}_{}",
-            basis_recipe.n_max, suffix
-        );
+        let filename = format!("SrF_Rb_scattering_n_max_{}_{}", basis_recipe.n_max, suffix);
 
         save_serialize(&filename, &data).unwrap()
     }
