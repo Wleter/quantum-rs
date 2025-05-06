@@ -16,8 +16,8 @@ def plot() -> tuple[Figure, Axes]:
 @dataclass
 class AxesArray:
     array: Any
-    ncols: int
     nrows: int
+    ncols: int
     
     def __getitem__(self, key) -> Axes:
         return self.array[key]
@@ -41,23 +41,23 @@ class AxesIter:
 
                 return self.axes[self.current - 1]
             else:
-                j = self.current % self.axes.nrows
-                i = self.current // self.axes.nrows
+                j = self.current % self.axes.ncols
+                i = self.current // self.axes.ncols
 
                 self.current += 1
                 return self.axes[i, j]
 
-def plot_many(ncols: int, nrows: int, shape = None) -> tuple[Figure, AxesArray]:
-    fig, axes = plt.subplots(ncols, nrows, figsize=shape)
+def plot_many(nrows: int, ncols: int, shape = None) -> tuple[Figure, AxesArray]:
+    fig, axes = plt.subplots(nrows, ncols, figsize=shape)
 
-    axes: AxesArray = AxesArray(axes, ncols, nrows)
+    axes: AxesArray = AxesArray(axes, nrows, ncols)
     if ncols == 1 or nrows == 1:
         for i in range(ncols * nrows):
             axes[i].grid()
             axes[i].tick_params(which='both', direction="in")
     else:
-        for i in range(ncols):
-            for j in range(nrows):
+        for i in range(nrows):
+            for j in range(ncols):
                 axes[i, j].grid()
                 axes[i, j].tick_params(which='both', direction="in")
 

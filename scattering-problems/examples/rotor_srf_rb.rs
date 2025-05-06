@@ -22,13 +22,12 @@ use scattering_solver::{
     boundary::{Boundary, Direction},
     log_derivatives::johnson::JohnsonLogDerivative,
     numerovs::{
-        LocalWavelengthStepRule, multi_numerov::MultiRNumerov,
-        propagator_watcher::PropagatorLogging,
+        multi_numerov::MultiRNumerov, propagator_watcher::PropagatorLogging, LocalWavelengthStepRule
     },
     observables::s_matrix::{ScatteringDependence, ScatteringObservables},
     potentials::potential::{Potential, ScaledPotential, SimplePotential},
     propagator::{CoupledEquation, Propagator},
-    utility::{save_data, save_serialize},
+    utility::{save_data, save_serialize, save_spectrum},
 };
 
 use rayon::prelude::*;
@@ -53,6 +52,12 @@ problems_impl!(Problems, "CaF + Rb Feshbach",
 
 impl Problems {
     fn potentials() {
+        let basis_recipe = RotorAtomBasisRecipe {
+            l_max: 10,
+            n_max: 10,
+            ..Default::default()
+        };
+
         let distances = linspace(5., 80., 800);
 
         let [pot_array_singlet, pot_array_triplet] = read_potentials(25);
@@ -96,6 +101,25 @@ impl Problems {
         )
         .unwrap();
 
+        let atoms = get_particles(Energy(1e-7, Kelvin), hi32!(0));
+        let problem = RotorAtomProblemBuilder::new(interpolated).build(&atoms, &basis_recipe);
+        
+        let mut data = vec![];
+        let mut potential_value = Mat::zeros(problem.potential.size(), problem.potential.size());
+        for &r in &distances {
+            problem.potential.value_inplace(r, &mut potential_value);
+
+            data.push(potential_value.self_adjoint_eigenvalues(faer::Side::Lower).unwrap());
+        }
+
+        save_spectrum(
+            &format!("SrF_Rb_triplet_adiabat_n_{}", basis_recipe.n_max), 
+            "distance\tadiabat", 
+            &distances, 
+            &data
+        )
+        .unwrap();
+
         let interpolated = get_interpolated(&pot_array_singlet);
         let mut data = vec![distances.clone()];
         for (_, p) in &interpolated {
@@ -107,6 +131,25 @@ impl Problems {
             "SrF_Rb_singlet_dec_interpolated",
             "distances\tpotential_decomposition",
             &data,
+        )
+        .unwrap();
+
+        let atoms = get_particles(Energy(1e-7, Kelvin), hi32!(0));
+        let problem = RotorAtomProblemBuilder::new(interpolated).build(&atoms, &basis_recipe);
+        
+        let mut data = vec![];
+        let mut potential_value = Mat::zeros(problem.potential.size(), problem.potential.size());
+        for &r in &distances {
+            problem.potential.value_inplace(r, &mut potential_value);
+
+            data.push(potential_value.self_adjoint_eigenvalues(faer::Side::Lower).unwrap());
+        }
+
+        save_spectrum(
+            &format!("SrF_Rb_singlet_adiabat_n_{}", basis_recipe.n_max), 
+            "distance\tadiabat", 
+            &distances, 
+            &data
         )
         .unwrap();
     }
