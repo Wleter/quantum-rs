@@ -2,7 +2,7 @@ import re
 import numpy as np
 from array import array
 
-def parse_wavefunction_file(path, max_coeff=None):
+def parse_wavefunction_file(path, basis_size, max_coeff=None):
     header_re = re.compile(r"WAVEFUNCTION FOR STATE\s+(\d+)\s+AT ENERGY\s+([-+]?\d*\.\d+(?:[eE][+-]?\d+)?)")
 
     data = {}
@@ -12,9 +12,9 @@ def parse_wavefunction_file(path, max_coeff=None):
     r_arr = array('d')
     coeffs_arr = array('d')
     buf = array('d')
-    row_length = 1 + 176
+    row_length = 1 + basis_size
 
-    coeff_count = (max_coeff + 1) if max_coeff is not None else 176
+    coeff_count = (max_coeff + 1) if max_coeff is not None else basis_size
 
     with open(path, 'r') as f:
         for line in f:
@@ -61,7 +61,7 @@ def parse_wavefunction_file(path, max_coeff=None):
     return data
 
 if __name__ == '__main__':
-    parsed = parse_wavefunction_file('data/wave_function_singlet_175.output', max_coeff = 5)
+    parsed = parse_wavefunction_file('data/wave_function_singlet_175.output', 176, max_coeff = 5)
 
     for st, info in parsed.items():
         print(f"State {st}: energy={info['energy']}, points={len(info['r'])}, coeffs_shape={info['coeffs'].shape}")

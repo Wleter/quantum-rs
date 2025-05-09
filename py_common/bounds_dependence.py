@@ -119,7 +119,7 @@ class BoundsDependence2D:
         grid = np.unique(self.data[:, axis])
         return len(grid)
 
-    def slice(self, index: int, axis: int = 1) -> BoundsDependence:
+    def slice(self, index: int, axis: int = 1) -> tuple[BoundsDependence, float]:
         assert axis == 0 or axis == 1
 
         grid = np.unique(self.data[:, axis])
@@ -131,7 +131,7 @@ class BoundsDependence2D:
         instance = BoundsDependence.__new__(BoundsDependence)
         instance.data = (self.data[filtering, :])[:, [(axis + 1) % 2, 2, 3]]
 
-        return instance
+        return instance, slice # type: ignore
 @dataclass
 class BoundStates:
     energies: list[float]

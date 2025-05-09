@@ -58,8 +58,14 @@ impl Problems {
         let energy_range = (Energy(-1., GHz), Energy(0., GHz));
         let err = Energy(1., MHz);
 
-        let scaling_singlet: Option<(ScalingType, f64)> = Some((ScalingType::Full, 1.0042));
-        let scaling_triplet: Option<(ScalingType, f64)> = Some((ScalingType::Full, 1.016));
+        let scaling_singlet: Option<Scalings> = Some(Scalings {
+            scaling_types: vec![ScalingType::Isotropic, ScalingType::Anisotropic],
+            scalings: vec![1.0042, 1.0042],
+        });
+        let scaling_triplet: Option<Scalings> = Some(Scalings {
+            scaling_types: vec![ScalingType::Isotropic, ScalingType::Anisotropic],
+            scalings: vec![1.016, 1.016],
+        });
         let suffix = "unscaled";
 
         ///////////////////////////////////
@@ -70,14 +76,14 @@ impl Problems {
         let singlet = get_interpolated(&singlet);
         let triplet = get_interpolated(&triplet);
 
-        let triplet = if let Some((scaling_type, scaling)) = &scaling_triplet {
-            scaling_type.scale(&triplet, *scaling)
+        let triplet = if let Some(scalings) = &scaling_triplet {
+            scalings.scale(&triplet)
         } else {
             ScalingType::Full.scale(&triplet, 1.)
         };
 
-        let singlet = if let Some((scaling_type, scaling)) = &scaling_singlet {
-            scaling_type.scale(&singlet, *scaling)
+        let singlet = if let Some(scalings) = &scaling_singlet {
+            scalings.scale(&singlet)
         } else {
             ScalingType::Full.scale(&singlet, 1.)
         };
@@ -193,7 +199,10 @@ impl Problems {
 
     fn potential_surface_2d_scaling() {
         let potential_type = PotentialType::Singlet;
-        let scaling_types = vec![ScalingType::Isotropic, ScalingType::Anisotropic];
+        let scaling_types = vec![
+            ScalingType::Isotropic, 
+            ScalingType::Anisotropic
+        ];
 
         let energy_range = (Energy(-12., GHz), Energy(0., GHz));
         let err = Energy(1., MHz);
@@ -203,8 +212,9 @@ impl Problems {
             n_max: 10,
             ..Default::default()
         };
-        let scalings1 = linspace(0.98, 1.02, 200);
-        let scalings2 = linspace(0.6, 1.0, 100);
+        let scalings1 = linspace(1.005, 1.015, 50);
+        let scalings2 = linspace(0.97, 0.99, 50);
+        let suffix = "zoomed_0,9798";
 
         ///////////////////////////////////
 
@@ -260,7 +270,7 @@ impl Problems {
             bound_states: pes_bounds,
         };
         let filename = format!(
-            "SrF_Rb_bounds_{potential_type}_2d_scaling_{}_{}_n_max_{}",
+            "SrF_Rb_bounds_{potential_type}_2d_scaling_{}_{}_n_max_{}_{suffix}",
             scaling_types[0], scaling_types[1], basis_recipe.n_max
         );
 

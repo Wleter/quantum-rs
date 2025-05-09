@@ -25,11 +25,11 @@ impl Display for ScalingType {
 
 #[allow(unused)]
 impl ScalingType {
-    pub fn scale(
+    pub fn scale<P: SimplePotential + Clone>(
         &self,
-        pes: &[(u32, impl SimplePotential + Clone)],
+        pes: &[(u32, P)],
         scaling: f64,
-    ) -> Vec<(u32, impl SimplePotential + Clone)> {
+    ) -> Vec<(u32, ScaledPotential<P>)> {
         pes.iter()
             .map(|(lambda, p)| {
                 (
@@ -73,16 +73,16 @@ impl ScalingType {
 
 #[allow(unused)]
 pub struct Scalings {
-    pub scalings: Vec<f64>,
     pub scaling_types: Vec<ScalingType>,
+    pub scalings: Vec<f64>,
 }
 
 #[allow(unused)]
 impl Scalings {
-    pub fn scale(
+    pub fn scale<P: SimplePotential + Clone>(
         &self,
-        pes: &[(u32, impl SimplePotential + Clone)],
-    ) -> Vec<(u32, impl SimplePotential + Clone)> {
+        pes: &[(u32, P)],
+    ) -> Vec<(u32, ScaledPotential<P>)> {
         pes.iter()
             .map(|(lambda, p)| {
                 (

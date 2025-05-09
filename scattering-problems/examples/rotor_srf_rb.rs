@@ -33,7 +33,7 @@ use scattering_solver::{
 use rayon::prelude::*;
 mod common;
 
-use common::{ScalingType, srf_rb_functionality::*};
+use common::{srf_rb_functionality::*, ScalingType, Scalings};
 
 pub fn main() {
     Problems::select(&mut get_args());
@@ -446,8 +446,14 @@ impl Problems {
             ..Default::default()
         };
 
-        let scaling_singlet: Option<(ScalingType, f64)> = Some((ScalingType::Full, 1.0042));
-        let scaling_triplet: Option<(ScalingType, f64)> = Some((ScalingType::Full, 1.016));
+        let scaling_singlet: Option<Scalings> = Some(Scalings {
+            scaling_types: vec![ScalingType::Isotropic, ScalingType::Anisotropic],
+            scalings: vec![1.0042, 1.0042],
+        });
+        let scaling_triplet: Option<Scalings> = Some(Scalings {
+            scaling_types: vec![ScalingType::Isotropic, ScalingType::Anisotropic],
+            scalings: vec![1.016, 1.016],
+        });
         let suffix = "unscaled";
 
         ///////////////////////////////////
@@ -458,14 +464,14 @@ impl Problems {
         let singlet = get_interpolated(&singlet);
         let triplet = get_interpolated(&triplet);
 
-        let triplet = if let Some((scaling_type, scaling)) = &scaling_triplet {
-            scaling_type.scale(&triplet, *scaling)
+        let triplet = if let Some(scalings) = &scaling_triplet {
+            scalings.scale(&triplet)
         } else {
             ScalingType::Full.scale(&triplet, 1.)
         };
 
-        let singlet = if let Some((scaling_type, scaling)) = &scaling_singlet {
-            scaling_type.scale(&singlet, *scaling)
+        let singlet = if let Some(scalings) = &scaling_singlet {
+            scalings.scale(&singlet)
         } else {
             ScalingType::Full.scale(&singlet, 1.)
         };
