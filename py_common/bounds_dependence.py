@@ -44,7 +44,7 @@ class BoundsDependence:
                 continue
 
             filtered = self.data[mask]
-            filtered = filtered[:, [0, 2]]
+            filtered = np.delete(filtered, 1, axis=1)
             if len(filtered.shape) == 1:
                 yield filtered
                 continue
@@ -62,7 +62,7 @@ class BoundsDependence:
                 continue
 
             filtered = self.data[mask]
-            filtered = filtered[:, [0, 2]]
+            filtered = np.delete(filtered, 1, axis=1)
             if len(filtered.shape) == 1:
                 yield filtered
                 continue
