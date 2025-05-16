@@ -441,20 +441,20 @@ impl Problems {
         let energy_relative = Energy(1e-7, Kelvin);
         let mag_fields = linspace(0., 1000., 500);
         let basis_recipe = TramBasisRecipe {
-            l_max: 0,
-            n_max: 0,
+            l_max: 10,
+            n_max: 10,
             ..Default::default()
         };
 
         let scaling_singlet: Option<Scalings> = Some(Scalings {
             scaling_types: vec![ScalingType::Isotropic, ScalingType::Anisotropic],
-            scalings: vec![1.0042, 1.0042],
+            scalings: vec![1.00354, 0.91387755],
         });
         let scaling_triplet: Option<Scalings> = Some(Scalings {
             scaling_types: vec![ScalingType::Isotropic, ScalingType::Anisotropic],
-            scalings: vec![1.016, 1.016],
+            scalings: vec![1.0071, 0.8142857],
         });
-        let suffix = "unscaled";
+        let suffix = "scaled_v0";
 
         ///////////////////////////////////
 

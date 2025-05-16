@@ -50,8 +50,8 @@ impl Problems {
         let energy_relative = Energy(1e-7, Kelvin);
         let mag_fields = linspace(0., 1000., 500);
         let basis_recipe = TramBasisRecipe {
-            l_max: 0,
-            n_max: 0,
+            l_max: 10,
+            n_max: 10,
             ..Default::default()
         };
 
@@ -60,13 +60,13 @@ impl Problems {
 
         let scaling_singlet: Option<Scalings> = Some(Scalings {
             scaling_types: vec![ScalingType::Isotropic, ScalingType::Anisotropic],
-            scalings: vec![1.0042, 1.0042],
+            scalings: vec![1.00354, 0.91387755],
         });
         let scaling_triplet: Option<Scalings> = Some(Scalings {
             scaling_types: vec![ScalingType::Isotropic, ScalingType::Anisotropic],
-            scalings: vec![1.016, 1.016],
+            scalings: vec![1.0071, 0.8142857],
         });
-        let suffix = "unscaled";
+        let suffix = "scaled_v0";
 
         ///////////////////////////////////
 
@@ -93,7 +93,7 @@ impl Problems {
 
         let start = Instant::now();
         let bound_states = mag_fields
-            .par_iter()
+            .iter()
             .progress()
             .map(|&mag_field| {
                 let mut atoms = atoms.clone();
@@ -212,9 +212,9 @@ impl Problems {
             n_max: 10,
             ..Default::default()
         };
-        let scalings1 = linspace(1.005, 1.015, 50);
-        let scalings2 = linspace(0.97, 0.99, 50);
-        let suffix = "zoomed_0,9798";
+        let scalings1 = linspace(1., 1.01, 50);
+        let scalings2 = linspace(0.90, 0.92, 50);
+        let suffix = "zoomed_0,9111";
 
         ///////////////////////////////////
 
