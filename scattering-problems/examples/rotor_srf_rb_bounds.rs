@@ -42,6 +42,7 @@ problems_impl!(Problems, "CaF + Rb Bounds",
     "magnetic field bounds" => |_| Self::magnetic_field_bounds(),
     "potential surface scaling" => |_| Self::potential_surface_scaling(),
     "potential surface 2d scaling" => |_| Self::potential_surface_2d_scaling(),
+    "magnetic field bounds" => |_| Self::magnetic_field_bounds_scaling(),
 );
 
 impl Problems {
@@ -272,6 +273,104 @@ impl Problems {
         let filename = format!(
             "SrF_Rb_bounds_{potential_type}_2d_scaling_{}_{}_n_max_{}_{suffix}",
             scaling_types[0], scaling_types[1], basis_recipe.n_max
+        );
+
+        save_serialize(&filename, &data).unwrap()
+    }
+
+    fn magnetic_field_bounds_scaling() {
+        let mag_fields = linspace(0., 1000., 500);
+        
+        let potential_type = PotentialType::Singlet;
+        let scaling_type = ScalingType::Full;
+        let scalings = linspace(1., 1.02, 50);
+
+        let other_scaling: Option<Scalings> = Some(Scalings {
+            scaling_types: vec![ScalingType::Full],
+            scalings: vec![1.0151],
+        });
+
+        let energy_range = (Energy(-1., GHz), Energy(0., GHz));
+        let err = Energy(1., MHz);
+
+        let basis_recipe = TramBasisRecipe {
+            l_max: 0,
+            n_max: 0,
+            ..Default::default()
+        };
+
+        ///////////////////////////////////
+
+        let projection = hi32!(1);
+        let energy_relative = Energy(1e-7, Kelvin);
+
+        let atoms = get_particles(energy_relative, projection);
+
+        let [singlet, triplet] = read_extended(25);
+        let singlet = get_interpolated(&singlet);
+        let triplet = get_interpolated(&triplet);
+
+        let scaling_field: Vec<(f64, f64)> = scalings
+            .iter()
+            .flat_map(|s1| mag_fields.iter().map(|s2| (*s1, *s2)))
+            .collect();
+
+        let start = Instant::now();
+        let bound_states = scaling_field
+            .par_iter()
+            .progress()
+            .map_with(atoms, |atoms, (scaling, mag_field)| {
+                let mut atoms = atoms.clone();
+
+                let singlet = match potential_type {
+                    PotentialType::Singlet => scaling_type.scale(&singlet, *scaling),
+                    PotentialType::Triplet => if let Some(scaling) = &other_scaling {
+                        scaling.scale(&singlet)
+                    } else {
+                        ScalingType::Full.scale(&singlet, 1.)
+                    }
+                };
+
+                let triplet = match potential_type {
+                    PotentialType::Triplet => scaling_type.scale(&triplet, *scaling),
+                    PotentialType::Singlet => if let Some(scaling) = &other_scaling {
+                        scaling.scale(&triplet)
+                    } else {
+                        ScalingType::Full.scale(&triplet, 1.)
+                    },
+                };
+
+                let alkali_problem = AlkaliRotorAtomProblemBuilder::new(triplet, singlet)
+                    .build(&atoms, &basis_recipe);
+
+                let alkali_problem = alkali_problem.scattering_for(*mag_field);
+
+                let asymptotic = alkali_problem.asymptotic;
+                atoms.insert(asymptotic);
+                let potential = &alkali_problem.potential;
+
+                let bound_problem = BoundProblemBuilder::new(&atoms, potential)
+                    .with_propagation(LocalWavelengthStepRule::new(4e-3, 10., 400.), Johnson)
+                    .with_range(5., 20., 500.)
+                    .build();
+
+                bound_problem
+                    .bound_states(energy_range, err)
+                    .with_energy_units(GHz)
+            })
+            .collect::<Vec<BoundStates>>();
+
+        let elapsed = start.elapsed();
+        println!("calculated in {}", elapsed.hhmmssxxx());
+
+        let data = BoundStatesDependence {
+            parameters: scaling_field,
+            bound_states,
+        };
+
+        let filename = format!(
+            "SrF_Rb_bound_states_n_max_{}_{potential_type}_scaling_{scaling_type}",
+            basis_recipe.n_max
         );
 
         save_serialize(&filename, &data).unwrap()

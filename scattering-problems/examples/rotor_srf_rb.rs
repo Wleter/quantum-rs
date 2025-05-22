@@ -33,7 +33,7 @@ use scattering_solver::{
 use rayon::prelude::*;
 mod common;
 
-use common::{srf_rb_functionality::*, ScalingType, Scalings};
+use common::{srf_rb_functionality::*, PotentialType, ScalingType, Scalings};
 
 pub fn main() {
     Problems::select(&mut get_args());
@@ -48,6 +48,7 @@ problems_impl!(Problems, "CaF + Rb Feshbach",
     "a_length potential scaling" => |_| Self::potential_scaling_propagation(),
     "spinless convergence" => |_| Self::spinless_convergence(),
     "potential scaled scattering calculation" => |_| Self::scattering_scaled(),
+    "scaled dependence scattering calculation" => |_| Self::magnetic_field_scattering_scaling(),
 );
 
 impl Problems {
@@ -134,6 +135,8 @@ impl Problems {
         )
         .unwrap();
 
+        let interpolated = ScalingType::Anisotropic.scale(&interpolated, 0.6);
+
         let atoms = get_particles(Energy(1e-7, Kelvin), hi32!(0));
         let problem = RotorAtomProblemBuilder::new(interpolated).build(&atoms, &basis_recipe);
         
@@ -146,7 +149,7 @@ impl Problems {
         }
 
         save_spectrum(
-            &format!("SrF_Rb_singlet_adiabat_n_{}", basis_recipe.n_max), 
+            &format!("SrF_Rb_singlet_adiabat_n_{}_scaled", basis_recipe.n_max), 
             "distance\tadiabat", 
             &distances, 
             &data
@@ -509,6 +512,102 @@ impl Problems {
         };
 
         let filename = format!("SrF_Rb_scattering_n_max_{}_{}", basis_recipe.n_max, suffix);
+
+        save_serialize(&filename, &data).unwrap()
+    }
+
+    fn magnetic_field_scattering_scaling() {
+        let mag_fields = linspace(0., 1000., 500);
+        
+        let potential_type = PotentialType::Singlet;
+        let scaling_type = ScalingType::Full;
+        let scalings = linspace(1., 1.02, 50);
+
+        let other_scaling: Option<Scalings> = Some(Scalings {
+            scaling_types: vec![ScalingType::Full],
+            scalings: vec![1.0151],
+        });
+
+        let basis_recipe = TramBasisRecipe {
+            l_max: 0,
+            n_max: 0,
+            ..Default::default()
+        };
+
+        ///////////////////////////////////
+
+        let projection = hi32!(1);
+        let energy_relative = Energy(1e-7, Kelvin);
+
+        let atoms = get_particles(energy_relative, projection);
+
+        let [singlet, triplet] = read_extended(25);
+        let singlet = get_interpolated(&singlet);
+        let triplet = get_interpolated(&triplet);
+
+        let scaling_field: Vec<(f64, f64)> = scalings
+            .iter()
+            .flat_map(|s1| mag_fields.iter().map(|s2| (*s1, *s2)))
+            .collect();
+
+        let start = Instant::now();
+        let scatterings = scaling_field
+            .par_iter()
+            .progress()
+            .map_with(atoms, |atoms, (scaling, mag_field)| {
+                let mut atoms = atoms.clone();
+
+                let singlet = match potential_type {
+                    PotentialType::Singlet => scaling_type.scale(&singlet, *scaling),
+                    PotentialType::Triplet => if let Some(scaling) = &other_scaling {
+                        scaling.scale(&singlet)
+                    } else {
+                        ScalingType::Full.scale(&singlet, 1.)
+                    }
+                };
+
+                let triplet = match potential_type {
+                    PotentialType::Triplet => scaling_type.scale(&triplet, *scaling),
+                    PotentialType::Singlet => if let Some(scaling) = &other_scaling {
+                        scaling.scale(&triplet)
+                    } else {
+                        ScalingType::Full.scale(&triplet, 1.)
+                    },
+                };
+
+                let alkali_problem = AlkaliRotorAtomProblemBuilder::new(triplet, singlet)
+                    .build(&atoms, &basis_recipe);
+
+                let alkali_problem = alkali_problem.scattering_for(*mag_field);
+
+                let asymptotic = alkali_problem.asymptotic;
+                atoms.insert(asymptotic);
+                let potential = &alkali_problem.potential;
+
+                let boundary =
+                    Boundary::new_multi_vanishing(5.0, Direction::Outwards, potential.size());
+                let step_rule = LocalWavelengthStepRule::new(4e-3, 10., 400.);
+                let eq = CoupledEquation::from_particles(potential, &atoms);
+                let mut numerov = JohnsonLogDerivative::new(eq, boundary, step_rule);
+
+                numerov.propagate_to(1500.);
+
+                numerov.s_matrix().observables()
+            })
+            .collect::<Vec<ScatteringObservables>>();
+
+        let elapsed = start.elapsed();
+        println!("calculated in {}", elapsed.hhmmssxxx());
+
+        let data = ScatteringDependence {
+            parameters: scaling_field,
+            observables: scatterings,
+        };
+
+        let filename = format!(
+            "SrF_Rb_scatterings_n_max_{}_{potential_type}_scaling_{scaling_type}",
+            basis_recipe.n_max
+        );
 
         save_serialize(&filename, &data).unwrap()
     }
