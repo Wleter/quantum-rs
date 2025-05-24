@@ -115,6 +115,76 @@ pub fn save_spectrum(
     Ok(())
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum RootError {
+    NoConvergence,
+    RootOutside
+}
+
+pub fn brent_root_method(lower: [f64; 2], upper: [f64; 2], f: impl Fn(f64) -> f64, err: f64, max_iter: u32) -> Result<f64, RootError> {
+    let (mut a, mut ya, mut b, mut yb) = sort_secant(lower[0], lower[1], upper[0], upper[1]);
+
+    let (mut c, mut yc, mut d) = (a, ya, a);
+    let mut bisection_last = true;
+
+    let mut iter = 0;
+    loop {
+        if (a - b).abs() < err {
+            return Ok(c);
+        }
+
+        let yab = ya - yb;
+        let yac = ya - yc;
+        let ybc = yb - yc;
+
+        let mut s = if (ya != yc) && (yb != yc) {
+            a * yb * yc / (yab * yac) + b * ya * yc / (-yab * ybc) + c * ya * yb / (yac * ybc)
+        } else {
+            b - yb * (b - a) / (-yab)
+        };
+
+        let cond1 = (s - b) * (s - (3. * a + b) / 4.) > 0.;
+        let cond2 = bisection_last && (s - b).abs() >= (b - c).abs() / 2.;
+        let cond3 = !bisection_last && (s - b).abs() >= (c - d).abs() / 2.;
+        let cond4 = bisection_last && (b - c).abs() < err;
+        let cond5 = !bisection_last && (c - d).abs() < err;
+
+        if cond1 || cond2 || cond3 || cond4 || cond5 {
+            s = (a + b) / 2.;
+            bisection_last = true;
+        } else {
+            bisection_last = false;
+        }
+
+        if (s - b).abs() < err {
+            return Ok(s)
+        }
+
+        let ys = f(s);
+        d = c;
+        c = b;
+        yc = yb;
+        if ya * ys < 0. {
+            (a, ya, b, yb) = sort_secant(a, ya, s, ys)
+        } else {
+            (a, ya, b, yb) = sort_secant(s, ys, b, yb)
+        }
+
+        iter = iter + 1;
+        if iter >= max_iter {
+            return Err(RootError::NoConvergence);
+        }
+    }
+}
+
+fn sort_secant(a: f64, ya: f64, b: f64, yb: f64) -> (f64, f64, f64, f64) {
+    if ya.abs() > yb.abs() {
+        (a, ya, b, yb)
+    } else {
+        (b, yb, a, ya)
+    }
+}
+
 pub fn get_ldlt_inverse_buffer(size: usize) -> MemBuffer {
     MemBuffer::new(
         temp_mat_scratch::<f64>(size, 1)
@@ -458,6 +528,7 @@ pub fn inverse_ldlt_inplace_nodes(
 #[cfg(test)]
 mod test {
     use faer::{Mat, linalg::solvers::DenseSolveCore};
+    use quantum::assert_approx_eq;
     use rand::{Rng, distr::Uniform, rng};
 
     use crate::utility::{
@@ -465,7 +536,7 @@ mod test {
         inverse_ldlt_inplace,
     };
 
-    use super::{get_lu_inverse_buffer, inverse_lu_inplace};
+    use super::{brent_root_method, get_lu_inverse_buffer, inverse_lu_inplace};
 
     #[test]
     fn test_inverse_inplace() {
@@ -525,5 +596,22 @@ mod test {
         inverse_lblt_inplace(mat.as_ref(), out.as_mut(), &mut buffer);
 
         assert_eq!(out, mat.lblt(faer::Side::Lower).inverse());
+    }
+
+    #[test]
+    fn test_brent_method() {
+        let f = |x| {
+            println!("{x}");
+            f64::tan(x - 0.1)
+        };
+        let value = brent_root_method(
+            [-1.1, f(-1.1)], 
+            [1.2, f(1.2)], 
+            f, 
+            1e-4, 
+            30
+        ).unwrap();
+
+        assert_approx_eq!(value, 0.1, 1e-4)
     }
 }

@@ -12,7 +12,7 @@ use crate::{
     log_derivatives::{LogDerivative, LogDerivativeReference},
     numerovs::StepRule,
     potentials::potential::MatPotential,
-    propagator::{CoupledEquation, Propagator},
+    propagator::{CoupledEquation, Propagator}, utility::brent_root_method,
 };
 
 #[derive(Clone, Debug)]
@@ -241,67 +241,73 @@ where
             .unwrap()
             .clone();
 
-        while upper_bound.energy.to_au() - lower_bound.energy.to_au() > err {
-            if upper_bound.nodes == target_nodes + 1 && lower_bound.nodes == target_nodes {
-                let index = lower_bound
-                    .matching_eigenvalues
-                    .partition_point(|&x| x < 0.);
-                let lower_eigenvalue = lower_bound.matching_eigenvalues.get(index);
+        let index = lower_bound
+            .matching_eigenvalues
+            .partition_point(|&x| x < 0.);
+        let mut lower_eigenvalue = lower_bound.matching_eigenvalues.get(index);
+
+        let index = upper_bound
+            .matching_eigenvalues
+            .partition_point(|&x| x < 0.);
+        let mut upper_eigenvalue = upper_bound.matching_eigenvalues.get(index - 1);
+
+        while upper_bound.nodes != target_nodes + 1 || lower_bound.nodes != target_nodes
+                || lower_eigenvalue.is_none() || upper_eigenvalue.is_none()
+        {
+            let energy_mid = (upper_bound.energy.to_au() + lower_bound.energy.to_au()) / 2.;
+            if upper_bound.energy.to_au() - lower_bound.energy.to_au() < err {
+                return Energy(energy_mid, Au)
+            }
+
+            let mid_mismatch = self.bound_mismatch(Energy(energy_mid, Au));
+
+            let index = (mid_mismatch.nodes - index_offset) as usize;
+
+            if mismatch_node[index].is_none() {
+                mismatch_node[index] = Some(mid_mismatch.clone());
+            }
+
+            if mid_mismatch.nodes > target_nodes {
+                upper_bound = mid_mismatch;
 
                 let index = upper_bound
                     .matching_eigenvalues
                     .partition_point(|&x| x < 0.);
-                let upper_eigenvalue = upper_bound.matching_eigenvalues.get(index - 1);
-
-                let energy_mid = if lower_eigenvalue.is_none() || upper_eigenvalue.is_none() {
-                    (upper_bound.energy.to_au() + lower_bound.energy.to_au()) / 2.
-                } else {
-                    let lower_eigenvalue = *lower_eigenvalue.unwrap();
-                    let upper_eigenvalue = *upper_eigenvalue.unwrap();
-
-                    let s = (upper_bound.energy.to_au() * lower_eigenvalue
-                        - lower_bound.energy.to_au() * upper_eigenvalue)
-                        / (lower_eigenvalue - upper_eigenvalue);
-
-                    let m = (upper_bound.energy.to_au() + lower_bound.energy.to_au()) / 2.;
-
-                    let is_lower_closer = lower_eigenvalue.abs() < upper_eigenvalue.abs();
-
-                    if (is_lower_closer && m > s) || (!is_lower_closer && m < s) {
-                        m
-                    } else {
-                        s
-                    }
-                };
-                let mid_mismatch = self.bound_mismatch(Energy(energy_mid, Au));
-
-                if mid_mismatch.nodes > target_nodes {
-                    upper_bound = mid_mismatch
-                } else {
-                    lower_bound = mid_mismatch
-                }
+                upper_eigenvalue = upper_bound.matching_eigenvalues.get(index - 1);
             } else {
-                let energy_mid = (upper_bound.energy.to_au() + lower_bound.energy.to_au()) / 2.;
-                let mid_mismatch = self.bound_mismatch(Energy(energy_mid, Au));
+                lower_bound = mid_mismatch;
 
-                let index = (mid_mismatch.nodes - index_offset) as usize;
-
-                if mismatch_node[index].is_none() {
-                    mismatch_node[index] = Some(mid_mismatch.clone());
-                }
-
-                if mid_mismatch.nodes > target_nodes {
-                    upper_bound = mid_mismatch
-                } else {
-                    lower_bound = mid_mismatch
-                }
+                let index = lower_bound
+                    .matching_eigenvalues
+                    .partition_point(|&x| x < 0.);
+                lower_eigenvalue = lower_bound.matching_eigenvalues.get(index);
             }
         }
 
-        Energy(
-            (lower_bound.energy.to_au() + upper_bound.energy.to_au()) / 2.,
-            Au,
-        )
+        let result = brent_root_method(
+            [lower_bound.energy.to_au(), *lower_eigenvalue.unwrap()], 
+            [upper_bound.energy.to_au(), *upper_eigenvalue.unwrap()],
+            |x| {
+                let mismatch = self.bound_mismatch(Energy(x, Au));
+
+                let index = mismatch
+                    .matching_eigenvalues
+                    .partition_point(|&x| x < 0.);
+
+                if mismatch.nodes > target_nodes {
+                    mismatch.matching_eigenvalues[index - 1]
+                } else {
+                    mismatch.matching_eigenvalues[index]
+                }
+            }, 
+            err, 
+            30
+        );
+
+        match result {
+            Ok(x) => return Energy(x, Au),
+            Err(err) => panic!("{err:?}"),
+        }
     }
 }
 

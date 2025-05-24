@@ -2,8 +2,6 @@ use clebsch_gordan::half_integer::{HalfI32, HalfU32};
 
 use super::braket::Braket;
 
-pub extern crate clebsch_gordan;
-
 #[derive(Clone, Copy, PartialEq, Default)]
 pub struct Spin {
     pub s: HalfU32,

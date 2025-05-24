@@ -120,7 +120,7 @@ pub struct ScatteringObservables {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ScatteringDependence {
-    pub parameters: Vec<f64>,
+pub struct ScatteringDependence<T> {
+    pub parameters: Vec<T>,
     pub observables: Vec<ScatteringObservables>,
 }
