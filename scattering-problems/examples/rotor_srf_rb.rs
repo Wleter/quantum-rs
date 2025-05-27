@@ -43,6 +43,7 @@ struct Problems;
 
 problems_impl!(Problems, "CaF + Rb Feshbach",
     "potentials" => |_| Self::potentials(),
+    "potential levels convergence" => |_| Self::potential_levels(),
     "single cross section calculation" => |_| Self::single_cross_sections(),
     "cross sections calculation" => |_| Self::cross_sections(),
     "a_length potential scaling" => |_| Self::potential_scaling_propagation(),
@@ -153,6 +154,86 @@ impl Problems {
             "distance\tadiabat", 
             &distances, 
             &data
+        )
+        .unwrap();
+    }
+
+    fn potential_levels() {
+        let n_take = 5;
+        let n_maxes: Vec<u32> = (n_take..100).collect();
+
+        let distances = linspace(6., 10., 40);
+        let levels_minima_triplet: Vec<Vec<f64>> = n_maxes
+            .par_iter()
+            .map(|&n| {
+                let basis_recipe = RotorAtomBasisRecipe {
+                    l_max: n,
+                    n_max: n,
+                    ..Default::default()
+                };
+
+                let [_, pot_array_triplet] = read_extended(25);
+                let interpolated = get_interpolated(&pot_array_triplet);
+
+                let atoms = get_particles(Energy(1e-7, Kelvin), hi32!(0));
+                let problem = RotorAtomProblemBuilder::new(interpolated).build(&atoms, &basis_recipe);
+
+                let mut data: Vec<Vec<f64>> = vec![];
+                let mut potential_value = Mat::zeros(problem.potential.size(), problem.potential.size());
+                for &r in &distances {
+                    problem.potential.value_inplace(r, &mut potential_value);
+
+                    let levels = potential_value.self_adjoint_eigenvalues(faer::Side::Lower).unwrap();
+                    data.push(levels.into_iter().take(n_take as usize + 1).collect());
+                }
+
+                data.into_iter().min_by(|x, y| x[0].partial_cmp(&y[0]).unwrap()).unwrap()
+            })
+            .collect();
+
+        let distances = linspace(5., 9., 40);
+        let levels_minima_singlet: Vec<Vec<f64>> = n_maxes.iter()
+            .map(|&n| {
+                let basis_recipe = RotorAtomBasisRecipe {
+                    l_max: n,
+                    n_max: n,
+                    ..Default::default()
+                };
+
+                let [pot_array_singlet, _] = read_extended(25);
+                let interpolated = get_interpolated(&pot_array_singlet);
+
+                let atoms = get_particles(Energy(1e-7, Kelvin), hi32!(0));
+                let problem = RotorAtomProblemBuilder::new(interpolated).build(&atoms, &basis_recipe);
+
+                let mut data: Vec<Vec<f64>> = vec![];
+                let mut potential_value = Mat::zeros(problem.potential.size(), problem.potential.size());
+                for &r in &distances {
+                    problem.potential.value_inplace(r, &mut potential_value);
+
+                    let levels = potential_value.self_adjoint_eigenvalues(faer::Side::Lower).unwrap();
+                    data.push(levels.into_iter().take(n_take as usize + 1).collect());
+                }
+
+                data.into_iter().min_by(|x, y| x[0].partial_cmp(&y[0]).unwrap()).unwrap()
+            })
+            .collect();
+
+        let n_maxes: Vec<f64> = n_maxes.iter().map(|&x| x as f64).collect();
+
+        save_spectrum(
+            &format!("SrF_Rb_triplet_adiabat_levels_minima"), 
+            "n_maxes\tminima", 
+            &n_maxes, 
+            &levels_minima_triplet
+        )
+        .unwrap();
+
+        save_spectrum(
+            &format!("SrF_Rb_singlet_adiabat_levels_minima"), 
+            "n_maxes\tminima", 
+            &n_maxes, 
+            &levels_minima_singlet
         )
         .unwrap();
     }
