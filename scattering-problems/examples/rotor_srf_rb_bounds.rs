@@ -200,10 +200,7 @@ impl Problems {
 
     fn potential_surface_2d_scaling() {
         let potential_type = PotentialType::Singlet;
-        let scaling_types = vec![
-            ScalingType::Isotropic, 
-            ScalingType::Anisotropic
-        ];
+        let scaling_types = vec![ScalingType::Isotropic, ScalingType::Anisotropic];
 
         let energy_range = (Energy(-12., GHz), Energy(0., GHz));
         let err = Energy(1., MHz);
@@ -280,7 +277,7 @@ impl Problems {
 
     fn magnetic_field_bounds_scaling() {
         let mag_fields = linspace(0., 1000., 500);
-        
+
         let potential_type = PotentialType::Singlet;
         let scaling_type = ScalingType::Full;
         let scalings = linspace(1., 1.02, 50);
@@ -324,20 +321,24 @@ impl Problems {
 
                 let singlet = match potential_type {
                     PotentialType::Singlet => scaling_type.scale(&singlet, *scaling),
-                    PotentialType::Triplet => if let Some(scaling) = &other_scaling {
-                        scaling.scale(&singlet)
-                    } else {
-                        ScalingType::Full.scale(&singlet, 1.)
+                    PotentialType::Triplet => {
+                        if let Some(scaling) = &other_scaling {
+                            scaling.scale(&singlet)
+                        } else {
+                            ScalingType::Full.scale(&singlet, 1.)
+                        }
                     }
                 };
 
                 let triplet = match potential_type {
                     PotentialType::Triplet => scaling_type.scale(&triplet, *scaling),
-                    PotentialType::Singlet => if let Some(scaling) = &other_scaling {
-                        scaling.scale(&triplet)
-                    } else {
-                        ScalingType::Full.scale(&triplet, 1.)
-                    },
+                    PotentialType::Singlet => {
+                        if let Some(scaling) = &other_scaling {
+                            scaling.scale(&triplet)
+                        } else {
+                            ScalingType::Full.scale(&triplet, 1.)
+                        }
+                    }
                 };
 
                 let alkali_problem = AlkaliRotorAtomProblemBuilder::new(triplet, singlet)

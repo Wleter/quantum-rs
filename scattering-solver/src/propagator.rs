@@ -10,6 +10,7 @@ use crate::{
 };
 
 pub trait Repr<T> {}
+impl<T> Repr<T> for T {}
 
 #[derive(Clone, Debug)]
 pub struct Solution<R> {

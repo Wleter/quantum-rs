@@ -22,7 +22,8 @@ use scattering_solver::{
     boundary::{Boundary, Direction},
     log_derivatives::johnson::JohnsonLogDerivative,
     numerovs::{
-        multi_numerov::MultiRNumerov, propagator_watcher::PropagatorLogging, LocalWavelengthStepRule
+        LocalWavelengthStepRule, multi_numerov::MultiRNumerov,
+        propagator_watcher::PropagatorLogging,
     },
     observables::s_matrix::{ScatteringDependence, ScatteringObservables},
     potentials::potential::{Potential, ScaledPotential, SimplePotential},
@@ -33,7 +34,7 @@ use scattering_solver::{
 use rayon::prelude::*;
 mod common;
 
-use common::{srf_rb_functionality::*, PotentialType, ScalingType, Scalings};
+use common::{PotentialType, ScalingType, Scalings, srf_rb_functionality::*};
 
 pub fn main() {
     Problems::select(&mut get_args());
@@ -105,20 +106,24 @@ impl Problems {
 
         let atoms = get_particles(Energy(1e-7, Kelvin), hi32!(0));
         let problem = RotorAtomProblemBuilder::new(interpolated).build(&atoms, &basis_recipe);
-        
+
         let mut data = vec![];
         let mut potential_value = Mat::zeros(problem.potential.size(), problem.potential.size());
         for &r in &distances {
             problem.potential.value_inplace(r, &mut potential_value);
 
-            data.push(potential_value.self_adjoint_eigenvalues(faer::Side::Lower).unwrap());
+            data.push(
+                potential_value
+                    .self_adjoint_eigenvalues(faer::Side::Lower)
+                    .unwrap(),
+            );
         }
 
         save_spectrum(
-            &format!("SrF_Rb_triplet_adiabat_n_{}", basis_recipe.n_max), 
-            "distance\tadiabat", 
-            &distances, 
-            &data
+            &format!("SrF_Rb_triplet_adiabat_n_{}", basis_recipe.n_max),
+            "distance\tadiabat",
+            &distances,
+            &data,
         )
         .unwrap();
 
@@ -140,20 +145,24 @@ impl Problems {
 
         let atoms = get_particles(Energy(1e-7, Kelvin), hi32!(0));
         let problem = RotorAtomProblemBuilder::new(interpolated).build(&atoms, &basis_recipe);
-        
+
         let mut data = vec![];
         let mut potential_value = Mat::zeros(problem.potential.size(), problem.potential.size());
         for &r in &distances {
             problem.potential.value_inplace(r, &mut potential_value);
 
-            data.push(potential_value.self_adjoint_eigenvalues(faer::Side::Lower).unwrap());
+            data.push(
+                potential_value
+                    .self_adjoint_eigenvalues(faer::Side::Lower)
+                    .unwrap(),
+            );
         }
 
         save_spectrum(
-            &format!("SrF_Rb_singlet_adiabat_n_{}_scaled", basis_recipe.n_max), 
-            "distance\tadiabat", 
-            &distances, 
-            &data
+            &format!("SrF_Rb_singlet_adiabat_n_{}_scaled", basis_recipe.n_max),
+            "distance\tadiabat",
+            &distances,
+            &data,
         )
         .unwrap();
     }
@@ -176,23 +185,30 @@ impl Problems {
                 let interpolated = get_interpolated(&pot_array_triplet);
 
                 let atoms = get_particles(Energy(1e-7, Kelvin), hi32!(0));
-                let problem = RotorAtomProblemBuilder::new(interpolated).build(&atoms, &basis_recipe);
+                let problem =
+                    RotorAtomProblemBuilder::new(interpolated).build(&atoms, &basis_recipe);
 
                 let mut data: Vec<Vec<f64>> = vec![];
-                let mut potential_value = Mat::zeros(problem.potential.size(), problem.potential.size());
+                let mut potential_value =
+                    Mat::zeros(problem.potential.size(), problem.potential.size());
                 for &r in &distances {
                     problem.potential.value_inplace(r, &mut potential_value);
 
-                    let levels = potential_value.self_adjoint_eigenvalues(faer::Side::Lower).unwrap();
+                    let levels = potential_value
+                        .self_adjoint_eigenvalues(faer::Side::Lower)
+                        .unwrap();
                     data.push(levels.into_iter().take(n_take as usize + 1).collect());
                 }
 
-                data.into_iter().min_by(|x, y| x[0].partial_cmp(&y[0]).unwrap()).unwrap()
+                data.into_iter()
+                    .min_by(|x, y| x[0].partial_cmp(&y[0]).unwrap())
+                    .unwrap()
             })
             .collect();
 
         let distances = linspace(5., 9., 40);
-        let levels_minima_singlet: Vec<Vec<f64>> = n_maxes.iter()
+        let levels_minima_singlet: Vec<Vec<f64>> = n_maxes
+            .iter()
             .map(|&n| {
                 let basis_recipe = RotorAtomBasisRecipe {
                     l_max: n,
@@ -204,36 +220,42 @@ impl Problems {
                 let interpolated = get_interpolated(&pot_array_singlet);
 
                 let atoms = get_particles(Energy(1e-7, Kelvin), hi32!(0));
-                let problem = RotorAtomProblemBuilder::new(interpolated).build(&atoms, &basis_recipe);
+                let problem =
+                    RotorAtomProblemBuilder::new(interpolated).build(&atoms, &basis_recipe);
 
                 let mut data: Vec<Vec<f64>> = vec![];
-                let mut potential_value = Mat::zeros(problem.potential.size(), problem.potential.size());
+                let mut potential_value =
+                    Mat::zeros(problem.potential.size(), problem.potential.size());
                 for &r in &distances {
                     problem.potential.value_inplace(r, &mut potential_value);
 
-                    let levels = potential_value.self_adjoint_eigenvalues(faer::Side::Lower).unwrap();
+                    let levels = potential_value
+                        .self_adjoint_eigenvalues(faer::Side::Lower)
+                        .unwrap();
                     data.push(levels.into_iter().take(n_take as usize + 1).collect());
                 }
 
-                data.into_iter().min_by(|x, y| x[0].partial_cmp(&y[0]).unwrap()).unwrap()
+                data.into_iter()
+                    .min_by(|x, y| x[0].partial_cmp(&y[0]).unwrap())
+                    .unwrap()
             })
             .collect();
 
         let n_maxes: Vec<f64> = n_maxes.iter().map(|&x| x as f64).collect();
 
         save_spectrum(
-            &format!("SrF_Rb_triplet_adiabat_levels_minima"), 
-            "n_maxes\tminima", 
-            &n_maxes, 
-            &levels_minima_triplet
+            &format!("SrF_Rb_triplet_adiabat_levels_minima"),
+            "n_maxes\tminima",
+            &n_maxes,
+            &levels_minima_triplet,
         )
         .unwrap();
 
         save_spectrum(
-            &format!("SrF_Rb_singlet_adiabat_levels_minima"), 
-            "n_maxes\tminima", 
-            &n_maxes, 
-            &levels_minima_singlet
+            &format!("SrF_Rb_singlet_adiabat_levels_minima"),
+            "n_maxes\tminima",
+            &n_maxes,
+            &levels_minima_singlet,
         )
         .unwrap();
     }
@@ -599,7 +621,7 @@ impl Problems {
 
     fn magnetic_field_scattering_scaling() {
         let mag_fields = linspace(0., 1000., 500);
-        
+
         let potential_type = PotentialType::Singlet;
         let scaling_type = ScalingType::Full;
         let scalings = linspace(1., 1.02, 50);
@@ -640,20 +662,24 @@ impl Problems {
 
                 let singlet = match potential_type {
                     PotentialType::Singlet => scaling_type.scale(&singlet, *scaling),
-                    PotentialType::Triplet => if let Some(scaling) = &other_scaling {
-                        scaling.scale(&singlet)
-                    } else {
-                        ScalingType::Full.scale(&singlet, 1.)
+                    PotentialType::Triplet => {
+                        if let Some(scaling) = &other_scaling {
+                            scaling.scale(&singlet)
+                        } else {
+                            ScalingType::Full.scale(&singlet, 1.)
+                        }
                     }
                 };
 
                 let triplet = match potential_type {
                     PotentialType::Triplet => scaling_type.scale(&triplet, *scaling),
-                    PotentialType::Singlet => if let Some(scaling) = &other_scaling {
-                        scaling.scale(&triplet)
-                    } else {
-                        ScalingType::Full.scale(&triplet, 1.)
-                    },
+                    PotentialType::Singlet => {
+                        if let Some(scaling) = &other_scaling {
+                            scaling.scale(&triplet)
+                        } else {
+                            ScalingType::Full.scale(&triplet, 1.)
+                        }
+                    }
                 };
 
                 let alkali_problem = AlkaliRotorAtomProblemBuilder::new(triplet, singlet)

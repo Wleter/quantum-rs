@@ -118,10 +118,16 @@ pub fn save_spectrum(
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum RootError {
     NoConvergence,
-    RootOutside
+    RootOutside,
 }
 
-pub fn brent_root_method(lower: [f64; 2], upper: [f64; 2], f: impl Fn(f64) -> f64, err: f64, max_iter: u32) -> Result<f64, RootError> {
+pub fn brent_root_method(
+    lower: [f64; 2],
+    upper: [f64; 2],
+    f: impl Fn(f64) -> f64,
+    err: f64,
+    max_iter: u32,
+) -> Result<f64, RootError> {
     let (mut a, mut ya, mut b, mut yb) = sort_secant(lower[0], lower[1], upper[0], upper[1]);
 
     let (mut c, mut yc, mut d) = (a, ya, a);
@@ -157,7 +163,7 @@ pub fn brent_root_method(lower: [f64; 2], upper: [f64; 2], f: impl Fn(f64) -> f6
         }
 
         if (s - b).abs() < err {
-            return Ok(s)
+            return Ok(s);
         }
 
         let ys = f(s);
@@ -604,13 +610,7 @@ mod test {
             println!("{x}");
             f64::tan(x - 0.1)
         };
-        let value = brent_root_method(
-            [-1.1, f(-1.1)], 
-            [1.2, f(1.2)], 
-            f, 
-            1e-4, 
-            30
-        ).unwrap();
+        let value = brent_root_method([-1.1, f(-1.1)], [1.2, f(1.2)], f, 1e-4, 30).unwrap();
 
         assert_approx_eq!(value, 0.1, 1e-4)
     }

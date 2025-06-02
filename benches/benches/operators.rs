@@ -1,11 +1,10 @@
 use diol::prelude::*;
 use quantum::{
-    cast_variant, operator_mel,
+    cast_variant,
+    clebsch_gordan::half_integer::{HalfI32, HalfU32},
+    operator_mel,
     states::{
-        spins::{
-            clebsch_gordan::half_integer::{HalfI32, HalfU32},
-            get_spin_basis, Spin, SpinOperators,
-        },
+        spins::{get_spin_basis, Spin, SpinOperators},
         state::{into_variant, StateBasis},
         States, StatesBasis,
     },

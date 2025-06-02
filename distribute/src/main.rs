@@ -6,13 +6,13 @@ use std::{
 };
 
 use quantum::{
+    clebsch_gordan::{half_integer::HalfI32, hi32, hu32},
     params::{
         Params,
         particle::Particle,
         particle_factory::{RotConst, create_atom},
         particles::Particles,
     },
-    clebsch_gordan::{half_integer::HalfI32, hi32, hu32},
     units::{
         Au, Unit,
         distance_units::{Angstrom, Distance},
