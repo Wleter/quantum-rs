@@ -12,7 +12,7 @@ use quantum::{
         particle_factory::{RotConst, create_atom},
         particles::Particles,
     },
-    states::spins::clebsch_gordan::{half_integer::HalfI32, hi32, hu32},
+    clebsch_gordan::{half_integer::HalfI32, hi32, hu32},
     units::{
         Au, Unit,
         distance_units::{Angstrom, Distance},

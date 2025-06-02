@@ -7,4 +7,4 @@ edition.workspace = true
 timely-hpc = { git = "https://github.com/Wleter/timely-hpc" }
 scattering-problems = { path = "../scattering-problems" }
 scattering-solver = { path = "../scattering-solver" }
-quantum = { path = "../quantum" }
+quantum = { path = "../quantum", features = ["spins"]}
