@@ -1,5 +1,7 @@
 use std::time::Instant;
 
+use argmin::{core::{observers::ObserverMode, CostFunction, Executor, State}, solver::neldermead::NelderMead};
+use argmin_observer_slog::SlogLogger;
 use clebsch_gordan::hi32;
 use hhmmss::Hhmmss;
 
@@ -7,11 +9,10 @@ use hhmmss::Hhmmss;
 use indicatif::{ParallelProgressIterator, ProgressIterator};
 
 use quantum::{
-    problem_selector::{ProblemSelector, get_args},
+    problem_selector::{get_args, ProblemSelector},
     problems_impl,
     units::{
-        MHz,
-        energy_units::{Energy, GHz, Kelvin},
+        energy_units::{Energy, GHz, Kelvin}, Au, MHz
     },
     utility::linspace,
 };
@@ -42,6 +43,7 @@ problems_impl!(Problems, "CaF + Rb Bounds",
     "magnetic field bounds" => |_| Self::magnetic_field_bounds(),
     "potential surface scaling" => |_| Self::potential_surface_scaling(),
     "potential surface 2d scaling" => |_| Self::potential_surface_2d_scaling(),
+    "bound states reconstruction" => |_| Self::bound_states_reconstruction(),
     "magnetic field bounds" => |_| Self::magnetic_field_bounds_scaling(),
 );
 
@@ -275,6 +277,101 @@ impl Problems {
         save_serialize(&filename, &data).unwrap()
     }
 
+    fn bound_states_reconstruction() {
+        let potential_type = PotentialType::Triplet;
+        let reconstructing_bound = vec![
+            (0, Energy(-0.04527481, GHz)),
+            (1, Energy(-0.77267861, GHz)),
+            (2, Energy(-3.09381825, GHz)),
+            (3, Energy(-4.64858425, GHz)),
+            // (4, Energy(-7.68292606, GHz)),
+            // (5, Energy(-8.22490901, GHz)),
+            // (6, Energy(-9.90615487, GHz)),
+        ];
+
+        let scaling_types = vec![ScalingType::Isotropic, ScalingType::Anisotropic];
+
+        let (center_iso, center_aniso) = (1.0071, 0.81428);
+        let (d_iso, d_aniso) = (0.02, 0.02);
+
+        let max_iter = 100;
+
+        let energy_range = (Energy(-6., GHz), Energy(0., GHz));
+        let err = Energy(1., MHz);
+
+        let basis_recipe = RotorAtomBasisRecipe {
+            l_max: 10,
+            n_max: 10,
+            ..Default::default()
+        };
+
+        /////////////////////////////////////////////////////
+
+        let energy_relative = Energy(1e-7, Kelvin);
+
+        let [singlet, triplet] = read_extended(25);
+        let pes = match potential_type {
+            PotentialType::Singlet => singlet,
+            PotentialType::Triplet => triplet,
+        };
+        let pes = get_interpolated(&pes);
+
+        let calculation = |scalings: Scalings| {
+            println!("{scalings:?}");
+            let mut atoms = get_particles(energy_relative, hi32!(0));
+            let pes = scalings.scale(&pes);
+
+            let problem = RotorAtomProblemBuilder::new(pes).build(&atoms, &basis_recipe);
+
+            let asymptotic = problem.asymptotic;
+            atoms.insert(asymptotic);
+            let potential = problem.potential;
+
+            let bound_problem = BoundProblemBuilder::new(&atoms, &potential)
+                .with_propagation(LocalWavelengthStepRule::new(4e-3, 10., 400.), Johnson)
+                .with_range(5., 20., 500.)
+                .build();
+
+            bound_problem
+                .bound_states(energy_range, err)
+                .energies
+                .iter()
+                .map(|x| Energy(*x, Au).to(GHz))
+                .collect()
+        };
+
+        let bound_reconstruction = BoundMinimizationProblem {
+            reconstructing_bound,
+            scaling_types: scaling_types.clone(),
+            calculation,
+        };
+
+        let init_simplex = vec![
+            vec![center_iso + d_iso, center_aniso + d_aniso], 
+            vec![center_iso, center_aniso - d_aniso], 
+            vec![center_iso - d_iso, center_aniso + d_aniso], 
+        ];
+
+        let solver = NelderMead::new(init_simplex);
+
+        let res = Executor::new(bound_reconstruction, solver)
+            .configure(|state| 
+                state.max_iters(max_iter)
+                    .target_cost(0.)
+        )
+        .add_observer(SlogLogger::term(), ObserverMode::Always)
+        .run()
+        .unwrap();
+
+        let best = res.state().get_best_param().unwrap();
+        let chi2 = res.state().get_best_cost();
+
+        println!("{}", res);
+        println!("best scalings: {best:?}");
+        println!("scaling types: {scaling_types:?}");
+        println!("chi2: {chi2}");
+    }
+
     fn magnetic_field_bounds_scaling() {
         let mag_fields = linspace(0., 1000., 500);
 
@@ -375,5 +472,36 @@ impl Problems {
         );
 
         save_serialize(&filename, &data).unwrap()
+    }
+}
+
+struct BoundMinimizationProblem<F: Fn(Scalings) -> Vec<Energy<GHz>>> {
+    reconstructing_bound: Vec<(u32, Energy<GHz>)>,
+    scaling_types: Vec<ScalingType>,
+    calculation: F
+}
+
+impl<F: Fn(Scalings) -> Vec<Energy<GHz>>> CostFunction for BoundMinimizationProblem<F> {
+    type Param = Vec<f64>;
+    type Output = f64;
+
+    fn cost(&self, param: &Self::Param) -> Result<Self::Output, argmin_math::Error> {
+        let scalings = Scalings {
+            scaling_types: self.scaling_types.clone(),
+            scalings: param.clone()
+        };
+
+        let mut energies = (self.calculation)(scalings);
+        energies.sort_by(|a, b| b.value().partial_cmp(&a.value()).unwrap());
+
+        let chi2: f64 = self.reconstructing_bound.iter()
+            .map(|(index, x)| {
+                let bound_state = energies.get(*index as usize).map_or(2. * x.value(), |x| x.value());
+
+                (x.value() / bound_state).log2().powi(2)
+            })
+            .sum();
+
+        Ok(chi2)
     }
 }

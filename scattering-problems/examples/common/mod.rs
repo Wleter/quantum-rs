@@ -4,7 +4,7 @@ use std::fmt::Display;
 pub mod srf_rb_functionality;
 
 #[allow(unused)]
-#[derive(Clone)]
+#[derive(Clone, Debug, Copy)]
 pub enum ScalingType {
     Full,
     Isotropic,
@@ -72,6 +72,7 @@ impl ScalingType {
 }
 
 #[allow(unused)]
+#[derive(Debug)]
 pub struct Scalings {
     pub scaling_types: Vec<ScalingType>,
     pub scalings: Vec<f64>,
