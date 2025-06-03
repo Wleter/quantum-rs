@@ -278,23 +278,36 @@ impl Problems {
     }
 
     fn bound_states_reconstruction() {
-        let potential_type = PotentialType::Triplet;
+        // let potential_type = PotentialType::Triplet;
+        // let reconstructing_bound = vec![
+        //     (0, Energy(-0.04527481, GHz)),
+        //     (1, Energy(-0.77267861, GHz)),
+        //     (2, Energy(-3.09381825, GHz)),
+        //     (3, Energy(-4.64858425, GHz)),
+        //     // (4, Energy(-7.68292606, GHz)),
+        //     // (5, Energy(-8.22490901, GHz)),
+        //     // (6, Energy(-9.90615487, GHz)),
+        // ];
+
+        let potential_type = PotentialType::Singlet;
         let reconstructing_bound = vec![
-            (0, Energy(-0.04527481, GHz)),
-            (1, Energy(-0.77267861, GHz)),
-            (2, Energy(-3.09381825, GHz)),
-            (3, Energy(-4.64858425, GHz)),
-            // (4, Energy(-7.68292606, GHz)),
-            // (5, Energy(-8.22490901, GHz)),
-            // (6, Energy(-9.90615487, GHz)),
+            (0, Energy(-0.13956298, GHz)),
+            // (1, Energy(-1.15303618, GHz)),
+            (2, Energy(-1.56510323, GHz)),
+            // (3, Energy(-3.78752205, GHz)),
+            // (4, Energy(-6.31701475, GHz)),
+            // (5, Energy(-7.95295992, GHz)),
+            // (6, Energy(-10.25863621, GHz)),
+            // (7, Energy(-11.96461586, GHz)),
         ];
+
 
         let scaling_types = vec![ScalingType::Isotropic, ScalingType::Anisotropic];
 
-        let (center_iso, center_aniso) = (1.0071, 0.81428);
-        let (d_iso, d_aniso) = (0.02, 0.02);
+        let (center_iso, center_aniso) = (1.1, 0.8);
+        let (d_iso, d_aniso) = (0.1, 0.1);
 
-        let max_iter = 100;
+        let max_iter = 200;
 
         let energy_range = (Energy(-6., GHz), Energy(0., GHz));
         let err = Energy(1., MHz);
@@ -347,9 +360,9 @@ impl Problems {
         };
 
         let init_simplex = vec![
-            vec![center_iso + d_iso, center_aniso + d_aniso], 
-            vec![center_iso, center_aniso - d_aniso], 
-            vec![center_iso - d_iso, center_aniso + d_aniso], 
+            vec![center_iso, center_aniso], 
+            vec![center_iso + d_iso, center_aniso], 
+            vec![center_iso, center_aniso + d_aniso], 
         ];
 
         let solver = NelderMead::new(init_simplex);
