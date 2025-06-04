@@ -16,7 +16,7 @@ rayon = {workspace = true }
 gauss-quad = "0.2.1"
 spline-interpolation = { git = "https://github.com/Wleter/spline-interpolation.git" }
 
-argmin = "0.10.0"
+argmin = { version = "0.10.0", features = ["rayon"] }
 argmin-math = "0.4"
 argmin-observer-slog = "0.1.0"
 

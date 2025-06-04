@@ -63,13 +63,13 @@ impl Problems {
 
         let scaling_singlet: Option<Scalings> = Some(Scalings {
             scaling_types: vec![ScalingType::Isotropic, ScalingType::Anisotropic],
-            scalings: vec![1.00354, 0.91387755],
+            scalings: vec![1.0036204085226377, 0.9129498323277407],
         });
         let scaling_triplet: Option<Scalings> = Some(Scalings {
             scaling_types: vec![ScalingType::Isotropic, ScalingType::Anisotropic],
-            scalings: vec![1.0071, 0.8142857],
+            scalings: vec![1.0069487290287622, 0.8152177020075073],
         });
-        let suffix = "scaled_v0";
+        let suffix = "scaled_v1";
 
         ///////////////////////////////////
 
@@ -292,22 +292,21 @@ impl Problems {
         let potential_type = PotentialType::Singlet;
         let reconstructing_bound = vec![
             (0, Energy(-0.13956298, GHz)),
-            // (1, Energy(-1.15303618, GHz)),
+            (1, Energy(-1.15303618, GHz)),
             (2, Energy(-1.56510323, GHz)),
-            // (3, Energy(-3.78752205, GHz)),
+            (3, Energy(-3.78752205, GHz)),
             // (4, Energy(-6.31701475, GHz)),
             // (5, Energy(-7.95295992, GHz)),
             // (6, Energy(-10.25863621, GHz)),
             // (7, Energy(-11.96461586, GHz)),
         ];
 
-
         let scaling_types = vec![ScalingType::Isotropic, ScalingType::Anisotropic];
 
         let (center_iso, center_aniso) = (1.1, 0.8);
         let (d_iso, d_aniso) = (0.1, 0.1);
 
-        let max_iter = 200;
+        let max_iter = 500;
 
         let energy_range = (Energy(-6., GHz), Energy(0., GHz));
         let err = Energy(1., MHz);
@@ -330,7 +329,7 @@ impl Problems {
         let pes = get_interpolated(&pes);
 
         let calculation = |scalings: Scalings| {
-            println!("{scalings:?}");
+            // println!("{scalings:?}");
             let mut atoms = get_particles(energy_relative, hi32!(0));
             let pes = scalings.scale(&pes);
 
@@ -364,15 +363,25 @@ impl Problems {
             vec![center_iso + d_iso, center_aniso], 
             vec![center_iso, center_aniso + d_aniso], 
         ];
-
         let solver = NelderMead::new(init_simplex);
+
+        // let solver = ParticleSwarm::new(
+        //     (
+        //         vec![center_iso - d_iso, center_aniso - d_aniso],
+        //         vec![center_iso + d_iso, center_aniso + d_aniso]
+        //     ), 
+        //     32
+        // );
 
         let res = Executor::new(bound_reconstruction, solver)
             .configure(|state| 
                 state.max_iters(max_iter)
                     .target_cost(0.)
         )
-        .add_observer(SlogLogger::term(), ObserverMode::Always)
+        .add_observer(
+            SlogLogger::term(), 
+            ObserverMode::Always
+        )
         .run()
         .unwrap();
 
@@ -516,5 +525,9 @@ impl<F: Fn(Scalings) -> Vec<Energy<GHz>>> CostFunction for BoundMinimizationProb
             .sum();
 
         Ok(chi2)
+    }
+
+    fn parallelize(&self) -> bool {
+        true
     }
 }

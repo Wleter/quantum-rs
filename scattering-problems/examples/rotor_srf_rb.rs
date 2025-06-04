@@ -554,13 +554,13 @@ impl Problems {
 
         let scaling_singlet: Option<Scalings> = Some(Scalings {
             scaling_types: vec![ScalingType::Isotropic, ScalingType::Anisotropic],
-            scalings: vec![1.00354, 0.91387755],
+            scalings: vec![1.0036204085226377, 0.9129498323277407],
         });
         let scaling_triplet: Option<Scalings> = Some(Scalings {
             scaling_types: vec![ScalingType::Isotropic, ScalingType::Anisotropic],
-            scalings: vec![1.0071, 0.8142857],
+            scalings: vec![1.0069487290287622, 0.8152177020075073],
         });
-        let suffix = "scaled_v0";
+        let suffix = "scaled_v1";
 
         ///////////////////////////////////
 
