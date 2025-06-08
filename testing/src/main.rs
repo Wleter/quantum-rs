@@ -1,32 +1,47 @@
-use argmin::{core::{CostFunction, Error, Executor, State}, solver::{neldermead::NelderMead, particleswarm::ParticleSwarm, simulatedannealing::SimulatedAnnealing}};
+use std::io::{self, BufRead};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use std::thread;
+use std::time::Duration;
 
-struct MyProblem {}
-
-impl CostFunction for MyProblem {
-    type Param = Vec<f64>;
-    type Output = f64;
-
-    fn cost(&self, p: &Self::Param) -> Result<Self::Output, Error> {
-        Ok((p[0] - 4.0).abs().sqrt() + (p[1] - 10.).abs().sqrt())
-    }
-}
+use rayon::prelude::*;
 
 fn main() {
-    let cost = MyProblem {};
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let c = cancelled.clone();
 
-    let solver = NelderMead::new(vec![vec![-50., -100.], vec![50., -100.], vec![0., 100.]])
-        .with_sd_tolerance(1e-5).unwrap();
+    thread::spawn(move || {
+        let stdin = io::stdin();
+        for line in stdin.lock().lines() {
+            match line {
+                Ok(input) if input.trim() == "stop" => {
+                    c.store(true, Ordering::SeqCst);
+                    break;
+                }
+                _ => {}
+            }
+        }
+    });
 
-    let res = Executor::new(cost, solver)
-        .configure(|state| 
-            state.max_iters(100)
-                .target_cost(0.)
-    )
-    .run()
-    .unwrap();
+    let data: Vec<f64> = (0..300).map(|x| x as f64).collect();
 
-    println!("{}", res);
-    let best = res.state().get_best_param().unwrap();
-    println!("{:?}", best);
+    let results: Vec<f64> = data
+        .par_iter()
+        .filter_map(|&x| {
+            if cancelled.load(Ordering::SeqCst) {
+                None
+            } else {
+                // Simulate work
+                println!("started {x}");
+                thread::sleep(Duration::from_secs(1));
+                Some(2. * x)
+            }
+        })
+        .collect();
 
+    println!("{}", results.len());
+    println!("{}", data.len());
+    println!("{}", data[0..results.len()].len())
 }
