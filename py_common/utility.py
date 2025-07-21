@@ -24,6 +24,7 @@ class AxesArray:
     
     def __iter__(self):
         return AxesIter(self, 0)
+
 @dataclass
 class AxesIter:
     axes: AxesArray
@@ -47,8 +48,8 @@ class AxesIter:
                 self.current += 1
                 return self.axes[i, j]
 
-def plot_many(nrows: int, ncols: int, shape = None) -> tuple[Figure, AxesArray]:
-    fig, axes = plt.subplots(nrows, ncols, figsize=shape)
+def plot_many(nrows: int, ncols: int, shape = None, sharex = False, sharey = False) -> tuple[Figure, AxesArray]:
+    fig, axes = plt.subplots(nrows, ncols, figsize=shape, sharex = sharex, sharey = sharey)
 
     axes: AxesArray = AxesArray(axes, nrows, ncols)
     if ncols == 1 or nrows == 1:

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     boundary::{Boundary, Direction},
-    log_derivatives::{LogDerivative, LogDerivativeReference},
+    log_derivatives::{LogDerivative, LogDerivativeReference, WaveLogDerivStorage},
     numerovs::StepRule,
     potentials::potential::MatPotential,
     propagator::{CoupledEquation, Propagator},
@@ -211,6 +211,47 @@ where
         }
     }
 
+    pub fn bound_waves(&self, bounds: &BoundStates) -> impl Iterator<Item = WaveFunction> {
+        bounds.energies.iter()
+            .map(move |&e| {
+                let mut particles = self.particles.clone();
+                particles.insert(Energy(e, Au));
+
+                let eq = CoupledEquation::from_particles(self.potential, &particles);
+                let boundary = Boundary::new_exponential_vanishing(self.r_max, &eq);
+
+                let mut propagator_in = LogDerivative::<_, Prop>::new(eq.clone(), boundary, self.step_rule.clone());
+                propagator_in.with_storage(WaveLogDerivStorage::new(true));
+                let solution_in = propagator_in.propagate_to(self.r_match);
+
+                let boundary = Boundary::new_multi_vanishing(self.r_min, Direction::Outwards, self.potential.size());
+                let mut propagator_out = LogDerivative::<_, Prop>::new(eq, boundary, self.step_rule.clone());
+                propagator_out.with_storage(WaveLogDerivStorage::new(true));
+                let solution_out = propagator_out.propagate_to(self.r_match);
+
+                let matching_matrix = &solution_out.sol.0 - &solution_in.sol.0;
+
+                let eigen = matching_matrix
+                    .self_adjoint_eigen(faer::Side::Lower)
+                    .expect("could not diagonalize matching matrix");
+
+                let index = eigen.S().column_vector().iter()
+                    .enumerate()
+                    .min_by(|x, y| x.1.abs().partial_cmp(&y.1.abs()).unwrap())
+                    .unwrap().0;
+
+                let init_wave = eigen.U().col(index);
+
+                let wave_in = propagator_in.storage().as_ref().unwrap().reconstruct(init_wave);
+                let mut wave_out = propagator_out.storage().as_ref().unwrap().reconstruct(init_wave);
+
+                wave_out.reverse();
+                wave_out.extend(wave_in);
+
+                wave_out
+            })
+    }
+
     fn search_state(
         &self,
         index_offset: u64,
@@ -329,6 +370,52 @@ impl BoundStates {
     pub fn with_energy_units(mut self, unit: impl EnergyUnit) -> Self {
         for energy in &mut self.energies {
             *energy = Energy(*energy, Au).to(unit).value()
+        }
+
+        self
+    }
+}
+
+#[derive(Serialize)]
+pub struct WaveFunctions {
+    pub bounds: BoundStates,
+    pub waves: Vec<WaveFunction>
+}
+
+#[derive(Serialize)]
+pub struct WaveFunction {
+    pub distances: Vec<f64>,
+    pub values: Vec<Vec<f64>>,
+}
+
+impl WaveFunction {
+    pub fn reverse(&mut self) {
+        self.distances.reverse();
+        self.values.reverse();
+    }
+
+    pub fn extend(&mut self, wave: WaveFunction) {
+        self.distances.extend(wave.distances);
+        self.values.extend(wave.values);
+    }
+
+    pub fn normalize(mut self) -> Self {
+        let normalization: f64 = self.distances.windows(2)
+            .zip(self.values.windows(2))
+            .map(|(x, f)| unsafe {
+                let f1 = f.get_unchecked(1);
+                let f0 = f.get_unchecked(0);
+                let f1_norm = f1.iter().fold(0., |acc, x| acc + x * x);
+                let f0_norm = f0.iter().fold(0., |acc, x| acc + x * x);
+
+                0.5 * (x.get_unchecked(1) - x.get_unchecked(0)) * (f1_norm + f0_norm)
+            })
+            .sum();
+        
+        for v in &mut self.values {
+            for p in v {
+                *p /= normalization.sqrt()
+            }
         }
 
         self

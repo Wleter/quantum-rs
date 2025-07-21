@@ -2,6 +2,7 @@ use scattering_solver::potentials::potential::{ScaledPotential, SimplePotential}
 use std::fmt::Display;
 
 pub mod srf_rb_functionality;
+pub mod potential_cutting;
 
 #[allow(unused)]
 #[derive(Clone, Debug, Copy)]
@@ -72,7 +73,7 @@ impl ScalingType {
 }
 
 #[allow(unused)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Default)]
 pub struct Scalings {
     pub scaling_types: Vec<ScalingType>,
     pub scalings: Vec<f64>,
@@ -104,6 +105,7 @@ impl Scalings {
 }
 
 #[allow(unused)]
+#[derive(Clone, Copy)]
 pub enum PotentialType {
     Singlet,
     Triplet,

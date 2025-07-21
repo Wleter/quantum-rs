@@ -4,11 +4,7 @@ pub mod johnson;
 use std::marker::PhantomData;
 
 use faer::{
-    Accum, Mat, MatMut, MatRef, Par,
-    dyn_stack::MemBuffer,
-    linalg::{matmul::matmul, solvers::DenseSolveCore},
-    prelude::c64,
-    unzip, zip,
+    dyn_stack::MemBuffer, linalg::{matmul::matmul, solvers::DenseSolveCore}, prelude::c64, unzip, zip, Accum, ColRef, Mat, MatMut, MatRef, Par
 };
 use quantum::utility::{
     ratio_riccati_i_deriv, ratio_riccati_k_deriv, riccati_j_deriv, riccati_n_deriv,
@@ -16,10 +12,10 @@ use quantum::utility::{
 
 use crate::{
     boundary::{Boundary, Direction},
-    numerovs::{StepRule, propagator_watcher::PropagatorWatcher},
-    observables::s_matrix::SMatrix,
+    numerovs::{propagator_watcher::PropagatorWatcher, StepRule},
+    observables::{bound_states::WaveFunction, s_matrix::SMatrix},
     propagator::{Equation, Propagator, Repr, Solution},
-    utility::{get_ldlt_inverse_buffer, inverse_ldlt_inplace_nodes},
+    utility::{get_ldlt_inverse_buffer, inverse_ldlt_inplace, inverse_ldlt_inplace_nodes},
 };
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -77,6 +73,15 @@ where
             step_rule,
         }
     }
+
+    pub fn with_storage(&mut self, storage: WaveLogDerivStorage) {
+        self.step.wave_storage = Some(storage)
+    }
+
+    pub fn storage(&mut self) -> &Option<WaveLogDerivStorage> {
+        &self.step.wave_storage
+    }
+
 
     pub fn s_matrix(&self) -> SMatrix {
         self.solution.s_matrix(&self.equation)
@@ -143,16 +148,19 @@ where
     }
 }
 
+/// https://doi.org/10.1016/0010-4655(94)90200-3
 struct LogDerivativeStep<R: LogDerivativeReference> {
     buffer1: Mat<f64>,
     buffer2: Mat<f64>,
     buffer3: Mat<f64>,
-
-    w_ref: Mat<f64>,
-
     inverse_buffer: MemBuffer,
 
+    z_matrix: Mat<f64>,
+    w_ref: Mat<f64>,
+
     reference: PhantomData<R>,
+
+    wave_storage: Option<WaveLogDerivStorage>
 }
 
 impl<R: LogDerivativeReference> LogDerivativeStep<R> {
@@ -161,9 +169,13 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
             buffer1: Mat::zeros(size, size),
             buffer2: Mat::zeros(size, size),
             buffer3: Mat::zeros(size, size),
-            w_ref: Mat::zeros(size, size),
             inverse_buffer: get_ldlt_inverse_buffer(size),
+
+            z_matrix: Mat::zeros(size, size),
+            w_ref: Mat::zeros(size, size),
+
             reference: PhantomData,
+            wave_storage: None,
         }
     }
 
@@ -171,40 +183,15 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
     fn perform_step(&mut self, sol: &mut Solution<LogDeriv<Mat<f64>>>, eq: &Equation<Mat<f64>>) {
         let h = sol.dr / 2.0;
 
-        eq.w_matrix(sol.r + h, &mut self.buffer3);
-        R::w_ref(self.buffer3.as_ref(), self.w_ref.as_mut());
+        eq.w_matrix(sol.r + h, &mut self.buffer1);
+        R::w_ref(self.buffer1.as_ref(), self.w_ref.as_mut());
 
-        eq.w_matrix(sol.r, &mut self.buffer1);
-
-        R::imbedding1(h, self.w_ref.as_ref(), self.buffer2.as_mut());
-
-        zip!(self.buffer2.as_mut(), self.buffer1.as_ref(), self.w_ref.as_ref())
-        .for_each(|unzip!(y1, w_a, w_ref)| {
-            *y1 += h / 3. * (w_ref - w_a) // sign change because of different convention
-        });
-        // buffer2 is a y_1(a, c)
-
-        zip!(self.buffer2.as_mut(), sol.sol.0.as_ref())
-        .for_each(|unzip!(y1, sol)| {
-            *y1 += sol
+        zip!(self.buffer1.as_mut(), eq.unit.as_ref(), self.w_ref.as_ref())
+        .for_each(|unzip!(b, u, w_ref)| {
+            *b = u - h * h / 6. * (w_ref - *b)  // sign change because of different convention
         });
 
-        let mut nodes = inverse_ldlt_inplace_nodes(self.buffer2.as_ref(), sol.sol.0.as_mut(), &mut self.inverse_buffer);
-        // sol is now (Y(a) + y_1(a, c))^-1
-
-        R::imbedding3(h, self.w_ref.as_ref(), self.buffer1.as_mut());
-        matmul(self.buffer2.as_mut(), Accum::Replace, self.buffer1.as_ref(), sol.sol.0.as_ref(), 1.0, Par::Seq);
-        R::imbedding2(h, self.w_ref.as_ref(), self.buffer1.as_mut());
-        matmul(sol.sol.0.as_mut(), Accum::Replace, self.buffer2.as_ref(), self.buffer1.as_ref(), 1.0, Par::Seq);
-        // sol is a second term in y_3 (Y(a) + y_1(a, c))^-1 y_2
-
-        zip!(self.buffer3.as_mut(), eq.unit.as_ref(), self.w_ref.as_ref())
-        .for_each(|unzip!(b, u, w)| {
-            *b = u - h * h / 6. * (w - *b) // different sign since W(c) is -W(c) in our notation
-        });
-
-        let k_count = inverse_ldlt_inplace_nodes(self.buffer3.as_ref(), self.buffer2.as_mut(), &mut self.inverse_buffer);
-        // same as in molscat mdprop.f file
+        inverse_ldlt_inplace(self.buffer1.as_ref(), self.buffer2.as_mut(), &mut self.inverse_buffer);
 
         zip!(self.buffer2.as_mut(), eq.unit.as_ref())
         .for_each(|unzip!(b, u)| {
@@ -216,62 +203,104 @@ impl<R: LogDerivativeReference> LogDerivativeStep<R> {
 
         zip!(self.buffer1.as_mut(), self.buffer2.as_ref())
         .for_each(|unzip!(y4, w_tilde)| {
-            *y4 += 2. * h / 3. * w_tilde
+            *y4 = *y4 + 2. * h / 3. * w_tilde
         });
         // buffer1 is a y_4(a, c)
 
-        zip!(sol.sol.0.as_mut(), self.buffer1.as_ref())
-        .for_each(|unzip!(y, y4)| {
-            *y = y4 - *y
+        R::imbedding1(h, self.w_ref.as_ref(), self.buffer3.as_mut());
+
+        zip!(self.buffer3.as_mut(), self.buffer2.as_ref())
+        .for_each(|unzip!(y4, w_tilde)| {
+            *y4 = *y4 + 2. * h / 3. * w_tilde
         });
+        // buffer3 is a y_1(c, b)
 
-        // sol is Y(c) /////////////////////////////////////
-
-        R::imbedding1(h, self.w_ref.as_ref(), self.buffer1.as_mut());
-
-        zip!(self.buffer1.as_mut(), self.buffer2.as_ref())
-        .for_each(|unzip!(y1, w_tilde)| {
-            *y1 += 2. * h / 3. * w_tilde
+        zip!(self.buffer1.as_mut(), self.buffer3.as_ref())
+        .for_each(|unzip!(y4, y1)| {
+            *y4 = *y4 + y1
         });
-        // buffer1 is a y_1(c, b)
+        inverse_ldlt_inplace(self.buffer1.as_ref(), self.z_matrix.as_mut(), &mut self.inverse_buffer);
+        // z_matrix is a z(a, b, c)
 
-        zip!(self.buffer1.as_mut(), sol.sol.0.as_ref())
+        R::imbedding2(h, self.w_ref.as_ref(), self.buffer1.as_mut());
+        matmul(self.buffer3.as_mut(), Accum::Replace, self.buffer1.as_ref(), self.z_matrix.as_ref(), 1.0, Par::Seq);
+        R::imbedding3(h, self.w_ref.as_ref(), self.buffer1.as_mut());
+        matmul(self.buffer2.as_mut(), Accum::Replace, self.buffer3.as_ref(), self.buffer1.as_ref(), 1.0, Par::Seq);
+        // buffer2 is a second term in y_1(a, b)
+        
+        eq.w_matrix(sol.r, &mut self.buffer1);
+        R::imbedding1(h, self.w_ref.as_ref(), self.buffer3.as_mut());
+
+        zip!(self.buffer3.as_mut(), self.buffer1.as_ref(), self.w_ref.as_ref())
+        .for_each(|unzip!(y1, w_a, w_ref)| {
+            *y1 = *y1 + h / 3. * (w_ref - w_a) // sign change because of different convention
+        });
+        // buffer3 is a y_1(a, c)
+
+        zip!(self.buffer3.as_mut(), self.buffer2.as_ref())
+        .for_each(|unzip!(y1, b)| {
+            *y1 = *y1 - b
+        });
+        // buffer3 is a y_1(a, b)
+        
+        zip!(self.buffer3.as_mut(), sol.sol.0.as_ref())
         .for_each(|unzip!(y1, sol)| {
-            *y1 += sol
+            *y1 = sol + *y1
         });
-        nodes += inverse_ldlt_inplace_nodes(self.buffer1.as_ref(), sol.sol.0.as_mut(), &mut self.inverse_buffer);
+        
+        let mut nodes = inverse_ldlt_inplace_nodes(self.buffer3.as_ref(), sol.sol.0.as_mut(), &mut self.inverse_buffer);
+        // sol is now (y + y1(a, b))^-1
 
-        // sol is now (Y(c) + y_1(c, b))^-1
+        R::imbedding2(h, self.w_ref.as_ref(), self.buffer1.as_mut());
+        matmul(self.buffer3.as_mut(), Accum::Replace, self.buffer1.as_ref(), self.z_matrix.as_ref(), 1.0, Par::Seq);
+        matmul(self.buffer2.as_mut(), Accum::Replace, self.buffer3.as_ref(), self.buffer1.as_ref(), 1.0, Par::Seq);
+
+        matmul(self.buffer1.as_mut(), Accum::Replace, sol.sol.0.as_ref(), self.buffer2.as_ref(), 1.0, Par::Seq);
+        // buffer1 is now (y + y1(a, b))^-1 * y_2(a, b)
+
+        if let Some(storage) = &mut self.wave_storage {
+            storage.push(sol.r, self.buffer1.as_ref());
+        }
+
+        R::imbedding3(h, self.w_ref.as_ref(), self.buffer2.as_mut());
+        matmul(sol.sol.0.as_mut(), Accum::Replace, self.buffer2.as_ref(), self.z_matrix.as_ref(), 1.0, Par::Seq);
+        matmul(self.buffer3.as_mut(), Accum::Replace, sol.sol.0.as_ref(), self.buffer2.as_ref(), 1.0, Par::Seq);
+        
+        matmul(sol.sol.0.as_mut(), Accum::Replace, self.buffer3.as_ref(), self.buffer1.as_ref(), 1.0, Par::Seq);
+        // sol is now y_3(a, b) * (y + y1(a, b))^-1 * y_2(a, b)
 
         R::imbedding3(h, self.w_ref.as_ref(), self.buffer1.as_mut());
-        matmul(self.buffer2.as_mut(), Accum::Replace, self.buffer1.as_ref(), sol.sol.0.as_ref(), 1.0, Par::Seq);
+        matmul(self.buffer3.as_mut(), Accum::Replace, self.buffer1.as_ref(), self.z_matrix.as_ref(), 1.0, Par::Seq);
         R::imbedding2(h, self.w_ref.as_ref(), self.buffer1.as_mut());
-        matmul(sol.sol.0.as_mut(), Accum::Replace, self.buffer2.as_ref(), self.buffer1.as_ref(), 1.0, Par::Seq);
-        // sol is a second term in y_3 (Y(c) + y_1(c, b))^-1 y_2
-
+        matmul(self.buffer2.as_mut(), Accum::Replace, self.buffer3.as_ref(), self.buffer1.as_ref(), 1.0, Par::Seq);
+        // buffer2 is a second term in y_4(a, b)
+        
         eq.w_matrix(sol.r + sol.dr, &mut self.buffer1);
+        R::imbedding4(h, self.w_ref.as_ref(), self.buffer3.as_mut());
 
-        R::imbedding4(h, self.w_ref.as_ref(), self.buffer2.as_mut());
-
-        zip!(self.buffer2.as_mut(), self.buffer1.as_ref(), self.w_ref.as_ref())
-        .for_each(|unzip!(y4, w_b, w_ref)| {
-            *y4 += h / 3. * (w_ref - w_b) // sign change because of different convention
+        zip!(self.buffer3.as_mut(), self.buffer1.as_ref(), self.w_ref.as_ref())
+        .for_each(|unzip!(y4, w_a, w_ref)| {
+            *y4 = *y4 + h / 3. * (w_ref - w_a) // sign change because of different convention
         });
-        // buffer2 is a y_4(c, b)
+        // buffer3 is a y_4(c, b)
 
-        zip!(sol.sol.0.as_mut(), self.buffer2.as_ref())
+        zip!(self.buffer3.as_mut(), self.buffer2.as_ref())
+        .for_each(|unzip!(y4, b)| {
+            *y4 = *y4 - b
+        });
+        // buffer3 is a y_4(a, b)
+
+        zip!(sol.sol.0.as_mut(), self.buffer3.as_ref())
         .for_each(|unzip!(y, y4)| {
             *y = y4 - *y
         });
-        // sol is Y(c) 
+        // sol is y(b)
 
         let dim = eq.potential.size();
         if sol.dr < 0. {
-            nodes = 2 * dim as u64 - nodes;
+            nodes = dim as u64 - nodes
         }
-
-        assert!(nodes >= k_count, "Node counting is wrong k-count {} nodes {}", k_count, sol.nodes);
-        sol.nodes += nodes - k_count;
+        sol.nodes += nodes;
 
         sol.r += sol.dr;
     }
@@ -360,5 +389,55 @@ impl Solution<LogDeriv<Mat<f64>>> {
             .0;
 
         SMatrix::new(s_matrix, momenta[eq.asymptotic.entrance], entrance)
+    }
+}
+
+pub struct WaveLogDerivStorage {
+    distances: Vec<f64>,
+    connections: Vec<Mat<f64>>,
+    last_first: bool,
+}
+
+impl WaveLogDerivStorage {
+    pub fn new(last_first: bool) -> Self {
+        Self {
+            distances: Vec::new(),
+            connections: Vec::new(),
+            last_first,
+        }
+    }
+
+    pub fn push(&mut self, r: f64, connection: MatRef<f64>) {
+        let byte_size = self.connections.len() * 8 * connection.nrows() * connection.ncols();
+
+        if byte_size > (8 * 1024 * 1024 * 1024) {
+            panic!("Size overload todo! disk saving")
+        }
+
+        self.distances.push(r);
+        self.connections.push(connection.cloned());
+    }
+
+    pub fn reconstruct(&self, wave_init: ColRef<f64>) -> WaveFunction {
+        let mut values = Vec::with_capacity(self.connections.len());
+        let mut wave_recent = wave_init.cloned();
+
+        let distances = if self.last_first {
+            for c in self.connections.iter().rev() {
+                wave_recent = c * &wave_recent;
+                values.push(wave_recent.iter().copied().collect())
+            }
+
+            self.distances.iter().rev().copied().collect()
+        } else {
+            for c in self.connections.iter() {
+                wave_recent = c * &wave_recent;
+                values.push(wave_recent.iter().copied().collect())
+            }
+
+            self.distances.clone()
+        };
+        
+        WaveFunction { distances, values }
     }
 }

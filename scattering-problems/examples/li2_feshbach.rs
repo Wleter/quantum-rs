@@ -21,8 +21,8 @@ use scattering_problems::{
 };
 use scattering_solver::{
     boundary::{Boundary, Direction},
-    log_derivatives::johnson::Johnson,
-    numerovs::{LocalWavelengthStepRule, multi_numerov::MultiRNumerov},
+    log_derivatives::johnson::{Johnson, JohnsonLogDerivative},
+    numerovs::{multi_numerov::MultiRNumerov, LocalWavelengthStepRule},
     observables::bound_states::{BoundProblemBuilder, BoundStates, BoundStatesDependence},
     potentials::{
         composite_potential::Composite,
@@ -128,7 +128,7 @@ impl Problems {
                     Boundary::new_multi_vanishing(4., Direction::Outwards, potential.size());
                 let step_rule = LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.);
                 let eq = CoupledEquation::from_particles(potential, &li2);
-                let mut numerov = MultiRNumerov::new(eq, boundary, step_rule);
+                let mut numerov = JohnsonLogDerivative::new(eq, boundary, step_rule);
 
                 numerov.propagate_to(1.5e3);
                 numerov.s_matrix().get_scattering_length()

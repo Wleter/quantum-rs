@@ -2186,6 +2186,7 @@ dependencies = [
  "num",
  "quantum",
  "rayon",
+ "regex",
  "scattering-solver",
  "spline-interpolation",
 ]

@@ -13,12 +13,17 @@ hhmmss = { workspace = true }
 indicatif = { workspace = true }
 num = { workspace = true }
 rayon = {workspace = true }
+
+# needed for examples todo! change examples to be its own crate i guess 
+
 gauss-quad = "0.2.1"
 spline-interpolation = { git = "https://github.com/Wleter/spline-interpolation.git" }
 
 argmin = { version = "0.10.0", features = ["rayon"] }
 argmin-math = "0.4"
 argmin-observer-slog = "0.1.0"
+
+regex = "1.11.1"
 
 [dev-dependencies]
 approx = "0.5.1"
