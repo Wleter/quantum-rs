@@ -2188,6 +2188,8 @@ dependencies = [
  "rayon",
  "regex",
  "scattering-solver",
+ "serde",
+ "serde_json",
  "spline-interpolation",
 ]
 

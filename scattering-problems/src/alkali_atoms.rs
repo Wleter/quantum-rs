@@ -13,7 +13,7 @@ use scattering_solver::{
     utility::AngMomentum,
 };
 
-use crate::{IndexBasisDescription, ScatteringProblem};
+use crate::{FieldScatteringProblem, IndexBasisDescription, ScatteringProblem};
 
 #[derive(Clone)]
 pub struct AlkaliAtomsProblemBuilder<P, V>
@@ -87,5 +87,25 @@ where
             potential: full_potential,
             basis_description: IndexBasisDescription,
         }
+    }
+}
+
+// very temporary fix soon todo!
+impl<P, V> FieldScatteringProblem<IndexBasisDescription> for AlkaliAtomsProblemBuilder<P, V> 
+where
+    P: SimplePotential + Clone,
+    V: SimplePotential + Clone,
+{
+    fn levels(&self, field: f64, _l: Option<u32>) -> (Vec<f64>, faer::Mat<f64>) {
+        let hifi = self.clone().hifi_problem.build();
+        let hifi_states = hifi.states_at(field);
+
+        let levels = hifi_states.0.iter().map(|x| x.to_au()).collect();
+
+        (levels, hifi_states.1)
+    }
+
+    fn scattering_for(&self, field: f64) -> ScatteringProblem<impl MatPotential, IndexBasisDescription> {
+        self.clone().build(field)
     }
 }

@@ -13,6 +13,7 @@ pub mod rkhs_interpolation;
 pub mod rotor_atom;
 pub mod uncoupled_alkali_rotor_atom;
 pub mod utility;
+pub mod field_bound_states;
 
 pub extern crate abm;
 pub extern crate scattering_solver;

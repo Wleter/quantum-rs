@@ -8,16 +8,15 @@ use indicatif::{ParallelProgressIterator, ProgressIterator};
 use num::complex::Complex64;
 use quantum::{
     params::{particle_factory, particles::Particles},
-    problem_selector::{ProblemSelector, get_args},
+    problem_selector::{get_args, ProblemSelector},
     problems_impl,
     units::{
-        GHz,
-        energy_units::{Energy, Kelvin, MHz},
+        energy_units::{Energy, Kelvin, MHz}, Au, GHz
     },
     utility::linspace,
 };
 use scattering_problems::{
-    IndexBasisDescription, ScatteringProblem, alkali_atoms::AlkaliAtomsProblemBuilder,
+    alkali_atoms::AlkaliAtomsProblemBuilder, field_bound_states::FieldProblemBuilder, IndexBasisDescription, ScatteringProblem
 };
 use scattering_solver::{
     boundary::{Boundary, Direction},
@@ -44,7 +43,8 @@ pub struct Problems;
 problems_impl!(Problems, "Li2 Feshbach",
     "potential values" => |_| Self::potential_values(),
     "feshbach resonance" => |_| Self::feshbach(),
-    "bound states" => |_| Self::bound_states()
+    "bound states" => |_| Self::bound_states(),
+    "field bound states" => |_| Self::field_bound_states(),
 );
 
 impl Problems {
@@ -191,5 +191,43 @@ impl Problems {
         };
 
         save_serialize("li2_bound_states", &bound_dependence).unwrap()
+    }
+
+    fn field_bound_states() {
+        let projection = hi32!(0);
+        let field_range = (0., 1200.);
+        let err = 1e-2;
+
+        ///////////////////////////////////
+
+        let first = HifiProblemBuilder::new(hu32!(1 / 2), hu32!(1))
+            .with_hyperfine_coupling(Energy(228.2 / 1.5, MHz).to_au());
+
+        let hifi_problem = DoubleHifiProblemBuilder::new_homo(first, Symmetry::Fermionic)
+            .with_projection(projection);
+
+        let mut li2_singlet = Composite::new(Dispersion::new(-1381., -6));
+        li2_singlet.add_potential(Dispersion::new(1.112e7, -12));
+
+        let mut li2_triplet = Composite::new(Dispersion::new(-1381., -6));
+        li2_triplet.add_potential(Dispersion::new(2.19348e8, -12));
+
+        let alkali_problem = AlkaliAtomsProblemBuilder::new(hifi_problem, li2_singlet, li2_triplet);
+
+        let mut particles = Self::get_particles();
+        particles.insert(Energy(-10., MHz).to(Au));
+
+        let bound_problem = FieldProblemBuilder::new(&particles, &alkali_problem)
+            .with_propagation(
+                LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.),
+                Johnson,
+            )
+            .with_range(4., 20., 500.)
+            .build();
+
+        let bounds = bound_problem
+            .bound_states(field_range, err);
+
+        println!("{bounds:?}");
     }
 }

@@ -25,5 +25,8 @@ argmin-observer-slog = "0.1.0"
 
 regex = "1.11.1"
 
+serde = { workspace = true }
+serde_json = { workspace = true }
+
 [dev-dependencies]
 approx = "0.5.1"
