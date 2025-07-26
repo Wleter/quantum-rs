@@ -53,6 +53,15 @@ pub struct ScaledPotential<P: SimplePotential> {
     pub scaling: f64,
 }
 
+impl<P: SimplePotential> ScaledPotential<P> {
+    pub fn new(potential: P, scaling: f64) -> Self {
+        Self {
+            potential,
+            scaling,
+        }
+    }
+}
+
 impl<P: SimplePotential> Potential for ScaledPotential<P> {
     type Space = f64;
 

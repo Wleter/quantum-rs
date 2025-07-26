@@ -10,7 +10,7 @@ use regex::Regex;
 use scattering_problems::rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder};
 use scattering_solver::{potentials::potential::Potential, utility::save_spectrum};
 
-use crate::common::potential_cutting::PotentialCutting;
+use crate::common::{potential_cutting::PotentialCutting, Morphing};
 
 pub fn main() {
     Problems::select(&mut get_args());
@@ -22,6 +22,7 @@ problems_impl!(Problems, "CaF + Rb potentials",
     "manipulate potential" => |_| Self::manipulate_potential(),
     "cut potential" => |_| Self::cut_potential(),
     "transform wavefunction adiabatically" => |_| Self::wave_adiabats(),
+    "morphing" => |_| Self::morph_potential(),
 );
 
 impl Problems {
@@ -179,6 +180,56 @@ impl Problems {
         
         file_adiabat.flush().unwrap();
         println!("Saved in {file_wave_adiabat}");
+    }
+
+    fn morph_potential() {
+        let pes_type = PotentialType::Singlet; 
+        let n_max = 10;
+        let morph = Morphing {
+            lambdas: vec![0, 1, 2],
+            scalings: vec![1.2, -0.1, -0.2]
+        };
+        let suffix = "test";
+
+        let basis_recipe = RotorAtomBasisRecipe {
+            l_max: n_max,
+            n_max: n_max,
+            ..Default::default()
+        };
+
+        let distances = linspace(5., 80., 800);
+
+        let [pot_array_singlet, pot_array_triplet] = read_extended(25);
+        let pes = match pes_type {
+            PotentialType::Singlet => pot_array_singlet,
+            PotentialType::Triplet => pot_array_triplet,
+        };
+
+        let interpolated = get_interpolated(&pes);
+        let interpolated = morph.morph(&interpolated);
+
+        let atoms = get_particles(Energy(1e-7, Kelvin), hi32!(0));
+        let problem = RotorAtomProblemBuilder::new(interpolated).build(&atoms, &basis_recipe);
+
+        let mut data = vec![];
+        let mut potential_value = Mat::zeros(problem.potential.size(), problem.potential.size());
+        for &r in &distances {
+            problem.potential.value_inplace(r, &mut potential_value);
+
+            data.push(
+                potential_value
+                    .self_adjoint_eigenvalues(faer::Side::Lower)
+                    .unwrap(),
+            );
+        }
+
+        save_spectrum(
+            &format!("SrF_Rb_{pes_type}_adiabat_morphing_{suffix}"),
+            "distance\tadiabat",
+            &distances,
+            &data,
+        )
+        .unwrap();
     }
 }
 

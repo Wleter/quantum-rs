@@ -143,8 +143,6 @@ impl Problems {
             )
             .unwrap();
     
-            let interpolated = ScalingType::Anisotropic.scale(&interpolated, 0.6);
-    
             let atoms = get_particles(Energy(1e-7, Kelvin), hi32!(0));
             let problem = RotorAtomProblemBuilder::new(interpolated).build(&atoms, &basis_recipe);
     
@@ -161,7 +159,7 @@ impl Problems {
             }
     
             save_spectrum(
-                &format!("SrF_Rb_singlet_adiabat_n_{}_scaled", basis_recipe.n_max),
+                &format!("SrF_Rb_singlet_adiabat_n_{}", basis_recipe.n_max),
                 "distance\tadiabat",
                 &distances,
                 &data,

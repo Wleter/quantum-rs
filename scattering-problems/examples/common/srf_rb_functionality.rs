@@ -36,7 +36,7 @@ use scattering_problems::{
     utility::{AnisoHifi, GammaSpinRot},
 };
 use scattering_solver::potentials::{
-    composite_potential::Composite, dispersion_potential::Dispersion, potential::SimplePotential,
+    composite_potential::Composite, dispersion_potential::Dispersion, potential::{SimplePotential, SubPotential},
 };
 
 pub fn get_particles(energy: Energy<impl EnergyUnit>, projection: HalfI32) -> Particles {
@@ -424,7 +424,7 @@ pub fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
 
 pub fn get_interpolated(
     pot_array: &PotentialArray,
-) -> Vec<(u32, impl SimplePotential + Clone + use<>)> {
+) -> Vec<(u32, impl SimplePotential + Clone + SubPotential + use<>)> {
     let interp_potentials = interpolate_potentials(pot_array, 3);
 
     let mut potentials_far = Vec::new();

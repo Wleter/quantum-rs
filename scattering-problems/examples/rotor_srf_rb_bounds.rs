@@ -139,12 +139,12 @@ impl Problems {
         let potential_type = PotentialType::Singlet;
         let scaling_type = ScalingType::Isotropic;
 
-        let energy_range = (Energy(-12., GHz), Energy(0., GHz));
+        let energy_range = (Energy(-6., GHz), Energy(0., GHz));
         let err = Energy(0.1, MHz);
 
         let basis_recipe = RotorAtomBasisRecipe {
-            l_max: 50,
-            n_max: 50,
+            l_max: 10,
+            n_max: 10,
             ..Default::default()
         };
         let scalings = linspace(0.98, 1.02, 500);
