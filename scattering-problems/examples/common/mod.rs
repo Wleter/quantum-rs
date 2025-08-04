@@ -2,7 +2,6 @@ use scattering_solver::potentials::{composite_potential::Composite, potential::{
 use std::fmt::Display;
 
 pub mod srf_rb_functionality;
-pub mod potential_cutting;
 
 #[allow(unused)]
 #[derive(Clone, Debug, Copy)]
@@ -105,8 +104,8 @@ impl Scalings {
 }
 
 pub struct Morphing {
+    pub lambdas: Vec<u32>,
     pub scalings: Vec<f64>,
-    pub lambdas: Vec<u32>
 }
 
 impl Morphing {

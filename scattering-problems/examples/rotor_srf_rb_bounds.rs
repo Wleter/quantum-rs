@@ -33,7 +33,10 @@ mod common;
 
 use common::{PotentialType, ScalingType, Scalings, srf_rb_functionality::*};
 
+use crate::common::Morphing;
+
 pub fn main() {
+    rayon::ThreadPoolBuilder::new().num_threads(24).build_global().unwrap();
     Problems::select(&mut get_args());
 }
 
@@ -137,9 +140,9 @@ impl Problems {
 
     fn potential_surface_scaling() {
         let potential_type = PotentialType::Singlet;
-        let scaling_type = ScalingType::Isotropic;
+        let scaling_type = ScalingType::Full;
 
-        let energy_range = (Energy(-6., GHz), Energy(0., GHz));
+        let energy_range = (Energy(-8., GHz), Energy(0., GHz));
         let err = Energy(0.1, MHz);
 
         let basis_recipe = RotorAtomBasisRecipe {
@@ -147,7 +150,10 @@ impl Problems {
             n_max: 10,
             ..Default::default()
         };
-        let scalings = linspace(0.98, 1.02, 500);
+        let scalings = linspace(1.37 - 0.03, 1.37 + 0.03, 501);
+        let calc_wave = true;
+        let suffix = "c6_1_3_lambda_-6e-4";
+        let lambda_1 = -0.0006368640198765835;
 
         ///////////////////////////////////
 
@@ -163,12 +169,18 @@ impl Problems {
         let pes = get_interpolated(&pes);
 
         let start = Instant::now();
-        let singlet_bounds = scalings
-            .iter()
+        let bounds: Vec<BoundStates> = scalings
+            .par_iter()
             .progress()
             .map(|&scaling| {
                 let mut atoms = atoms.clone();
-                let pes = scaling_type.scale(&pes, scaling);
+
+                let morph = Morphing {
+                    lambdas: vec![0, 1],
+                    scalings: vec![scaling, lambda_1]
+                };
+
+                let pes = morph.morph(&pes);
 
                 let problem = RotorAtomProblemBuilder::new(pes).build(&atoms, &basis_recipe);
 
@@ -181,9 +193,18 @@ impl Problems {
                     .with_range(5., 20., 500.)
                     .build();
 
-                bound_problem
-                    .bound_states(energy_range, err)
-                    .with_energy_units(GHz)
+                let mut bounds = bound_problem
+                    .bound_states(energy_range, err);
+
+                if calc_wave {
+                    let waves: Vec<Vec<f64>> = bound_problem.bound_waves(&bounds)
+                        .map(|x| x.occupations())
+                        .collect();
+    
+                    bounds.occupations = Some(waves);
+                }
+
+                bounds.with_energy_units(GHz)
             })
             .collect();
 
@@ -192,21 +213,21 @@ impl Problems {
 
         let data = BoundStatesDependence {
             parameters: scalings,
-            bound_states: singlet_bounds,
+            bound_states: bounds,
         };
         let filename = format!(
-            "SrF_Rb_bounds_{potential_type}_scaling_{scaling_type}_n_max_{}",
+            "SrF_Rb_bounds_{potential_type}_scaling_{scaling_type}_n_max_{}_{suffix}",
             basis_recipe.n_max
         );
 
-        save_serialize(&filename, &data).unwrap()
+        save_serialize(&filename, &data).unwrap();
     }
 
     fn potential_surface_2d_scaling() {
         let potential_type = PotentialType::Singlet;
-        let scaling_types = vec![ScalingType::Isotropic, ScalingType::Anisotropic];
+        let scaling_types = vec![ScalingType::Legendre(0), ScalingType::Legendre(1)];
 
-        let energy_range = (Energy(-12., GHz), Energy(0., GHz));
+        let energy_range = (Energy(-8., GHz), Energy(0., GHz));
         let err = Energy(0.1, MHz);
 
         let basis_recipe = RotorAtomBasisRecipe {
@@ -214,9 +235,10 @@ impl Problems {
             n_max: 10,
             ..Default::default()
         };
-        let scalings1 = linspace(1., 1.01, 50);
-        let scalings2 = linspace(0.90, 0.92, 50);
-        let suffix = "zoomed_0,9111";
+        let scalings1 = linspace(1.37 - 0.01, 1.37 + 0.01, 51);
+        let scalings2 = linspace(-0.025, 0.025, 51);
+        let suffix = "morphing_1_37";
+        let calc_wave = true;
 
         ///////////////////////////////////
 
@@ -241,11 +263,11 @@ impl Problems {
             .par_iter()
             .progress()
             .map_with(atoms, |atoms, &(s1, s2)| {
-                let scalings = Scalings {
+                let scalings = Morphing {
+                    lambdas: vec![0, 1],
                     scalings: vec![s1, s2],
-                    scaling_types: scaling_types.clone(),
                 };
-                let pes = scalings.scale(&pes);
+                let pes = scalings.morph(&pes);
 
                 let problem = RotorAtomProblemBuilder::new(pes).build(&atoms, &basis_recipe);
 
@@ -258,9 +280,18 @@ impl Problems {
                     .with_range(5., 20., 500.)
                     .build();
 
-                bound_problem
-                    .bound_states(energy_range, err)
-                    .with_energy_units(GHz)
+                let mut bounds = bound_problem
+                    .bound_states(energy_range, err);
+
+                if calc_wave {
+                    let waves: Vec<Vec<f64>> = bound_problem.bound_waves(&bounds)
+                        .map(|x| x.occupations())
+                        .collect();
+    
+                    bounds.occupations = Some(waves);
+                }
+
+                bounds.with_energy_units(GHz)
             })
             .collect();
 
@@ -281,12 +312,12 @@ impl Problems {
 
     fn bound_waves() {
         let potential_type = PotentialType::Singlet;
-        let scaling = Scalings {
-            scaling_types: vec![ScalingType::Isotropic,ScalingType::Anisotropic],
-            scalings: vec![1.0036204085226377, 0.9129498323277407],
+        let scaling = Morphing {
+            lambdas: vec![0, 1],
+            scalings: vec![1.3731587996463799, -0.0006368640198765835],
         };
         
-        let energy_range = (Energy(-12., GHz), Energy(0., GHz));
+        let energy_range = (Energy(-8., GHz), Energy(0., GHz));
         let err = Energy(0.1, MHz);
 
         let basis_recipe = RotorAtomBasisRecipe {
@@ -294,7 +325,7 @@ impl Problems {
             n_max: 10,
             ..Default::default()
         };
-        let suffix = "";
+        let suffix = "scaling_1_37";
 
         ///////////////////////////////////
 
@@ -307,7 +338,7 @@ impl Problems {
             PotentialType::Triplet => triplet,
         };
         let pes = get_interpolated(&pes);
-        let pes = scaling.scale(&pes);
+        let pes = scaling.morph(&pes);
 
         let problem = RotorAtomProblemBuilder::new(pes).build(&atoms, &basis_recipe);
 
@@ -323,7 +354,7 @@ impl Problems {
         let bounds = bound_problem
             .bound_states(energy_range, err);
 
-        let waves = bound_problem.bound_waves(&bounds).map(|x| x.normalize()).collect();
+        let waves = bound_problem.bound_waves(&bounds).collect();
 
         let data = WaveFunctions {
             bounds,
@@ -362,10 +393,9 @@ impl Problems {
             // (7, Energy(-11.96461586, GHz)),
         ];
 
-        let scaling_types = vec![ScalingType::Isotropic, ScalingType::Anisotropic];
-
-        let (center_iso, center_aniso) = (0.9991, 1.);
-        let (d_iso, d_aniso) = (0.005, 0.1);
+        let scaling_types = vec![ScalingType::Legendre(0), ScalingType::Legendre(1)];
+        let (center_0, center_1) = (1.3735, 0.0);
+        let (d_0, d_1) = (0.01, 0.1);
 
         let max_iter = 500;
 
@@ -373,8 +403,8 @@ impl Problems {
         let err = Energy(0.1, MHz);
 
         let basis_recipe = RotorAtomBasisRecipe {
-            l_max: 40,
-            n_max: 40,
+            l_max: 10,
+            n_max: 10,
             ..Default::default()
         };
 
@@ -392,7 +422,15 @@ impl Problems {
         let calculation = |scalings: Scalings| {
             println!("{scalings:?}");
             let mut atoms = get_particles(energy_relative, hi32!(0));
-            let pes = scalings.scale(&pes);
+
+            assert!(matches!(scalings.scaling_types[0], ScalingType::Legendre(0)));
+            assert!(matches!(scalings.scaling_types[1], ScalingType::Legendre(1)));
+            let morphing = Morphing {
+                lambdas: vec![0, 1],
+                scalings: scalings.scalings,
+            };
+
+            let pes = morphing.morph(&pes);
 
             let problem = RotorAtomProblemBuilder::new(pes).build(&atoms, &basis_recipe);
 
@@ -420,9 +458,9 @@ impl Problems {
         };
 
         let init_simplex = vec![
-            vec![center_iso, center_aniso], 
-            vec![center_iso + d_iso, center_aniso], 
-            vec![center_iso, center_aniso + d_aniso], 
+            vec![center_0, center_1], 
+            vec![center_0 + d_0, center_1], 
+            vec![center_0, center_1 + d_1], 
         ];
         let solver = NelderMead::new(init_simplex);
 

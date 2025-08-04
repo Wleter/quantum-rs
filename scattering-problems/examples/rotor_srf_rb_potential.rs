@@ -2,7 +2,7 @@ use std::{fs::File, io::{self, BufRead, BufReader, Write}};
 
 use clebsch_gordan::hi32;
 use faer::{Col, Mat};
-use quantum::{problem_selector::{get_args, ProblemSelector}, problems_impl, units::{Energy, Kelvin}, utility::linspace};
+use quantum::{problem_selector::{get_args, ProblemSelector}, problems_impl, units::{Energy, Kelvin}, utility::{linspace, logspace}};
 
 mod common;
 use common::{PotentialType, ScalingType, Scalings, srf_rb_functionality::*};
@@ -10,7 +10,7 @@ use regex::Regex;
 use scattering_problems::rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder};
 use scattering_solver::{potentials::potential::Potential, utility::save_spectrum};
 
-use crate::common::{potential_cutting::PotentialCutting, Morphing};
+use crate::common::Morphing;
 
 pub fn main() {
     Problems::select(&mut get_args());
@@ -20,7 +20,7 @@ struct Problems;
 
 problems_impl!(Problems, "CaF + Rb potentials",
     "manipulate potential" => |_| Self::manipulate_potential(),
-    "cut potential" => |_| Self::cut_potential(),
+    "long range adiabats" => |_| Self::long_range_adiabats(),
     "transform wavefunction adiabatically" => |_| Self::wave_adiabats(),
     "morphing" => |_| Self::morph_potential(),
 );
@@ -77,52 +77,54 @@ impl Problems {
         }
     }
 
-    // todo! very wrong approach probably so far, there is 0 guarantee the basis is effective TRAM, 
-    // only adiabats are correct (but maybe QR gives good estimate?)
-    fn cut_potential() {
-        let pes_type = PotentialType::Singlet; 
-        let n_max = 50;
-        let cut_n_max = 10;
+    fn long_range_adiabats() {
+        let n_maxes = [0, 1, 5, 10, 50, 170];
+        let distances = logspace(1., 4., 80);
+        let n_take = 2;
 
-        let basis_recipe = RotorAtomBasisRecipe {
-            l_max: n_max,
-            n_max: n_max,
-            ..Default::default()
-        };
+        let pes_type = PotentialType::Singlet;
 
-        let distances = linspace(5., 80., 800);
+        for n_max in n_maxes {
+            let basis_recipe = RotorAtomBasisRecipe {
+                l_max: n_max,
+                n_max: n_max,
+                ..Default::default()
+            };
+    
+            let [pot_array_singlet, pot_array_triplet] = read_extended(25);
+            let pes = match pes_type {
+                PotentialType::Singlet => pot_array_singlet,
+                PotentialType::Triplet => pot_array_triplet,
+            };
+    
+            let interpolated = get_interpolated(&pes);
+    
+            let atoms = get_particles(Energy(1e-7, Kelvin), hi32!(0));
+            let problem = RotorAtomProblemBuilder::new(interpolated).build(&atoms, &basis_recipe);
+    
+            let mut data = vec![];
+            let mut potential_value = Mat::zeros(problem.potential.size(), problem.potential.size());
+            for &r in &distances {
+                problem.potential.value_inplace(r, &mut potential_value);
+    
+                data.push(
+                    potential_value
+                        .self_adjoint_eigenvalues(faer::Side::Lower)
+                        .unwrap()
+                        .into_iter()
+                        .take(n_take + 1)
+                        .collect()
+                );
+            }
 
-        let [pot_array_singlet, pot_array_triplet] = read_extended(25);
-        let pes = match pes_type {
-            PotentialType::Singlet => pot_array_singlet,
-            PotentialType::Triplet => pot_array_triplet,
-        };
-
-        let interpolated = get_interpolated(&pes);
-
-        let atoms = get_particles(Energy(1e-7, Kelvin), hi32!(0));
-        let problem = RotorAtomProblemBuilder::new(interpolated).build(&atoms, &basis_recipe);
-        let potential = PotentialCutting::new(problem.potential, cut_n_max + 1);
-
-        let mut data = vec![];
-        let mut potential_value = Mat::zeros(potential.size(), potential.size());
-        for &r in &distances {
-            potential.value_inplace(r, &mut potential_value);
-
-            data.push(
-                potential_value
-                    .self_adjoint_eigenvalues(faer::Side::Lower)
-                    .unwrap(),
-            );
+            save_spectrum(
+                &format!("SrF_Rb_{pes_type}_n_max_{n_max}_adiabats_long_range"),
+                "distance\tadiabat",
+                &distances,
+                &data,
+            )
+            .unwrap();
         }
-
-        save_spectrum(
-            &format!("SrF_Rb_{pes_type}_adiabat_{n_max}_cut_{cut_n_max}"),
-            "distance\tadiabat",
-            &distances,
-            &data,
-        )
-        .unwrap();
     }
 
     fn wave_adiabats() {

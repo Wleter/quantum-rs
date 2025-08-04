@@ -208,6 +208,7 @@ where
         BoundStates {
             energies: bound_energies,
             nodes: bound_nodes,
+            occupations: None
         }
     }
 
@@ -248,7 +249,7 @@ where
                 wave_out.reverse();
                 wave_out.extend(wave_in);
 
-                wave_out
+                wave_out.normalize()
             })
     }
 
@@ -357,6 +358,7 @@ where
 pub struct BoundStates {
     pub energies: Vec<f64>,
     pub nodes: Vec<u64>,
+    pub occupations: Option<Vec<Vec<f64>>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -382,7 +384,7 @@ pub struct WaveFunctions {
     pub waves: Vec<WaveFunction>
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct WaveFunction {
     pub distances: Vec<f64>,
     pub values: Vec<Vec<f64>>,
@@ -419,5 +421,17 @@ impl WaveFunction {
         }
 
         self
+    }
+
+    pub fn occupations(&self) -> Vec<f64> {
+        self.distances.windows(2)
+            .zip(self.values.windows(2))
+            .fold(vec![0.; self.values[0].len()], |mut acc, (d, v)| {
+                for i in 0..acc.len() {
+                    acc[i] += 0.5 * (d[1] - d[0]) * (v[1][i].powi(2) + v[0][i].powi(2))
+                }
+            
+            acc
+        })
     }
 }

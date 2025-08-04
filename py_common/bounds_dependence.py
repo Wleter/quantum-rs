@@ -6,7 +6,7 @@ import numpy.typing as npt
 
 class BoundsDependence:
     def __init__(self, filename):
-        self.data = np.loadtxt(filename, delimiter="\t", skiprows=1)
+        self.data = np.loadtxt(filename, delimiter="\t", skiprows=1) # type: ignore
 
     @staticmethod
     def parse_json(filename: str) -> 'BoundsDependence':
@@ -17,15 +17,24 @@ class BoundsDependence:
         bound_states = [
             BoundStates(
                 item['energies'],
-                item['nodes']
+                item['nodes'],
+                item['occupations'],
             )
             for item in data['bound_states']
         ]
 
-        data = np.zeros((0, 3))
+        add_size = 0
+        if bound_states[0].occupations is not None:
+            add_size = len(bound_states[0].occupations[0])
+
+        data = np.zeros((0, 3 + add_size))
         for parameter, bounds in zip(parameters, bound_states):
-            for node, energy in zip(bounds.nodes, bounds.energies):
-                data = np.append(data, np.array([parameter, node, energy]).reshape((1, 3)), axis=0)
+            for i, (node, energy) in enumerate(zip(bounds.nodes, bounds.energies)):
+                single_bound = [parameter, node, energy]
+                if bounds.occupations is not None:
+                    single_bound.extend(bounds.occupations[i])
+
+                data = np.append(data, np.array(single_bound).reshape((1, -1)), axis=0)
 
         instance = BoundsDependence.__new__(BoundsDependence)
         instance.data = data
@@ -84,15 +93,24 @@ class BoundsDependence2D:
         bound_states = [
             BoundStates(
                 item['energies'],
-                item['nodes']
+                item['nodes'],
+                item['occupations'],
             )
             for item in data['bound_states']
         ]
 
-        data = np.zeros((0, 4))
+        add_size = 0
+        if bound_states[0].occupations is not None:
+            add_size = len(bound_states[0].occupations[0])
+
+        data = np.zeros((0, 4 + add_size))
         for parameter, bounds in zip(parameters, bound_states):
-            for node, energy in zip(bounds.nodes, bounds.energies):
-                data = np.append(data, np.array([parameter[0], parameter[1], node, energy]).reshape((1, 4)), axis=0)
+            for i, (node, energy) in enumerate(zip(bounds.nodes, bounds.energies)):
+                single_bound = [parameter[0], parameter[1], node, energy]
+                if bounds.occupations is not None:
+                    single_bound.extend(bounds.occupations[i])
+
+                data = np.append(data, np.array(single_bound).reshape((1, -1)), axis=0)
 
         return BoundsDependence2D(data)
 
@@ -129,13 +147,14 @@ class BoundsDependence2D:
         filtering = self.data[:, axis] == slice
 
         instance = BoundsDependence.__new__(BoundsDependence)
-        instance.data = (self.data[filtering, :])[:, [(axis + 1) % 2, 2, 3]]
+        instance.data = np.delete(self.data[filtering, :], axis % 2, 1)
 
         return instance, slice # type: ignore
 @dataclass
 class BoundStates:
     energies: list[float]
     nodes: list[int]
+    occupations: list[list[float]] | None = None
 
 if __name__ == "__main__":
     for s in BoundsDependence(f"data/srf_rb_bounds_2.dat").states():
