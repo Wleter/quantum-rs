@@ -33,7 +33,7 @@ impl<U: EnergyUnit> Energy<U> {
 
 impl EnergyUnit for Au {}
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Kelvin;
 
 impl Unit for Kelvin {
@@ -41,7 +41,7 @@ impl Unit for Kelvin {
 }
 impl EnergyUnit for Kelvin {}
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct CmInv;
 
 impl Unit for CmInv {
@@ -49,7 +49,7 @@ impl Unit for CmInv {
 }
 impl EnergyUnit for CmInv {}
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct MHz;
 
 impl Unit for MHz {
@@ -57,7 +57,7 @@ impl Unit for MHz {
 }
 impl EnergyUnit for MHz {}
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct GHz;
 
 impl Unit for GHz {

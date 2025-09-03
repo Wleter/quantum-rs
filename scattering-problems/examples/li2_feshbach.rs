@@ -16,12 +16,12 @@ use quantum::{
     utility::linspace,
 };
 use scattering_problems::{
-    alkali_atoms::AlkaliAtomsProblemBuilder, field_bound_states::FieldProblemBuilder, IndexBasisDescription, ScatteringProblem
+    alkali_atoms::AlkaliAtomsProblemBuilder, field_bound_states::{FieldBoundStates, FieldBoundStatesDependence, FieldProblemBuilder}, IndexBasisDescription, ScatteringProblem
 };
 use scattering_solver::{
     boundary::{Boundary, Direction},
     log_derivatives::johnson::{Johnson, JohnsonLogDerivative},
-    numerovs::{multi_numerov::MultiRNumerov, LocalWavelengthStepRule},
+    numerovs::LocalWavelengthStepRule,
     observables::bound_states::{BoundProblemBuilder, BoundStates, BoundStatesDependence},
     potentials::{
         composite_potential::Composite,
@@ -194,40 +194,52 @@ impl Problems {
     }
 
     fn field_bound_states() {
+        ///////////////////////////////////
+
         let projection = hi32!(0);
-        let field_range = (0., 1200.);
+        let energies: Vec<Energy<GHz>> = linspace(-2., -1e-2, 501)
+            .iter()
+            .map(|x| Energy(x.powi(3), GHz))
+            .collect();
+
+        let mag_fields = (0., 1200.);
         let err = 1e-2;
 
         ///////////////////////////////////
 
-        let first = HifiProblemBuilder::new(hu32!(1 / 2), hu32!(1))
-            .with_hyperfine_coupling(Energy(228.2 / 1.5, MHz).to_au());
+        let start = Instant::now();
+        let bound_states = energies
+            .par_iter()
+            .progress()
+            .map(|&energy| {
+                let mut particles = Self::get_particles();
+                particles.insert(energy.to(Au));
 
-        let hifi_problem = DoubleHifiProblemBuilder::new_homo(first, Symmetry::Fermionic)
-            .with_projection(projection);
+                let problem = |field| {
+                    Self::get_problem(projection, field)
+                };
 
-        let mut li2_singlet = Composite::new(Dispersion::new(-1381., -6));
-        li2_singlet.add_potential(Dispersion::new(1.112e7, -12));
+                let bound_problem = FieldProblemBuilder::new(&particles, &problem)
+                    .with_propagation(
+                        LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.),
+                        Johnson,
+                    )
+                    .with_range(4., 20., 500.)
+                    .build();
 
-        let mut li2_triplet = Composite::new(Dispersion::new(-1381., -6));
-        li2_triplet.add_potential(Dispersion::new(2.19348e8, -12));
+                bound_problem
+                    .bound_states(mag_fields, err)
+            })
+            .collect::<Vec<FieldBoundStates>>();
 
-        let alkali_problem = AlkaliAtomsProblemBuilder::new(hifi_problem, li2_singlet, li2_triplet);
+        let elapsed = start.elapsed();
+        println!("calculated in {}", elapsed.hhmmssxxx());
 
-        let mut particles = Self::get_particles();
-        particles.insert(Energy(-10., MHz).to(Au));
+        let bound_dependence = FieldBoundStatesDependence {
+            energies: energies.iter().map(|x| x.value()).collect(),
+            bound_states,
+        };
 
-        let bound_problem = FieldProblemBuilder::new(&particles, &alkali_problem)
-            .with_propagation(
-                LocalWavelengthStepRule::new(1e-4, f64::INFINITY, 500.),
-                Johnson,
-            )
-            .with_range(4., 20., 500.)
-            .build();
-
-        let bounds = bound_problem
-            .bound_states(field_range, err);
-
-        println!("{bounds:?}");
+        save_serialize("li2_field_states", &bound_dependence).unwrap()
     }
 }

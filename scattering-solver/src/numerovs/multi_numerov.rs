@@ -164,7 +164,7 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
         .for_each(|unzip!(b1, u, c)| *b1 = u + sol.dr * sol.dr / 12. * c);
         // buffer1 is (1 - T_n)
 
-        let artificial = inverse_ldlt_inplace_nodes(
+        let _artificial = inverse_ldlt_inplace_nodes(
             self.buffer1.as_ref(),
             self.sol_last.0.as_mut(),
             &mut self.inverse_buffer,
@@ -189,15 +189,15 @@ impl MultiStep<Mat<f64>, Ratio<Mat<f64>>> for MultiRNumerovStep {
         );
         // buffer2 is U_n
 
-        let nodes = inverse_ldlt_inplace_nodes(
+        let _nodes = inverse_ldlt_inplace_nodes(
             sol.sol.0.as_ref(),
             self.sol_last.0.as_mut(),
             &mut self.inverse_buffer,
         );
 
-        if nodes >= artificial {
-            println!("artificial nodes is higher than nodes")
-        }
+        // if nodes >= artificial {
+        //     println!("artificial nodes is higher than nodes")
+        // }
         // assert!(nodes >= artificial);
         // sol.nodes += nodes - artificial;
         // if artificial > 0 {

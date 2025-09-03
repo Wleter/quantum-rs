@@ -6,8 +6,8 @@ from matplotlib.figure import Figure
 import numpy as np
 import numpy.typing as npt
 
-def plot() -> tuple[Figure, Axes]:
-    fig, ax = plt.subplots()
+def plot(shape = None) -> tuple[Figure, Axes]:
+    fig, ax = plt.subplots(figsize = shape)
     ax.grid()
     ax.tick_params(which='both', direction="in")
 

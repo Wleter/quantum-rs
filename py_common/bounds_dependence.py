@@ -6,10 +6,10 @@ import numpy.typing as npt
 
 class BoundsDependence:
     def __init__(self, filename):
-        self.data = np.loadtxt(filename, delimiter="\t", skiprows=1) # type: ignore
+        self.data = np.loadtxt(filename, delimiter="\t") # type: ignore
 
     @staticmethod
-    def parse_json(filename: str) -> 'BoundsDependence':
+    def parse_json(filename: str, parameter_range: tuple[float, float] | None = None) -> 'BoundsDependence':
         with open(filename, "r") as file:
             data = json.load(file)
 
@@ -18,7 +18,7 @@ class BoundsDependence:
             BoundStates(
                 item['energies'],
                 item['nodes'],
-                item['occupations'],
+                item['occupations'] if "occupations" in item else None,
             )
             for item in data['bound_states']
         ]
@@ -29,8 +29,45 @@ class BoundsDependence:
 
         data = np.zeros((0, 3 + add_size))
         for parameter, bounds in zip(parameters, bound_states):
+            if parameter_range is not None and (parameter < parameter_range[0] or parameter > parameter_range[1]):
+                continue
             for i, (node, energy) in enumerate(zip(bounds.nodes, bounds.energies)):
                 single_bound = [parameter, node, energy]
+                if bounds.occupations is not None:
+                    single_bound.extend(bounds.occupations[i])
+
+                data = np.append(data, np.array(single_bound).reshape((1, -1)), axis=0)
+
+        instance = BoundsDependence.__new__(BoundsDependence)
+        instance.data = data
+
+        return instance
+    
+    @staticmethod
+    def parse_field_json(filename: str, parameter_range: tuple[float, float] | None = None) -> 'BoundsDependence':
+        with open(filename, "r") as file:
+            data = json.load(file)
+
+        energies = data['energies']
+        bound_states = [
+            FieldBoundStates(
+                item['fields'],
+                item['nodes'],
+                item['occupations'] if "occupations" in item else None,
+            )
+            for item in data['bound_states']
+        ]
+
+        add_size = 0
+        if bound_states[0].occupations is not None:
+            add_size = len(bound_states[0].occupations[0])
+
+        data = np.zeros((0, 3 + add_size))
+        for energy, bounds in zip(energies, bound_states):
+            for i, (node, field) in enumerate(zip(bounds.nodes, bounds.fields)):
+                if parameter_range is not None and (field < parameter_range[0] or field > parameter_range[1]):
+                    continue
+                single_bound = [field, node, energy]
                 if bounds.occupations is not None:
                     single_bound.extend(bounds.occupations[i])
 
@@ -153,6 +190,12 @@ class BoundsDependence2D:
 @dataclass
 class BoundStates:
     energies: list[float]
+    nodes: list[int]
+    occupations: list[list[float]] | None = None
+
+@dataclass
+class FieldBoundStates:
+    fields: list[float]
     nodes: list[int]
     occupations: list[list[float]] | None = None
 

@@ -65,6 +65,60 @@ def parse_wavefunction_file(path, basis_size, max_coeff=None):
 
     return data
 
+def parse_wavefunction_field_file(path, basis_size, max_coeff=None):
+    header_re = re.compile(r"WAVEFUNCTION FOR STATE\s+(\d+)\s+AT")
+
+    data = []
+    current_state = None
+
+    r_arr = array('d')
+    coeffs_arr = array('d')
+    buf = array('d')
+    row_length = 1 + basis_size
+
+    coeff_count = (max_coeff + 1) if max_coeff is not None else basis_size
+
+    with open(path, 'r') as f:
+        for line in f:
+            m = header_re.search(line)
+            if m:
+                if current_state is not None:
+                    npts = len(r_arr)
+                    data.append({
+                        'r': np.frombuffer(r_arr, dtype=float).copy(),
+                        'coeffs': np.frombuffer(coeffs_arr, dtype=float).reshape(npts, coeff_count).copy()
+                    })
+
+                current_state = int(m.group(1))
+                r_arr = array('d')
+                coeffs_arr = array('d')
+                buf = array('d')
+                continue
+
+            if not line or line[0] in ('#', '\n', '\r'):
+                continue
+
+            nums = np.fromstring(line, dtype=float, sep=' ')
+            if nums.size == 0:
+                continue
+            buf.extend(nums.tolist())
+
+            while len(buf) >= row_length:
+                r_arr.append(buf[0])
+                start = 1
+                end = 1 + coeff_count
+                coeffs_arr.extend(buf[start:end])
+                del buf[:row_length]
+
+    if current_state is not None:
+        npts = len(r_arr)
+        data.append({
+            'r': np.frombuffer(r_arr, dtype=float).copy(),
+            'coeffs': np.frombuffer(coeffs_arr, dtype=float).reshape(npts, coeff_count).copy()
+        })
+
+    return data
+
 @dataclass
 class WaveFunction:
     energy: float

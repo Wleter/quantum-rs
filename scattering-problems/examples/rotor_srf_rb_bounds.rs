@@ -17,9 +17,7 @@ use quantum::{
     utility::linspace,
 };
 use scattering_problems::{
-    FieldScatteringProblem,
-    alkali_rotor_atom::{AlkaliRotorAtomProblemBuilder, TramBasisRecipe},
-    rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder},
+    alkali_rotor_atom::{AlkaliRotorAtomProblemBuilder, TramBasisRecipe}, field_bound_states::{FieldBoundStates, FieldBoundStatesDependence, FieldProblemBuilder}, rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder}, FieldScatteringProblem
 };
 use scattering_solver::{
     log_derivatives::johnson::Johnson,
@@ -36,7 +34,6 @@ use common::{PotentialType, ScalingType, Scalings, srf_rb_functionality::*};
 use crate::common::Morphing;
 
 pub fn main() {
-    rayon::ThreadPoolBuilder::new().num_threads(24).build_global().unwrap();
     Problems::select(&mut get_args());
 }
 
@@ -45,6 +42,7 @@ struct Problems;
 problems_impl!(Problems, "CaF + Rb Bounds",
     "magnetic field bounds" => |_| Self::magnetic_field_bounds(),
     "potential surface scaling" => |_| Self::potential_surface_scaling(),
+    "potential surface scaling field" => |_| Self::potential_surface_scaling_field(),
     "potential surface 2d scaling" => |_| Self::potential_surface_2d_scaling(),
     "singlet/triplet bound waves" => |_| Self::bound_waves(),
     "bound states reconstruction" => |_| Self::bound_states_reconstruction(),
@@ -139,10 +137,10 @@ impl Problems {
     }
 
     fn potential_surface_scaling() {
-        let potential_type = PotentialType::Singlet;
+        let potential_type = PotentialType::Triplet;
         let scaling_type = ScalingType::Full;
 
-        let energy_range = (Energy(-8., GHz), Energy(0., GHz));
+        let energy_range = (Energy(-9., GHz), Energy(0., GHz));
         let err = Energy(0.1, MHz);
 
         let basis_recipe = RotorAtomBasisRecipe {
@@ -150,10 +148,10 @@ impl Problems {
             n_max: 10,
             ..Default::default()
         };
-        let scalings = linspace(1.37 - 0.03, 1.37 + 0.03, 501);
+        let scalings = linspace(0.6, 1.4, 20_000);
         let calc_wave = true;
-        let suffix = "c6_1_3_lambda_-6e-4";
-        let lambda_1 = -0.0006368640198765835;
+        let suffix = "long";
+        let lambda_1 = 0.;
 
         ///////////////////////////////////
 
@@ -217,6 +215,91 @@ impl Problems {
         };
         let filename = format!(
             "SrF_Rb_bounds_{potential_type}_scaling_{scaling_type}_n_max_{}_{suffix}",
+            basis_recipe.n_max
+        );
+
+        save_serialize(&filename, &data).unwrap();
+    }
+    
+    fn potential_surface_scaling_field() {
+        let potential_type = PotentialType::Singlet;
+        let scaling_type = ScalingType::Full;
+
+        let scaling_range = (0.6, 1.4);
+        let err = 1e-6;
+
+        let basis_recipe = RotorAtomBasisRecipe {
+            l_max: 10,
+            n_max: 10,
+            ..Default::default()
+        };
+        let energies: Vec<Energy<GHz>> = linspace(-2., 0., 101)
+            .iter()
+            .map(|x| Energy(x.powi(3), GHz))
+            .collect();
+        let calc_wave = true;
+        let suffix = "long";
+        let lambda_1 = 0.;
+
+        ///////////////////////////////////
+
+        let energy_relative = Energy(1e-7, Kelvin);
+        let atoms = get_particles(energy_relative, hi32!(0));
+
+        let [singlet, triplet] = read_extended(25);
+        let pes = match potential_type {
+            PotentialType::Singlet => singlet,
+            PotentialType::Triplet => triplet,
+        };
+        let pes = get_interpolated(&pes);
+
+        let start = Instant::now();
+        let bounds: Vec<FieldBoundStates> = energies
+            .par_iter()
+            .progress()
+            .map(|&energy| {
+                let mut atoms = atoms.clone();
+                atoms.insert(energy.to(Au));
+
+                let morphed_problem = |scaling| {
+                    let morph = Morphing {
+                        lambdas: vec![0, 1],
+                        scalings: vec![scaling, lambda_1]
+                    };
+                    let pes = morph.morph(&pes);
+    
+                    RotorAtomProblemBuilder::new(pes).build(&atoms, &basis_recipe)
+                };
+
+                let bound_problem = FieldProblemBuilder::new(&atoms, &morphed_problem)
+                    .with_propagation(LocalWavelengthStepRule::new(4e-3, 10., 400.), Johnson)
+                    .with_range(5., 20., 500.)
+                    .build();
+
+                let mut bounds = bound_problem
+                    .bound_states(scaling_range, err);
+
+                if calc_wave {
+                    let waves: Vec<Vec<f64>> = bound_problem.bound_waves(&bounds)
+                        .map(|x| x.occupations())
+                        .collect();
+    
+                    bounds.occupations = Some(waves);
+                }
+
+                bounds
+            })
+            .collect();
+
+        let elapsed = start.elapsed();
+        println!("calculated in {}", elapsed.hhmmssxxx());
+
+        let data = FieldBoundStatesDependence {
+            energies: energies.iter().map(|x| x.value()).collect(),
+            bound_states: bounds,
+        };
+        let filename = format!(
+            "SrF_Rb_field_{potential_type}_scaling_{scaling_type}_n_max_{}_{suffix}",
             basis_recipe.n_max
         );
 

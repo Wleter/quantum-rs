@@ -133,6 +133,80 @@ class BoundOutput:
         
         self.matches.sort(key=lambda x: x.scan_variable)
 
+class FieldOutput:
+    def __init__(self, filepath: str, scan_param: ScanParameter = ScanParameter.MagneticField):
+        name = "POTL SCALING FACTOR" if scan_param == ScanParameter.PotScaling else "MAGNETIC Z FIELD"
+
+        with open(filepath, "r") as f:
+            text = f.read()
+
+            efv_pattern = re.compile(rf"ENERGY\s+\d+\s*=\s*([\d\.E+-]+)", re.MULTILINE)
+            state_pattern = re.compile(rf"CONVERGED ON STATE NUMBER\s+(\d+)\s+AT\s+{name}\s*=\s*([-]?\d+\.\d+(?:E[+-]?\d+)?)\s", re.MULTILINE)
+
+            efv_matches = list(efv_pattern.finditer(text))
+
+            parsed_data = []
+            unit = None
+
+            for i, efv_match in enumerate(efv_matches):
+                scan_variable = float(efv_match.group(1))
+                start_index = efv_match.end()
+
+                if i + 1 < len(efv_matches):
+                    end_index = efv_matches[i + 1].start()
+                else:
+                    end_index = len(text)
+
+                efv_text = text[start_index:end_index]
+                state_matches = state_pattern.findall(efv_text)
+
+                states = []
+                for state_match in state_matches:
+                    state_number = int(state_match[0])
+                    energy = float(state_match[1])
+
+                    states.append((state_number, energy))
+
+                parsed_data.append(ScanResult(scan_variable, states))
+
+            self.unit = unit
+            self.scan_param = scan_param
+            self.matches: list[ScanResult] = parsed_data
+
+        if len(self.matches) == 0:
+            raise ValueError(f"couldn't parse output {filepath}")
+
+    def print_all(self):
+        print(f"Scanning {self.scan_param}")
+        for match in self.matches:
+            print(f"For {match.scan_variable}:")
+            for state in match.states:
+                print(f"state: {state[0]}, parameter: {state[1]}")
+    
+    def save(self, savefile):
+        with open(savefile, "w+") as f:
+            f.write(f"{self.scan_param}\tState_number\tParameter\n")
+            for p in self.matches:
+                f.writelines(map(lambda l: f"{p.scan_variable}\t{l[0]}\t{l[1]}\n", p.states))
+
+    def combine(self, other: Iterable['BoundOutput'] | 'BoundOutput'):
+        if type(other) is Iterable['BoundOutput']:
+            for f in other:
+                assert f.scan_param == self.scan_param
+                assert f.unit == self.unit
+
+                self.matches.extend(f.matches)
+        elif type(other) is BoundOutput:
+            assert other.scan_param == self.scan_param
+            assert other.unit == self.unit
+
+            self.matches.extend(other.matches)
+        else:
+            raise TypeError(type(other))
+        
+        self.matches.sort(key=lambda x: x.scan_variable)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-b", "--bound", action="store_true")

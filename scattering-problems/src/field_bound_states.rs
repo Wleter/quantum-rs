@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, mem::swap};
 
 use faer::Mat;
 use quantum::{
@@ -6,11 +6,11 @@ use quantum::{
 };
 
 use scattering_solver::{
-    boundary::{Boundary, Direction}, log_derivatives::{LogDerivative, LogDerivativeReference, WaveLogDerivStorage}, numerovs::StepRule, observables::bound_states::WaveFunction, potentials::potential::Potential, propagator::{CoupledEquation, Propagator}, utility::brent_root_method
+    boundary::{Boundary, Direction}, log_derivatives::{LogDerivative, LogDerivativeReference, WaveLogDerivStorage}, numerovs::StepRule, observables::bound_states::WaveFunction, potentials::potential::{MatPotential}, propagator::{CoupledEquation, Propagator}, utility::brent_root_method
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{BasisDescription, FieldScatteringProblem};
+use crate::{BasisDescription, ScatteringProblem};
 
 // todo! refactor everything is copied from bound_states
 
@@ -22,10 +22,11 @@ pub struct BoundFieldMismatch {
     pub field: f64,
 }
 
-pub struct FieldProblemBuilder<'a, B, F, S, Prop>
+pub struct FieldProblemBuilder<'a, B, P, F, S, Prop>
 where
     B: BasisDescription,
-    F: FieldScatteringProblem<B>,
+    P: MatPotential,
+    F: Fn(f64) -> ScatteringProblem<P, B> + 'a,
     S: StepRule<Mat<f64>>,
     Prop: LogDerivativeReference,
 {
@@ -33,15 +34,16 @@ where
     field_problem: Option<&'a F>,
 
     step_rule: Option<S>,
-    phantom: PhantomData<(Prop, B)>,
+    phantom: PhantomData<(Prop, B, P)>,
 
     r_range: [f64; 3],
 }
 
-impl<'a, B, F, S, Prop> Default for FieldProblemBuilder<'a, B, F, S, Prop>
+impl<'a, B, P, F, S, Prop> Default for FieldProblemBuilder<'a, B, P, F, S, Prop>
 where
     B: BasisDescription,
-    F: FieldScatteringProblem<B>,
+    P: MatPotential,
+    F: Fn(f64) -> ScatteringProblem<P, B> + 'a,
     S: StepRule<Mat<f64>>,
     Prop: LogDerivativeReference,
 {
@@ -58,10 +60,11 @@ where
     }
 }
 
-impl<'a, B, F, S, Prop> FieldProblemBuilder<'a, B, F, S, Prop>
+impl<'a, B, P, F, S, Prop> FieldProblemBuilder<'a, B, P, F, S, Prop>
 where
     B: BasisDescription,
-    F: FieldScatteringProblem<B>,
+    P: MatPotential,
+    F: Fn(f64) -> ScatteringProblem<P, B> + 'a,
     S: StepRule<Mat<f64>>,
     Prop: LogDerivativeReference,
 {
@@ -86,7 +89,7 @@ where
         self
     }
 
-    pub fn build(self) -> FieldProblem<'a, B, F, S, Prop> {
+    pub fn build(self) -> FieldProblem<'a, B, P, F, S, Prop> {
         let particles = self
             .particles
             .expect("Did not found particles in BoundBuilder");
@@ -110,10 +113,11 @@ where
     }
 }
 
-pub struct FieldProblem<'a, B, F, S, Prop>
+pub struct FieldProblem<'a, B, P, F, S, Prop>
 where
     B: BasisDescription,
-    F: FieldScatteringProblem<B>,
+    P: MatPotential,
+    F: Fn(f64) -> ScatteringProblem<P, B> + 'a,
     S: StepRule<Mat<f64>>,
     Prop: LogDerivativeReference,
 {
@@ -121,22 +125,23 @@ where
     field_problem: &'a F,
 
     step_rule: S,
-    phantom: PhantomData<(Prop, B)>,
+    phantom: PhantomData<(Prop, B, P)>,
 
     r_min: f64,
     r_match: f64,
     r_max: f64,
 }
 
-impl<'a, B, F, S, Prop> FieldProblem<'a, B, F, S, Prop>
+impl<'a, B, P, F, S, Prop> FieldProblem<'a, B, P, F, S, Prop>
 where
     B: BasisDescription,
-    F: FieldScatteringProblem<B>,
+    P: MatPotential,
+    F: Fn(f64) -> ScatteringProblem<P, B> + 'a,
     S: StepRule<Mat<f64>> + Clone,
     Prop: LogDerivativeReference,
 {
     pub fn bound_mismatch(&self, field: f64) -> BoundFieldMismatch {
-        let problem = self.field_problem.scattering_for(field);
+        let problem = (self.field_problem)(field);
         let mut particles = self.particles.clone();
         particles.insert(problem.asymptotic);
 
@@ -177,20 +182,30 @@ where
         field_range: (f64, f64),
         err: f64,
     ) -> FieldBoundStates {
-        let lower_mismatch = self.bound_mismatch(field_range.0);
-        let upper_mismatch = self.bound_mismatch(field_range.1);
+        let mut lower_mismatch = self.bound_mismatch(field_range.0);
+        let mut upper_mismatch = self.bound_mismatch(field_range.1);
 
         let mut bound_fields = vec![];
         let mut bound_nodes = vec![];
 
+        let monotony = if lower_mismatch.nodes <= upper_mismatch.nodes {
+            Monotony::Ascending
+        } else {
+            Monotony::Descending
+        };
+        if let Monotony::Descending = monotony {
+            swap(&mut lower_mismatch, &mut upper_mismatch)
+        }
+
         let lower_node = lower_mismatch.nodes;
         let upper_node = upper_mismatch.nodes;
-        let states_no = (upper_node as i64 - lower_node as i64).abs() as usize;
+        let states_no = (upper_node - lower_node) as usize;
 
         if states_no == 0 {
             return FieldBoundStates {
                 fields: vec![],
                 nodes: vec![],
+                occupations: None
             }
         }
 
@@ -211,14 +226,15 @@ where
         FieldBoundStates {
             fields: bound_fields,
             nodes: bound_nodes,
+            occupations: None
         }
     }
 
     pub fn bound_waves(&self, bounds: &FieldBoundStates) -> impl Iterator<Item = WaveFunction> {
         bounds.fields.iter()
-            .map(move |&f| {
+            .map(move |&field| {
                 let mut particles = self.particles.clone();
-                let problem = self.field_problem.scattering_for(f);
+                let problem = (self.field_problem)(field);
                 particles.insert(problem.asymptotic);
 
                 let eq = CoupledEquation::from_particles(&problem.potential, &particles);
@@ -252,7 +268,7 @@ where
                 wave_out.reverse();
                 wave_out.extend(wave_in);
 
-                wave_out
+                wave_out.normalize()
             })
     }
 
@@ -301,7 +317,7 @@ where
             || upper_eigenvalue.is_none()
         {
             let field_mid = (upper_bound.field + lower_bound.field) / 2.;
-            if upper_bound.field - lower_bound.field < err {
+            if (upper_bound.field - lower_bound.field).abs() < err {
                 return field_mid;
             }
 
@@ -355,10 +371,23 @@ where
     }
 }
 
+#[derive(Clone, Copy)]
+enum Monotony {
+    Ascending,
+    Descending
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FieldBoundStates {
     pub fields: Vec<f64>,
     pub nodes: Vec<u64>,
+    pub occupations: Option<Vec<Vec<f64>>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct FieldBoundStatesDependence<T> {
+    pub energies: Vec<T>,
+    pub bound_states: Vec<FieldBoundStates>,
 }
 
 #[derive(Serialize)]
