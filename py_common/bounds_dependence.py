@@ -6,7 +6,10 @@ import numpy.typing as npt
 
 class BoundsDependence:
     def __init__(self, filename):
-        self.data = np.loadtxt(filename, delimiter="\t") # type: ignore
+        try:
+            self.data = np.loadtxt(filename, delimiter="\t") # type: ignore
+        except:
+            self.data = np.loadtxt(filename, delimiter="\t", skiprows=1) # type: ignore
 
     @staticmethod
     def parse_json(filename: str, parameter_range: tuple[float, float] | None = None) -> 'BoundsDependence':
