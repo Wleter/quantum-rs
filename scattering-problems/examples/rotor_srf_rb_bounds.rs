@@ -34,6 +34,7 @@ use common::{PotentialType, ScalingType, Scalings, srf_rb_functionality::*};
 use crate::common::Morphing;
 
 pub fn main() {
+    rayon::ThreadPoolBuilder::new().num_threads(12).build_global().unwrap();
     Problems::select(&mut get_args());
 }
 
@@ -137,21 +138,22 @@ impl Problems {
     }
 
     fn potential_surface_scaling() {
-        let potential_type = PotentialType::Triplet;
+        let potential_type = PotentialType::Singlet;
         let scaling_type = ScalingType::Full;
 
         let energy_range = (Energy(-9., GHz), Energy(0., GHz));
-        let err = Energy(0.1, MHz);
+        let err = Energy(1e-2, MHz);
 
         let basis_recipe = RotorAtomBasisRecipe {
             l_max: 10,
             n_max: 10,
             ..Default::default()
         };
-        let scalings = linspace(0.6, 1.4, 20_000);
+        let scaling_c = 1.37;
+        let scalings = linspace(scaling_c-0.02, scaling_c+0.02, 500);
         let calc_wave = true;
-        let suffix = "long";
-        let lambda_1 = 0.;
+        let suffix = "invariant";
+        let lambda_1 = -0.0035;
 
         ///////////////////////////////////
 
@@ -175,7 +177,8 @@ impl Problems {
 
                 let morph = Morphing {
                     lambdas: vec![0, 1],
-                    scalings: vec![scaling, lambda_1]
+                    // todo! temporarily change scaling so that it counters n = 1 states shift
+                    scalings: vec![scaling, lambda_1 + (scaling - scaling_c) * 21. / 20.] 
                 };
 
                 let pes = morph.morph(&pes);

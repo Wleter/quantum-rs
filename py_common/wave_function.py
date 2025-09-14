@@ -125,13 +125,24 @@ class WaveFunction:
     distances: npt.NDArray
     values: npt.NDArray
 
-def wavefunction_json(path: str, take: int) -> dict[int, WaveFunction]:
+    def to_dict(self):
+        return {
+            "energy": self.energy,
+            "r": self.distances,
+            "coeffs": self.values
+        }
+
+def wavefunction_json(path: str, take: int | None = None) -> dict[int, WaveFunction]:
     with open(path, "r") as file:
         data = json.load(file)
 
     waves = {}
     for (n, e, w) in zip(data["bounds"]["nodes"], data["bounds"]["energies"], data["waves"]):
-        wave = WaveFunction(e / GHZ, np.array(w["distances"]), np.array(w["values"])[:, :take])
+        values = np.array(w["values"])
+        if take is not None:
+            values = values[:, :take]
+
+        wave = WaveFunction(e / GHZ, np.array(w["distances"]), values)
         waves[n] = wave
 
     return waves

@@ -179,7 +179,7 @@ impl Problems {
     }    
     
     fn scaling_bound_states() {
-        let potential_type = PotentialType::Singlet;
+        let potential_type = PotentialType::Triplet;
 
         let scaling_range = (0.8, 1.2);
         let err = 1e-5;

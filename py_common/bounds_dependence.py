@@ -134,7 +134,7 @@ class BoundsDependence2D:
             BoundStates(
                 item['energies'],
                 item['nodes'],
-                item['occupations'],
+                item['occupations'] if "occupations" in item else None,
             )
             for item in data['bound_states']
         ]
