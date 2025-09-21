@@ -195,6 +195,13 @@ where
         mismatch_node[0] = Some(lower_mismatch);
         mismatch_node[states_no] = Some(upper_mismatch);
 
+        if upper_node == 0 {
+            return BoundStates {
+                energies: vec![],
+                nodes: vec![],
+                occupations: None,
+            }
+        }
         let mut target_nodes = upper_node - 1;
         while target_nodes >= lower_node {
             let bound_energy = self.search_state(lower_node, target_nodes, &mut mismatch_node, err);
@@ -202,6 +209,9 @@ where
             bound_energies.push(bound_energy.to_au());
             bound_nodes.push(target_nodes);
 
+            if target_nodes == 0 {
+                break
+            }
             target_nodes -= 1;
         }
 
