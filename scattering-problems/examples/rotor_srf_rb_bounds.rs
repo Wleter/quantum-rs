@@ -34,7 +34,7 @@ use common::{PotentialType, ScalingType, Scalings, srf_rb_functionality::*};
 use crate::common::Morphing;
 
 pub fn main() {
-    rayon::ThreadPoolBuilder::new().num_threads(12).build_global().unwrap();
+    rayon::ThreadPoolBuilder::new().num_threads(24).build_global().unwrap();
     Problems::select(&mut get_args());
 }
 
@@ -64,15 +64,15 @@ impl Problems {
         let energy_range = (Energy(-1., GHz), Energy(0., GHz));
         let err = Energy(0.1, MHz);
 
-        let scaling_singlet: Option<Scalings> = Some(Scalings {
-            scaling_types: vec![ScalingType::Isotropic, ScalingType::Anisotropic],
-            scalings: vec![1.0036204085226377, 0.9129498323277407],
-        });
-        let scaling_triplet: Option<Scalings> = Some(Scalings {
-            scaling_types: vec![ScalingType::Isotropic, ScalingType::Anisotropic],
+        let scaling_singlet = Scalings {
+            scaling_types: vec![ScalingType::Legendre(0), ScalingType::Legendre(1)],
+            scalings: vec![1.43405, 0.065125632],
+        };
+        let scaling_triplet = Scalings {
+            scaling_types: vec![ScalingType::Legendre(0), ScalingType::Legendre(1)],
             scalings: vec![1.0069487290287622, 0.8152177020075073],
-        });
-        let suffix = "scaled_v1";
+        };
+        let suffix = "scaled_v2";
 
         ///////////////////////////////////
 
@@ -82,20 +82,25 @@ impl Problems {
         let singlet = get_interpolated(&singlet);
         let triplet = get_interpolated(&triplet);
 
-        let triplet = if let Some(scalings) = &scaling_triplet {
-            scalings.scale(&triplet)
-        } else {
-            ScalingType::Full.scale(&triplet, 1.)
+        let triplet = {
+            let morphing = Morphing {
+                lambdas: vec![0, 1],
+                scalings: scaling_triplet.scalings,
+            };
+
+            morphing.morph(&triplet)
         };
 
-        let singlet = if let Some(scalings) = &scaling_singlet {
-            scalings.scale(&singlet)
-        } else {
-            ScalingType::Full.scale(&singlet, 1.)
+        let singlet = {
+            let morphing = Morphing {
+                lambdas: vec![0, 1],
+                scalings: scaling_singlet.scalings,
+            };
+
+            morphing.morph(&singlet)
         };
 
-        let alkali_problem =
-            AlkaliRotorAtomProblemBuilder::new(triplet, singlet).build(&atoms, &basis_recipe);
+        let alkali_problem = AlkaliRotorAtomProblemBuilder::new(triplet, singlet).build(&atoms, &basis_recipe);
 
         let start = Instant::now();
         let bound_states = mag_fields
@@ -149,11 +154,14 @@ impl Problems {
             n_max: 10,
             ..Default::default()
         };
-        let scaling_c = 1.37;
-        let scalings = linspace(scaling_c-0.02, scaling_c+0.02, 500);
+        let scaling_c = 1.3731588;
+        let scaling_d = 0.2;
+        let scaling_no = 4_001;
+    
+        let scalings = linspace(scaling_c-scaling_d, scaling_c+scaling_d, scaling_no);
         let calc_wave = true;
-        let suffix = "invariant";
-        let lambda_1 = -0.0035;
+        let suffix = "invariant_v2";
+        let lambda_1 = -0.000636864;
 
         ///////////////////////////////////
 
@@ -178,7 +186,7 @@ impl Problems {
                 let morph = Morphing {
                     lambdas: vec![0, 1],
                     // todo! temporarily change scaling so that it counters n = 1 states shift
-                    scalings: vec![scaling, lambda_1 + (scaling - scaling_c) * 21. / 20.] 
+                    scalings: vec![scaling, lambda_1 + (scaling - scaling_c) * 21.6 / 20.] 
                 };
 
                 let pes = morph.morph(&pes);
@@ -228,7 +236,7 @@ impl Problems {
         let potential_type = PotentialType::Singlet;
         let scaling_type = ScalingType::Full;
 
-        let scaling_range = (0.6, 1.4);
+        let scaling_range = (1.4340338097242147 - 0.05, 1.4340338097242147 + 0.05);
         let err = 1e-6;
 
         let basis_recipe = RotorAtomBasisRecipe {
@@ -241,8 +249,8 @@ impl Problems {
             .map(|x| Energy(x.powi(3), GHz))
             .collect();
         let calc_wave = true;
-        let suffix = "long";
-        let lambda_1 = 0.;
+        let suffix = "1_43";
+        let lambda_1 = 0.06516772306037935;
 
         ///////////////////////////////////
 
@@ -321,9 +329,9 @@ impl Problems {
             n_max: 10,
             ..Default::default()
         };
-        let scalings1 = linspace(1.37 - 0.01, 1.37 + 0.01, 51);
-        let scalings2 = linspace(-0.025, 0.025, 51);
-        let suffix = "morphing_1_37";
+        let scalings1 = linspace(1.434 - 0.01, 1.434 + 0.01, 51);
+        let scalings2 = linspace(0.065071632 - 0.004, 0.065071632 + 0.004, 21);
+        let suffix = "morphing_1_43";
         let calc_wave = true;
 
         ///////////////////////////////////
@@ -400,7 +408,7 @@ impl Problems {
         let potential_type = PotentialType::Singlet;
         let scaling = Morphing {
             lambdas: vec![0, 1],
-            scalings: vec![1.3731587996463799, -0.0006368640198765835],
+            scalings: vec![1.4340338097242147, 0.06516772306037935],
         };
         
         let energy_range = (Energy(-8., GHz), Energy(0., GHz));
@@ -411,7 +419,7 @@ impl Problems {
             n_max: 10,
             ..Default::default()
         };
-        let suffix = "scaling_1_37";
+        let suffix = "scaling_1_43";
 
         ///////////////////////////////////
 
@@ -472,7 +480,7 @@ impl Problems {
             (0, Energy(-0.13956298, GHz)),
             (1, Energy(-1.15303618, GHz)),
             (2, Energy(-1.56510323, GHz)),
-            // (3, Energy(-3.78752205, GHz)),
+            (3, Energy(-3.78752205, GHz)),
             // (4, Energy(-6.31701475, GHz)),
             // (5, Energy(-7.95295992, GHz)),
             // (6, Energy(-10.25863621, GHz)),
@@ -480,8 +488,8 @@ impl Problems {
         ];
 
         let scaling_types = vec![ScalingType::Legendre(0), ScalingType::Legendre(1)];
-        let (center_0, center_1) = (1.3735, 0.0);
-        let (d_0, d_1) = (0.01, 0.1);
+        let (center_0, center_1) = (1.43405, 0.065125632);
+        let (d_0, d_1) = (0.005, 0.005);
 
         let max_iter = 500;
 
