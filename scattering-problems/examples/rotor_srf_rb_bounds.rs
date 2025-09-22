@@ -66,11 +66,11 @@ impl Problems {
 
         let scaling_singlet = Scalings {
             scaling_types: vec![ScalingType::Legendre(0), ScalingType::Legendre(1)],
-            scalings: vec![1.43405, 0.065125632],
+            scalings: vec![1.4340338097242147, 0.06516772306037935],
         };
         let scaling_triplet = Scalings {
             scaling_types: vec![ScalingType::Legendre(0), ScalingType::Legendre(1)],
-            scalings: vec![1.0069487290287622, 0.8152177020075073],
+            scalings: vec![0.9849947036736354, -0.02322520097349072],
         };
         let suffix = "scaled_v2";
 
@@ -143,7 +143,7 @@ impl Problems {
     }
 
     fn potential_surface_scaling() {
-        let potential_type = PotentialType::Singlet;
+        let potential_type = PotentialType::Triplet;
         let scaling_type = ScalingType::Full;
 
         let energy_range = (Energy(-9., GHz), Energy(0., GHz));
@@ -154,14 +154,14 @@ impl Problems {
             n_max: 10,
             ..Default::default()
         };
-        let scaling_c = 1.3731588;
+        let scaling_c = 1.003;
         let scaling_d = 0.2;
-        let scaling_no = 4_001;
+        let scaling_no = 2_001;
     
         let scalings = linspace(scaling_c-scaling_d, scaling_c+scaling_d, scaling_no);
         let calc_wave = true;
-        let suffix = "invariant_v2";
-        let lambda_1 = -0.000636864;
+        let suffix = "invariant";
+        let lambda_1 = 0.;
 
         ///////////////////////////////////
 
@@ -186,7 +186,7 @@ impl Problems {
                 let morph = Morphing {
                     lambdas: vec![0, 1],
                     // todo! temporarily change scaling so that it counters n = 1 states shift
-                    scalings: vec![scaling, lambda_1 + (scaling - scaling_c) * 21.6 / 20.] 
+                    scalings: vec![scaling, lambda_1 + (scaling - scaling_c) * 26. / 20.] 
                 };
 
                 let pes = morph.morph(&pes);
@@ -405,10 +405,10 @@ impl Problems {
     }
 
     fn bound_waves() {
-        let potential_type = PotentialType::Singlet;
+        let potential_type = PotentialType::Triplet;
         let scaling = Morphing {
             lambdas: vec![0, 1],
-            scalings: vec![1.4340338097242147, 0.06516772306037935],
+            scalings: vec![0.9849947036736354, -0.02322520097349072],
         };
         
         let energy_range = (Energy(-8., GHz), Energy(0., GHz));
@@ -419,7 +419,7 @@ impl Problems {
             n_max: 10,
             ..Default::default()
         };
-        let suffix = "scaling_1_43";
+        let suffix = "morphing_1";
 
         ///////////////////////////////////
 
@@ -464,34 +464,34 @@ impl Problems {
     }
 
     fn bound_states_reconstruction() {
-        // let potential_type = PotentialType::Triplet;
-        // let reconstructing_bound = vec![
-        //     (0, Energy(-0.04527481, GHz)),
-        //     (1, Energy(-0.77267861, GHz)),
-        //     (2, Energy(-3.09381825, GHz)),
-        //     (3, Energy(-4.64858425, GHz)),
+        let potential_type = PotentialType::Triplet;
+        let reconstructing_bound = vec![
+            (0, Energy(-0.04527481, GHz)),
+            (1, Energy(-0.77267861, GHz)),
+            (2, Energy(-3.09381825, GHz)),
+            (3, Energy(-4.64858425, GHz)),
         //     // (4, Energy(-7.68292606, GHz)),
         //     // (5, Energy(-8.22490901, GHz)),
         //     // (6, Energy(-9.90615487, GHz)),
-        // ];
+        ];
 
-        let potential_type = PotentialType::Singlet;
-        let reconstructing_bound = vec![
-            (0, Energy(-0.13956298, GHz)),
-            (1, Energy(-1.15303618, GHz)),
-            (2, Energy(-1.56510323, GHz)),
-            (3, Energy(-3.78752205, GHz)),
+        // let potential_type = PotentialType::Singlet;
+        // let reconstructing_bound = vec![
+            // (0, Energy(-0.13956298, GHz)),
+            // (1, Energy(-1.15303618, GHz)),
+            // (2, Energy(-1.56510323, GHz)),
+            // (3, Energy(-3.78752205, GHz)),
             // (4, Energy(-6.31701475, GHz)),
             // (5, Energy(-7.95295992, GHz)),
             // (6, Energy(-10.25863621, GHz)),
             // (7, Energy(-11.96461586, GHz)),
-        ];
+        // ];
 
         let scaling_types = vec![ScalingType::Legendre(0), ScalingType::Legendre(1)];
-        let (center_0, center_1) = (1.43405, 0.065125632);
-        let (d_0, d_1) = (0.005, 0.005);
+        let (center_0, center_1) = (0.9849947036736354, -0.02322520097349072);
+        let (d_0, d_1) = (0.01, 0.01);
 
-        let max_iter = 500;
+        let max_iter = 30;
 
         let energy_range = (Energy(-6., GHz), Energy(0., GHz));
         let err = Energy(0.1, MHz);

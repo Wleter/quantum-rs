@@ -36,6 +36,8 @@ mod common;
 
 use common::{PotentialType, ScalingType, Scalings, srf_rb_functionality::*};
 
+use crate::common::Morphing;
+
 pub fn main() {
     Problems::select(&mut get_args());
 }
@@ -541,15 +543,15 @@ impl Problems {
             ..Default::default()
         };
 
-        let scaling_singlet: Option<Scalings> = Some(Scalings {
-            scaling_types: vec![ScalingType::Isotropic, ScalingType::Anisotropic],
-            scalings: vec![1.0036204085226377, 0.9129498323277407],
-        });
-        let scaling_triplet: Option<Scalings> = Some(Scalings {
-            scaling_types: vec![ScalingType::Isotropic, ScalingType::Anisotropic],
-            scalings: vec![1.0069487290287622, 0.8152177020075073],
-        });
-        let suffix = "scaled_v1";
+        let scaling_singlet = Scalings {
+            scaling_types: vec![ScalingType::Legendre(0), ScalingType::Legendre(1)],
+            scalings: vec![1.4340338097242147, 0.06516772306037935],
+        };
+        let scaling_triplet = Scalings {
+            scaling_types: vec![ScalingType::Legendre(0), ScalingType::Legendre(1)],
+            scalings: vec![0.9849947036736354, -0.02322520097349072],
+        };
+        let suffix = "scaled_v2";
 
         ///////////////////////////////////
 
@@ -559,16 +561,22 @@ impl Problems {
         let singlet = get_interpolated(&singlet);
         let triplet = get_interpolated(&triplet);
 
-        let triplet = if let Some(scalings) = &scaling_triplet {
-            scalings.scale(&triplet)
-        } else {
-            ScalingType::Full.scale(&triplet, 1.)
+        let triplet = {
+            let morphing = Morphing {
+                lambdas: vec![0, 1],
+                scalings: scaling_triplet.scalings,
+            };
+
+            morphing.morph(&triplet)
         };
 
-        let singlet = if let Some(scalings) = &scaling_singlet {
-            scalings.scale(&singlet)
-        } else {
-            ScalingType::Full.scale(&singlet, 1.)
+        let singlet = {
+            let morphing = Morphing {
+                lambdas: vec![0, 1],
+                scalings: scaling_singlet.scalings,
+            };
+
+            morphing.morph(&singlet)
         };
 
         let alkali_problem =

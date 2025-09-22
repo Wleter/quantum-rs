@@ -4,7 +4,7 @@ import re
 import numpy as np
 import numpy.typing as npt
 from array import array
-from .units import GHZ
+from .units import GHZ, ANGS
 
 
 def parse_wavefunction_file(path, basis_size, max_coeff=None):
@@ -29,8 +29,8 @@ def parse_wavefunction_file(path, basis_size, max_coeff=None):
                     npts = len(r_arr)
                     data[current_state] = {
                         'energy': energy,
-                        'r': np.frombuffer(r_arr, dtype=float).copy(),
-                        'coeffs': np.frombuffer(coeffs_arr, dtype=float).reshape(npts, coeff_count).copy()
+                        'r': np.frombuffer(r_arr, dtype=float).copy() * ANGS,
+                        'coeffs': np.frombuffer(coeffs_arr, dtype=float).reshape(npts, coeff_count).copy() / np.sqrt(ANGS)
                     }
 
                 current_state = int(m.group(1))
@@ -59,8 +59,8 @@ def parse_wavefunction_file(path, basis_size, max_coeff=None):
         npts = len(r_arr)
         data[current_state] = {
             'energy': energy,
-            'r': np.frombuffer(r_arr, dtype=float).copy(),
-            'coeffs': np.frombuffer(coeffs_arr, dtype=float).reshape(npts, coeff_count).copy()
+            'r': np.frombuffer(r_arr, dtype=float).copy() * ANGS,
+            'coeffs': np.frombuffer(coeffs_arr, dtype=float).reshape(npts, coeff_count).copy() / np.sqrt(ANGS)
         }
 
     return data
@@ -85,8 +85,8 @@ def parse_wavefunction_field_file(path, basis_size, max_coeff=None):
                 if current_state is not None:
                     npts = len(r_arr)
                     data.append({
-                        'r': np.frombuffer(r_arr, dtype=float).copy(),
-                        'coeffs': np.frombuffer(coeffs_arr, dtype=float).reshape(npts, coeff_count).copy()
+                        'r': np.frombuffer(r_arr, dtype=float).copy() * ANGS,
+                        'coeffs': np.frombuffer(coeffs_arr, dtype=float).reshape(npts, coeff_count).copy() / np.sqrt(ANGS)
                     })
 
                 current_state = int(m.group(1))
@@ -113,8 +113,8 @@ def parse_wavefunction_field_file(path, basis_size, max_coeff=None):
     if current_state is not None:
         npts = len(r_arr)
         data.append({
-            'r': np.frombuffer(r_arr, dtype=float).copy(),
-            'coeffs': np.frombuffer(coeffs_arr, dtype=float).reshape(npts, coeff_count).copy()
+            'r': np.frombuffer(r_arr, dtype=float).copy() * ANGS,
+            'coeffs': np.frombuffer(coeffs_arr, dtype=float).reshape(npts, coeff_count).copy() / np.sqrt(ANGS)
         })
 
     return data

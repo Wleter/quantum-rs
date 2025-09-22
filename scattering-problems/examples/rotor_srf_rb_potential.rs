@@ -2,7 +2,7 @@ use std::{fs::File, io::{self, BufRead, BufReader, Write}};
 
 use clebsch_gordan::hi32;
 use faer::{Col, Mat};
-use quantum::{problem_selector::{get_args, ProblemSelector}, problems_impl, units::{Energy, Kelvin}, utility::{linspace, logspace}};
+use quantum::{problem_selector::{get_args, ProblemSelector}, problems_impl, units::{Angstrom, Energy, Kelvin, Unit}, utility::{linspace, logspace}};
 
 mod common;
 use common::{PotentialType, ScalingType, Scalings, srf_rb_functionality::*};
@@ -128,7 +128,7 @@ impl Problems {
     }
 
     fn wave_adiabats() {
-        let pes_type = PotentialType::Singlet; 
+        let pes_type = PotentialType::Triplet; 
         let n_max = 175;
         let filename = format!("data/wave_function_{pes_type}_{n_max}.output");
         let basis_recipe = RotorAtomBasisRecipe {
@@ -161,7 +161,7 @@ impl Problems {
             file_adiabat.flush().unwrap();
 
             for (r, coeffs) in &mut state {
-                potential.value_inplace(r, &mut potential_value);
+                potential.value_inplace(r * Angstrom::TO_AU_MUL, &mut potential_value);
                 for (d, &c) in vector.iter_mut().zip(&coeffs) {
                     *d = c
                 }
