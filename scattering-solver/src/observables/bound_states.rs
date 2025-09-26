@@ -349,6 +349,12 @@ where
             if mismatch_node[index].is_none() {
                 mismatch_node[index] = Some(mid_mismatch.clone());
             }
+            if index == 0 {
+                mismatch_node[0] = Some(mid_mismatch.clone())
+            }
+            if index + 1 == mismatch_node.len() {
+                *mismatch_node.last_mut().unwrap() = Some(mid_mismatch.clone())
+            };
 
             if mid_mismatch.nodes > target_nodes {
                 upper_bound = mid_mismatch;
