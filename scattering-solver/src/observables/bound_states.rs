@@ -340,13 +340,14 @@ where
 
             let mid_mismatch = self.bound_mismatch(Energy(energy_mid, Au));
 
-            let index = (mid_mismatch.nodes - index_offset) as usize;
+            let index = if let Some(nodes_range) = self.nodes_range {
+                (mid_mismatch.nodes.clamp(nodes_range[0], nodes_range[1]) - index_offset) as usize
+            } else {
+                (mid_mismatch.nodes - index_offset) as usize
+            };
 
-            if index < mismatch_node.len() && mismatch_node[index].is_none() {
+            if mismatch_node[index].is_none() {
                 mismatch_node[index] = Some(mid_mismatch.clone());
-            }
-            if index >= mismatch_node.len() && mid_mismatch.energy.to_au() < upper_bound.energy.to_au() {
-                *mismatch_node.last_mut().unwrap() = Some(mid_mismatch.clone())
             }
 
             if mid_mismatch.nodes > target_nodes {
