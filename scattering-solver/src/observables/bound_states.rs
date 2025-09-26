@@ -24,6 +24,11 @@ pub struct BoundMismatch {
     pub energy: Energy<Au>,
 }
 
+pub enum Monotony {
+    Increasing,
+    Decreasing
+}
+
 pub struct BoundProblemBuilder<'a, P, S, Prop>
 where
     P: MatPotential,
@@ -37,6 +42,9 @@ where
     phantom: PhantomData<Prop>,
 
     r_range: [f64; 3],
+    nodes_range: Option<[u64; 2]>,
+
+    monotony: Monotony
 }
 
 impl<'a, P, S, Prop> Default for BoundProblemBuilder<'a, P, S, Prop>
@@ -54,6 +62,8 @@ where
             phantom: PhantomData,
 
             r_range: Default::default(),
+            nodes_range: None,
+            monotony: Monotony::Decreasing
         }
     }
 }
@@ -92,6 +102,18 @@ where
         self
     }
 
+    pub fn with_nodes_range(mut self, node_range: [u64; 2]) -> Self {
+        self.nodes_range = Some(node_range);
+
+        self
+    }
+
+    pub fn with_monotony(mut self, monotony: Monotony) -> Self {
+        self.monotony = monotony;
+        
+        self
+    }
+
     pub fn build(self) -> BoundProblem<'a, P, S, Prop> {
         let particles = self
             .particles
@@ -112,6 +134,8 @@ where
             r_min: self.r_range[0],
             r_match: self.r_range[1],
             r_max: self.r_range[2],
+            nodes_range: self.nodes_range,
+            monotony: self.monotony
         }
     }
 }
@@ -131,6 +155,9 @@ where
     r_min: f64,
     r_match: f64,
     r_max: f64,
+
+    nodes_range: Option<[u64; 2]>,
+    monotony: Monotony,
 }
 
 impl<'a, P, S, Prop> BoundProblem<'a, P, S, Prop>
@@ -187,32 +214,29 @@ where
         let mut bound_energies = vec![];
         let mut bound_nodes = vec![];
 
-        let upper_node = upper_mismatch.nodes;
-        let lower_node = lower_mismatch.nodes;
+        let mut upper_node = upper_mismatch.nodes;
+        let mut lower_node = lower_mismatch.nodes;
+        if let Some(node_range) = self.nodes_range {
+            lower_node = lower_node.max(node_range[0]);
+            upper_node = upper_node.min(node_range[1]);
+        }
+
         let states_no = (upper_node - lower_node) as usize;
 
         let mut mismatch_node = vec![None; states_no + 1];
         mismatch_node[0] = Some(lower_mismatch);
         mismatch_node[states_no] = Some(upper_mismatch);
 
-        if upper_node == 0 {
-            return BoundStates {
-                energies: vec![],
-                nodes: vec![],
-                occupations: None,
-            }
-        }
-        let mut target_nodes = upper_node - 1;
-        while target_nodes >= lower_node {
+        let nodes: Vec<u64> = match self.monotony {
+            Monotony::Increasing => (lower_node..upper_node).collect(),
+            Monotony::Decreasing => (lower_node..upper_node).rev().collect(),
+        };
+
+        for target_nodes in nodes {
             let bound_energy = self.search_state(lower_node, target_nodes, &mut mismatch_node, err);
 
             bound_energies.push(bound_energy.to_au());
             bound_nodes.push(target_nodes);
-
-            if target_nodes == 0 {
-                break
-            }
-            target_nodes -= 1;
         }
 
         BoundStates {
@@ -318,8 +342,11 @@ where
 
             let index = (mid_mismatch.nodes - index_offset) as usize;
 
-            if mismatch_node[index].is_none() {
+            if index < mismatch_node.len() && mismatch_node[index].is_none() {
                 mismatch_node[index] = Some(mid_mismatch.clone());
+            }
+            if index >= mismatch_node.len() && mid_mismatch.energy.to_au() < upper_bound.energy.to_au() {
+                *mismatch_node.last_mut().unwrap() = Some(mid_mismatch.clone())
             }
 
             if mid_mismatch.nodes > target_nodes {
