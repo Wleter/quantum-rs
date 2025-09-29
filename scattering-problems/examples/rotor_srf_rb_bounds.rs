@@ -66,7 +66,7 @@ impl Problems {
 
         let scaling_singlet = Scalings {
             scaling_types: vec![ScalingType::Legendre(0), ScalingType::Legendre(1)],
-            scalings: vec![1.4340338097242147, 0.06516772306037935],
+            scalings: vec![1.021560818780792, 0.023755917959479227],
         };
         let scaling_triplet = Scalings {
             scaling_types: vec![ScalingType::Legendre(0), ScalingType::Legendre(1)],
@@ -236,7 +236,7 @@ impl Problems {
         let potential_type = PotentialType::Singlet;
         let scaling_type = ScalingType::Full;
 
-        let scaling_range = (1.4340338097242147 - 0.05, 1.4340338097242147 + 0.05);
+        let scaling_range = (1.021560818780792 - 0.5, 1.021560818780792 + 0.5);
         let err = 1e-6;
 
         let basis_recipe = RotorAtomBasisRecipe {
@@ -249,8 +249,8 @@ impl Problems {
             .map(|x| Energy(x.powi(3), GHz))
             .collect();
         let calc_wave = true;
-        let suffix = "1_43";
-        let lambda_1 = 0.06516772306037935;
+        let suffix = "1_02";
+        let lambda_1 = 0.023755917959479227;
 
         ///////////////////////////////////
 
@@ -419,7 +419,7 @@ impl Problems {
             n_max: 10,
             ..Default::default()
         };
-        let suffix = "morphing_1";
+        let suffix = "morphing";
 
         ///////////////////////////////////
 
@@ -464,32 +464,32 @@ impl Problems {
     }
 
     fn bound_states_reconstruction() {
-        let potential_type = PotentialType::Triplet;
-        let reconstructing_bound = vec![
-            (0, Energy(-0.04527481, GHz)),
-            (1, Energy(-0.77267861, GHz)),
-            (2, Energy(-3.09381825, GHz)),
-            (3, Energy(-4.64858425, GHz)),
+        // let potential_type = PotentialType::Triplet;
+        // let reconstructing_bound = vec![
+        //     (0, Energy(-0.04527481, GHz)),
+        //     (1, Energy(-0.77267861, GHz)),
+        //     (2, Energy(-3.09381825, GHz)),
+        //     (3, Energy(-4.64858425, GHz)),
         //     // (4, Energy(-7.68292606, GHz)),
         //     // (5, Energy(-8.22490901, GHz)),
         //     // (6, Energy(-9.90615487, GHz)),
-        ];
+        // ];
 
-        // let potential_type = PotentialType::Singlet;
-        // let reconstructing_bound = vec![
-            // (0, Energy(-0.13956298, GHz)),
-            // (1, Energy(-1.15303618, GHz)),
-            // (2, Energy(-1.56510323, GHz)),
-            // (3, Energy(-3.78752205, GHz)),
+        let potential_type = PotentialType::Singlet;
+        let reconstructing_bound = vec![
+            (0, Energy(-0.13956298, GHz)),
+            (1, Energy(-1.15303618, GHz)),
+            (2, Energy(-1.56510323, GHz)),
+            (3, Energy(-3.78752205, GHz)),
             // (4, Energy(-6.31701475, GHz)),
             // (5, Energy(-7.95295992, GHz)),
             // (6, Energy(-10.25863621, GHz)),
             // (7, Energy(-11.96461586, GHz)),
-        // ];
+        ];
 
         let scaling_types = vec![ScalingType::Legendre(0), ScalingType::Legendre(1)];
-        let (center_0, center_1) = (0.9849947036736354, -0.02322520097349072);
-        let (d_0, d_1) = (0.01, 0.01);
+        let (center_0, center_1) = (1.1015652473217923, -0.09437170890913651);
+        let (d_0, d_1) = (0.1, 0.1);
 
         let max_iter = 30;
 

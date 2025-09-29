@@ -39,6 +39,7 @@ use common::{PotentialType, ScalingType, Scalings, srf_rb_functionality::*};
 use crate::common::Morphing;
 
 pub fn main() {
+    rayon::ThreadPoolBuilder::new().num_threads(24).build_global().unwrap();
     Problems::select(&mut get_args());
 }
 
@@ -545,7 +546,7 @@ impl Problems {
 
         let scaling_singlet = Scalings {
             scaling_types: vec![ScalingType::Legendre(0), ScalingType::Legendre(1)],
-            scalings: vec![1.4340338097242147, 0.06516772306037935],
+            scalings: vec![1.021560818780792, 0.023755917959479227],
         };
         let scaling_triplet = Scalings {
             scaling_types: vec![ScalingType::Legendre(0), ScalingType::Legendre(1)],
