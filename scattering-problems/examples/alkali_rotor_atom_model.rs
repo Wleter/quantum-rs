@@ -179,22 +179,24 @@ impl Problems {
     }    
     
     fn scaling_bound_states() {
-        let potential_type = PotentialType::Triplet;
+        let potential_type = PotentialType::Singlet;
 
-        let scaling_range = (0.8, 1.2);
-        let err = 1e-5;
+        let scaling_range = (1.4, 1.8);
+        let err = 1e-6;
 
         let basis_recipe = RotorAtomBasisRecipe {
             l_max: 10,
             n_max: 10,
             ..Default::default()
         };
-        let energies: Vec<Energy<GHz>> = linspace(-2., 0., 101)
+        let energies: Vec<Energy<GHz>> = linspace(-2., 0., 201)
             .iter()
             .map(|x| Energy(x.powi(3), GHz))
             .collect();
+
         let calc_wave = true;
-        let suffix = "";
+        let scaling_1 = 5e-3;
+        let suffix = "_anisotropy_5e-3_scaling_1_4";
 
         ///////////////////////////////////
 
@@ -221,8 +223,8 @@ impl Problems {
 
                 let morphed_problem = |scaling| {
                     let scaling = Scalings {
-                        scaling_types: vec![ScalingType::Full],
-                        scalings: vec![scaling],
+                        scaling_types: vec![ScalingType::Full, ScalingType::Legendre(1)],
+                        scalings: vec![scaling, scaling_1],
                     };
                     let pes = scaling.scale(&pes);
     
