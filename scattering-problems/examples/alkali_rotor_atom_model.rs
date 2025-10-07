@@ -4,9 +4,9 @@ use clebsch_gordan::hi32;
 use faer::Mat;
 use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
-use quantum::{problem_selector::{get_args, ProblemSelector}, problems_impl, units::{Au, Energy, GHz, Kelvin}, utility::linspace};
+use quantum::{problem_selector::{get_args, ProblemSelector}, problems_impl, units::{Au, Energy, GHz, Kelvin, MHz}, utility::linspace};
 use scattering_problems::{field_bound_states::{FieldBoundStates, FieldBoundStatesDependence, FieldProblemBuilder}, rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder}};
-use scattering_solver::{boundary::{Boundary, Direction}, log_derivatives::johnson::Johnson, numerovs::{multi_numerov::MultiRNumerov, LocalWavelengthStepRule}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, propagator::{CoupledEquation, Propagator}, utility::{save_data, save_serialize, save_spectrum}};
+use scattering_solver::{boundary::{Boundary, Direction}, log_derivatives::johnson::Johnson, numerovs::{multi_numerov::MultiRNumerov, LocalWavelengthStepRule}, observables::bound_states::{BoundProblemBuilder, WaveFunctions}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, propagator::{CoupledEquation, Propagator}, utility::{save_data, save_serialize, save_spectrum}};
 
 use crate::common::{srf_rb_functionality::get_particles, PotentialType, ScalingType, Scalings};
 use rayon::prelude::*;
@@ -22,7 +22,8 @@ struct Problems;
 problems_impl!(Problems, "alkali like rotor + atom model",
     "potentials" => |_| Self::potentials(),
     "basis convergence" => |_| Self::basis_convergence(),
-    "pes scaling bound states" => |_| Self::scaling_bound_states()
+    "pes scaling bound states" => |_| Self::scaling_bound_states(),
+    "pes scaled bound waves" => |_| Self::scaled_bound_waves(),
 );
 
 impl Problems {
@@ -181,12 +182,12 @@ impl Problems {
     fn scaling_bound_states() {
         let potential_type = PotentialType::Singlet;
 
-        let scaling_range = (1.4, 1.8);
-        let err = 1e-6;
+        let scaling_range = (0.6, 1.4);
+        let err = 1e-7;
 
         let basis_recipe = RotorAtomBasisRecipe {
-            l_max: 10,
-            n_max: 10,
+            l_max: 1,
+            n_max: 1,
             ..Default::default()
         };
         let energies: Vec<Energy<GHz>> = linspace(-2., 0., 201)
@@ -195,8 +196,8 @@ impl Problems {
             .collect();
 
         let calc_wave = true;
-        let scaling_1 = 5e-3;
-        let suffix = "_anisotropy_5e-3_scaling_1_4";
+        let scaling_1 = 1e-1;
+        let suffix = "_anisotropy_1e-1";
 
         ///////////////////////////////////
 
@@ -264,6 +265,69 @@ impl Problems {
         );
 
         save_serialize(&filename, &data).unwrap();
+    }
+
+    fn scaled_bound_waves() {
+        let potential_type = PotentialType::Singlet;
+
+        let energy_range = (Energy(-8., GHz), Energy(0., GHz));
+        let err = Energy(0.1, MHz);
+
+        let basis_recipe = RotorAtomBasisRecipe {
+            l_max: 1,
+            n_max: 1,
+            ..Default::default()
+        };
+
+        let scaling = 0.7;
+        let scaling_1 = 1e-1;
+        let suffix = "scaling_0_7_aniso_1e-1";
+
+        ///////////////////////////////////
+
+        let singlet = get_singlet();
+        let triplet = get_triplet();
+
+        let pes = match potential_type {
+            PotentialType::Singlet => singlet,
+            PotentialType::Triplet => triplet,
+        };
+
+        let mut atoms = get_particles(Energy(1e-7, Kelvin), hi32!(1));
+        let problem = {
+            let scaling = Scalings {
+                scaling_types: vec![ScalingType::Full, ScalingType::Legendre(1)],
+                scalings: vec![scaling, scaling_1],
+            };
+            let pes = scaling.scale(&pes);
+
+            RotorAtomProblemBuilder::new(pes).build(&atoms, &basis_recipe)
+        };
+        atoms.insert(problem.asymptotic);
+        let potential = problem.potential;
+
+
+        let bound_problem = BoundProblemBuilder::new(&atoms, &potential)
+            .with_propagation(LocalWavelengthStepRule::new(4e-3, 10., 400.), Johnson)
+            .with_range(6., 20., 500.)
+            .build();
+
+        let bounds = bound_problem
+            .bound_states(energy_range, err);
+
+        let waves = bound_problem.bound_waves(&bounds).collect();
+
+        let data = WaveFunctions {
+            bounds,
+            waves,
+        };
+
+        let filename = format!(
+            "rotor_atom_model_waves_{potential_type}_scaling_n_max_{}{suffix}",
+            basis_recipe.n_max
+        );
+
+        save_serialize(&filename, &data).unwrap()
     }
 }
 
