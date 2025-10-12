@@ -65,7 +65,7 @@ impl SMatrix {
         }
     }
 
-    pub fn s_matrix(&self) -> MatRef<c64> {
+    pub fn s_matrix(&self) -> MatRef<'_, c64> {
         self.s_matrix.as_ref()
     }
 

@@ -79,7 +79,6 @@ impl Problems {
         let potential = &alkali_problem.potential;
 
         let mut potential_mat = Mat::<f64>::identity(potential.size(), potential.size());
-        potential.value_inplace(1e4, &mut potential_mat);
 
         let distances = linspace(4., 200., 1000);
 

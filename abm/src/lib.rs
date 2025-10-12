@@ -617,11 +617,11 @@ impl<T> ABMHifiProblem<T> {
         (energies, vectors)
     }
 
-    pub fn get_magnetic_inv(&self) -> MatRef<f64> {
+    pub fn get_magnetic_inv(&self) -> MatRef<'_, f64> {
         self.magnetic_inv.as_ref()
     }
 
-    pub fn get_magnetic_prop(&self) -> MatRef<f64> {
+    pub fn get_magnetic_prop(&self) -> MatRef<'_, f64> {
         self.magnetic_prop.as_ref()
     }
 

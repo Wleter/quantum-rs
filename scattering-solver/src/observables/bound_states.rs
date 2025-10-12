@@ -103,6 +103,7 @@ where
     }
 
     pub fn with_nodes_range(mut self, node_range: [u64; 2]) -> Self {
+        // we want inclusive range, this way node_range[1] is included
         self.nodes_range = Some([node_range[0], node_range[1] + 1]);
 
         self

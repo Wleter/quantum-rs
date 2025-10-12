@@ -218,7 +218,7 @@ pub fn ratio_riccati_i(n: u32, x_1: f64, x_2: f64) -> f64 {
 /// "Handbook of Mathematical Functions" - eq. 10.2.4 (written as z * sqrt(pi/2z) K_{n+1/2}(z))
 pub fn ratio_riccati_k(n: u32, x_1: f64, x_2: f64) -> f64 {
     let red_k_0 = |_| 1.0;
-    let red_k_1 = |x| (1.0 + 1.0 / x);
+    let red_k_1 = |x| 1.0 + 1.0 / x;
 
     // Calculates riccati $(-1)^(n+1) * K$ bessel without leading exponent
     let k_1 = modified_bessel_recurrence(n, x_1, -red_k_0(x_1), red_k_1(x_1));
