@@ -75,6 +75,12 @@ impl SMatrix {
         1.0 / Complex64::new(0.0, self.momentum) * (1.0 - s_element) / (1.0 + s_element)
     }
 
+    pub fn get_phase_shift(&self) -> f64 {
+        let s_element: Complex64 = self.s_matrix[(self.entrance, self.entrance)].into();
+
+        s_element.arg() / 2.
+    }
+
     pub fn get_elastic_cross_sect(&self) -> f64 {
         let s_element: Complex64 = self.s_matrix[(self.entrance, self.entrance)].into();
 
