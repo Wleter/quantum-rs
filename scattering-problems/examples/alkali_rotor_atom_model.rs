@@ -447,9 +447,9 @@ impl Problems {
     }
 
     fn non_adiabatic_coupling() {
-        let n_max = 1;
-        let aniso_scaling = 1e-1;
-        let suffix = "_aniso_1e-1";
+        let n_max = 10;
+        let aniso_scaling = 1e-3;
+        let suffix = "_aniso_1e-3";
 
 
         let distances = linspace(3., 80., 804);
@@ -490,7 +490,7 @@ impl Problems {
 
             zip!(&mut num, &denom).for_each(|unzip!(n, d)| {
                 if *d != 0. {
-                    *n = *n / d
+                    *n = (*n / d).abs()
                 } else {
                     *n = 0.
                 }
