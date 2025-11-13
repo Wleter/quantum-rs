@@ -448,10 +448,15 @@ impl Problems {
 
     fn non_adiabatic_coupling() {
         let n_max = 1;
+        let aniso_scaling = 1e-1;
+        let suffix = "_aniso_1e-1";
+
+
         let distances = linspace(3., 80., 804);
         let dr = 1e-3;
 
         let singlet = get_singlet();
+        let pes = ScalingType::Legendre(1).scale(&singlet, aniso_scaling);
 
         let basis_recipe = RotorAtomBasisRecipe {
             l_max: n_max,
@@ -460,7 +465,7 @@ impl Problems {
         };
 
         let atoms = get_particles(Energy(1e-7, Kelvin), hi32!(0));
-        let problem = RotorAtomProblemBuilder::new(singlet.clone()).build(&atoms, &basis_recipe);
+        let problem = RotorAtomProblemBuilder::new(pes.clone()).build(&atoms, &basis_recipe);
 
         let mut data = vec![];
         let mut buffer = vec![0.; problem.potential.size() * (problem.potential.size() - 1) / 2];
@@ -504,7 +509,7 @@ impl Problems {
         }
 
         save_spectrum(
-            &format!("rotor_atom_model_singlet_non_adiabatic_n_{}", basis_recipe.n_max),
+            &format!("rotor_atom_model_singlet_non_adiabatic_n_{}{}", basis_recipe.n_max, suffix),
             "distance\tadiabat",
             &distances,
             &data,

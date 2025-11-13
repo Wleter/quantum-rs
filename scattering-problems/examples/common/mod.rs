@@ -1,7 +1,61 @@
-use scattering_solver::potentials::{composite_potential::Composite, potential::{ScaledPotential, SimplePotential, SubPotential}};
-use std::fmt::Display;
+use faer::{Mat, diag::Diag, unzip, zip};
+use quantum::{params::particles::Particles, units::{Au, Energy}};
+use scattering_solver::potentials::{composite_potential::Composite, potential::{MatPotential, ScaledPotential, SimplePotential, SubPotential}};
+use std::{f64::consts::PI, fmt::Display, mem::swap};
 
 pub mod srf_rb_functionality;
+
+pub fn phase_integral(pot: &impl MatPotential, r_min: f64, r_max: f64, prec: f64, particles: &Particles) -> Vec<f64> {
+    let mut r = r_min;
+    let m = particles.red_mass();
+    let e = particles.get::<Energy<Au>>().unwrap().value();
+
+    let mut k_prev = Mat::zeros(pot.size(), pot.size());
+    let mut k_max = calc_k(pot, r, m, e, &mut k_prev);
+
+    let mut k_now = k_prev.clone();
+
+    let mut in_well = false;
+    let mut cumulative = Mat::zeros(pot.size(), pot.size());
+    while r < r_max {
+        let dr = if k_max == 0. && in_well {
+            break
+        } else if k_max == 0. {
+            f64::min(0.1, 2. * PI / (k_max + 1e-10) * prec)
+        } else {
+            in_well = true;
+            2. * PI / (k_max + 1e-10) * prec
+        };
+
+        r += dr;
+        k_max = calc_k(pot, r, m, e, &mut k_now);
+        if k_max == 0. && in_well {
+            break
+        }
+
+        cumulative += 0.5 * dr * (&k_now + &k_prev) / PI;
+
+        swap(&mut k_now, &mut k_prev);
+    }
+
+    cumulative.self_adjoint_eigenvalues(faer::Side::Lower).unwrap()
+}
+
+fn calc_k(pot: &impl MatPotential, r: f64, m: f64, e: f64, out: &mut Mat<f64>) -> f64 {
+    pot.value_inplace(r, out);
+
+    let eig = out.self_adjoint_eigen(faer::Side::Lower).unwrap();
+    let mut diag: Diag<f64> = Diag::zeros(pot.size());
+    let transf = eig.U();
+
+    zip!(diag.column_vector_mut(), &eig.S().column_vector()).for_each(|unzip!(d, p)| {
+        *d = f64::sqrt(f64::max(0., 2. * m * (e - p)))
+    });
+
+    *out = &transf * &diag * transf.transpose();
+
+    *diag.column_vector().iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap()
+}
 
 #[allow(unused)]
 #[derive(Clone, Debug, Copy)]
