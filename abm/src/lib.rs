@@ -510,7 +510,7 @@ impl ABMProblemBuilder {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Copy)]
 pub enum Symmetry {
     None,
     Fermionic,
