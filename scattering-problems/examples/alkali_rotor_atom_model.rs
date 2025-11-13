@@ -1,14 +1,14 @@
 use std::time::Instant;
 
 use clebsch_gordan::hi32;
-use faer::Mat;
+use faer::{Mat, unzip, zip};
 use hhmmss::Hhmmss;
 use indicatif::ParallelProgressIterator;
 use quantum::{problem_selector::{get_args, ProblemSelector}, problems_impl, units::{Au, Energy, GHz, Kelvin, MHz}, utility::linspace};
 use scattering_problems::{field_bound_states::{FieldBoundStates, FieldBoundStatesDependence, FieldProblemBuilder, FieldWaveFunctions}, rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder}};
 use scattering_solver::{boundary::{Boundary, Direction}, log_derivatives::johnson::Johnson, numerovs::{multi_numerov::MultiRNumerov, LocalWavelengthStepRule}, observables::bound_states::{BoundProblemBuilder, WaveFunctions}, potentials::{composite_potential::Composite, dispersion_potential::Dispersion, potential::{Potential, SimplePotential}}, propagator::{CoupledEquation, Propagator}, utility::{save_data, save_serialize, save_spectrum}};
 
-use crate::common::{srf_rb_functionality::get_particles, PotentialType, ScalingType, Scalings};
+use crate::common::{PotentialType, ScalingType, Scalings, phase_integral, srf_rb_functionality::get_particles};
 use rayon::prelude::*;
 
 mod common;
@@ -26,6 +26,8 @@ problems_impl!(Problems, "alkali like rotor + atom model",
     "pes scaling bound states" => |_| Self::scaling_bound_states(),
     "pes scaled bound waves" => |_| Self::scaled_bound_waves(),
     "pes scaled bound waves field" => |_| Self::scaled_bound_waves_field(),
+    "wkb calculation" => |_| Self::wkb_calculation(),
+    "non adiabatic coupling" => |_| Self::non_adiabatic_coupling(),
 );
 
 impl Problems {
@@ -188,8 +190,8 @@ impl Problems {
         let err = 1e-7;
 
         let basis_recipe = RotorAtomBasisRecipe {
-            l_max: 1,
-            n_max: 1,
+            l_max: 2,
+            n_max: 2,
             ..Default::default()
         };
         let energies: Vec<Energy<GHz>> = linspace(-2., 0., 201)
@@ -198,8 +200,8 @@ impl Problems {
             .collect();
 
         let calc_wave = true;
-        let scaling_1 = 5e-1;
-        let suffix = "_anisotropy_5e-1";
+        let scaling_1 = 3e-1;
+        let suffix = "_anisotropy_3e-1";
 
         ///////////////////////////////////
 
@@ -236,7 +238,7 @@ impl Problems {
 
                 let bound_problem = FieldProblemBuilder::new(&atoms, &morphed_problem)
                     .with_propagation(LocalWavelengthStepRule::new(4e-3, 10., 400.), Johnson)
-                    .with_range(6., 20., 500.)
+                    .with_range(6., 50., 500.)
                     .build();
 
                 let mut bounds = bound_problem
@@ -281,9 +283,9 @@ impl Problems {
             ..Default::default()
         };
 
-        let scaling = 0.7;
-        let scaling_1 = 1e-1;
-        let suffix = "scaling_0_7_aniso_1e-1";
+        let scaling = 1.199;
+        let scaling_1 = 0.;
+        let suffix = "_scaling_1_199_aniso_0";
 
         ///////////////////////////////////
 
@@ -390,6 +392,124 @@ impl Problems {
         );
 
         save_serialize(&filename, &data).unwrap()
+    }
+    
+    fn wkb_calculation() {
+        let pes_type = PotentialType::Singlet;
+
+        let scaling_0 = 0.85;
+        let scaling_1 = 2e-1;
+        let suffix = "0_85_aniso_2e-1";
+        let energies: Vec<f64> = linspace(-2., 0., 100).iter().map(|x| x.powi(3)).collect();
+
+        let basis_recipe = RotorAtomBasisRecipe {
+            l_max: 1,
+            n_max: 1,
+            ..Default::default()
+        };
+
+        let singlet = get_singlet();
+        let triplet = get_triplet();
+
+        let pes = match pes_type {
+            PotentialType::Singlet => singlet,
+            PotentialType::Triplet => triplet,
+        };
+
+        let atoms = get_particles(Energy(-0.5, GHz), hi32!(0));
+        let scaling = Scalings {
+            scaling_types: vec![ScalingType::Full, ScalingType::Legendre(1)],
+            scalings: vec![scaling_0, scaling_1],
+        };
+        let pes = scaling.scale(&pes);
+        let problem = RotorAtomProblemBuilder::new(pes).build(&atoms, &basis_recipe);
+        let potential = problem.potential;
+
+        let mut data = vec![];
+        for e in &energies {
+            let atoms = get_particles(Energy(*e, GHz), hi32!(0));
+
+            let integral: Vec<f64> = phase_integral(&potential, 5., 1e2, 1e-3, &atoms)
+                .iter()
+                .map(|x| x - 0.5)
+                .collect();
+
+            data.push(integral);
+        }
+
+        save_spectrum(
+            &format!("rotor_atom_model_{pes_type}_wkb_{suffix}"),
+            "distance\tnu",
+            &energies,
+            &data,
+        )
+        .unwrap();
+    }
+
+    fn non_adiabatic_coupling() {
+        let n_max = 1;
+        let distances = linspace(3., 80., 804);
+        let dr = 1e-3;
+
+        let singlet = get_singlet();
+
+        let basis_recipe = RotorAtomBasisRecipe {
+            l_max: n_max,
+            n_max: n_max,
+            ..Default::default()
+        };
+
+        let atoms = get_particles(Energy(1e-7, Kelvin), hi32!(0));
+        let problem = RotorAtomProblemBuilder::new(singlet.clone()).build(&atoms, &basis_recipe);
+
+        let mut data = vec![];
+        let mut buffer = vec![0.; problem.potential.size() * (problem.potential.size() - 1) / 2];
+        let mut buffer1 = Mat::zeros(problem.potential.size(), problem.potential.size());
+        let mut buffer2 = Mat::zeros(problem.potential.size(), problem.potential.size());
+        let ones: Mat<f64> = Mat::ones(problem.potential.size(), problem.potential.size());
+        for &r in &distances {
+            problem.potential.value_inplace(r, &mut buffer1);
+
+            let eigen = buffer1
+                .self_adjoint_eigen(faer::Side::Lower)
+                .unwrap();
+            let vecs = eigen.U();
+            let vals = eigen.S();
+
+            problem.potential.value_inplace(r - dr, &mut buffer1);
+            problem.potential.value_inplace(r + dr, &mut buffer2);
+            let d_pot = (&buffer2 - &buffer1) / (2. * dr);
+            let mut num = vecs.transpose() * d_pot * &vecs;
+
+            let denom = &vals * &ones - &ones * &vals;
+
+            zip!(&mut num, &denom).for_each(|unzip!(n, d)| {
+                if *d != 0. {
+                    *n = *n / d
+                } else {
+                    *n = 0.
+                }
+            });
+
+
+            let mut k = 0;
+            for i in 0..num.ncols() {
+                for j in (i+1)..num.nrows() {
+                    buffer[k] = num[(i, j)];
+                    k += 1;
+                }
+            }
+
+            data.push(buffer.clone());
+        }
+
+        save_spectrum(
+            &format!("rotor_atom_model_singlet_non_adiabatic_n_{}", basis_recipe.n_max),
+            "distance\tadiabat",
+            &distances,
+            &data,
+        )
+        .unwrap();
     }
 }
 
