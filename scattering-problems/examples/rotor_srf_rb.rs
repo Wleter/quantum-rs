@@ -36,10 +36,7 @@ mod common;
 
 use common::{PotentialType, ScalingType, Scalings, srf_rb_functionality::*};
 
-use crate::common::Morphing;
-
 pub fn main() {
-    rayon::ThreadPoolBuilder::new().num_threads(24).build_global().unwrap();
     Problems::select(&mut get_args());
 }
 
@@ -544,15 +541,15 @@ impl Problems {
             ..Default::default()
         };
 
-        let scaling_singlet = Scalings {
-            scaling_types: vec![ScalingType::Legendre(0), ScalingType::Legendre(1)],
-            scalings: vec![1.021560818780792, 0.023755917959479227],
-        };
         let scaling_triplet = Scalings {
-            scaling_types: vec![ScalingType::Legendre(0), ScalingType::Legendre(1)],
-            scalings: vec![0.9849947036736354, -0.02322520097349072],
+            scaling_types: vec![ScalingType::Isotropic, ScalingType::Anisotropic],
+            scalings: vec![1.0069487290287622, 0.8152177020075073],
         };
-        let suffix = "scaled_v2";
+        let scaling_singlet = Scalings {
+            scaling_types: vec![ScalingType::Full, ScalingType::Anisotropic],
+            scalings: vec![0.9389302523757846, 0.976730434834512],
+        };
+        let suffix = "scaled_0_94_0_98";
 
         ///////////////////////////////////
 
@@ -562,23 +559,8 @@ impl Problems {
         let singlet = get_interpolated(&singlet);
         let triplet = get_interpolated(&triplet);
 
-        let triplet = {
-            let morphing = Morphing {
-                lambdas: vec![0, 1],
-                scalings: scaling_triplet.scalings,
-            };
-
-            morphing.morph(&triplet)
-        };
-
-        let singlet = {
-            let morphing = Morphing {
-                lambdas: vec![0, 1],
-                scalings: scaling_singlet.scalings,
-            };
-
-            morphing.morph(&singlet)
-        };
+        let triplet = scaling_triplet.scale(&triplet);
+        let singlet = scaling_singlet.scale(&singlet);
 
         let alkali_problem =
             AlkaliRotorAtomProblemBuilder::new(triplet, singlet).build(&atoms, &basis_recipe);

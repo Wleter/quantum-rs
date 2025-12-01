@@ -1,3 +1,7 @@
 [[paths]]
 local_path = "data"
 remote_path = "numerical_data/SrF_Rb/data"
+
+[[paths]]
+local_path = "scattering-problems/analysis"
+remote_path = "numerical_data/SrF_Rb/analysis"

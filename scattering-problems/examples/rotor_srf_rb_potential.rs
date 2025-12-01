@@ -1,16 +1,16 @@
-use std::{f64::consts::PI, fs::File, io::{self, BufRead, BufReader, Write}, mem::swap};
+use std::{fs::File, io::{self, BufRead, BufReader, Write}};
 
 use clebsch_gordan::hi32;
-use faer::{diag::Diag, unzip, zip, Col, Mat, MatMut};
-use quantum::{params::particles::Particles, problem_selector::{get_args, ProblemSelector}, problems_impl, units::{Angstrom, Au, Energy, Kelvin, Unit}, utility::{linspace, logspace}};
+use faer::{Col, Mat, unzip, zip};
+use quantum::{problem_selector::{get_args, ProblemSelector}, problems_impl, units::{Angstrom, Energy, GHz, Kelvin, Unit}, utility::{linspace, logspace}};
 
 mod common;
 use common::{PotentialType, ScalingType, Scalings, srf_rb_functionality::*};
 use regex::Regex;
 use scattering_problems::rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder};
-use scattering_solver::{potentials::potential::{MatPotential, Potential}, utility::save_spectrum};
+use scattering_solver::{potentials::potential::Potential, utility::save_spectrum};
 
-use crate::common::Morphing;
+use crate::common::{Morphing, phase_integral};
 
 pub fn main() {
     Problems::select(&mut get_args());
@@ -24,6 +24,7 @@ problems_impl!(Problems, "CaF + Rb potentials",
     "transform wavefunction adiabatically" => |_| Self::wave_adiabats(),
     "morphing" => |_| Self::morph_potential(),
     "wkb calculation" => |_| Self::wkb_calculation(),
+    "non adiabatic coupling" => |_| Self::non_adiabatic_coupling(),
 );
 
 impl Problems {
@@ -239,10 +240,12 @@ impl Problems {
         let pes_type = PotentialType::Singlet;
         let n_max = 10;
         let morph = Morphing {
-            lambdas: vec![0],
-            scalings: vec![1.]
+            lambdas: vec![0, 1],
+            scalings: vec![1.021560818780792, 0.023755917959479227],
+
         };
-        let suffix = "test";
+        let suffix = "scaled_1_02";
+        let energies: Vec<f64> = linspace(-2., 0., 100).iter().map(|x| x.powi(3)).collect();
 
         let basis_recipe = RotorAtomBasisRecipe {
             l_max: n_max,
@@ -256,66 +259,105 @@ impl Problems {
             PotentialType::Triplet => pot_array_triplet,
         };
 
-        let atoms = get_particles(Energy(0., Kelvin), hi32!(0));
+        let atoms = get_particles(Energy(-0.5, GHz), hi32!(0));
         let interpolated = get_interpolated(&pes);
-        let problem = RotorAtomProblemBuilder::new(interpolated).build(&atoms, &basis_recipe);
+        let morphed = morph.morph(&interpolated);
+        let problem = RotorAtomProblemBuilder::new(morphed).build(&atoms, &basis_recipe);
         let potential = problem.potential;
 
-        println!("{:?}", wkb(&potential, 5., 1e3, 1e-3, &atoms));
+        let mut data = vec![];
+        for e in &energies {
+            let atoms = get_particles(Energy(*e, GHz), hi32!(0));
 
-    }
-}
+            let integral: Vec<f64> = phase_integral(&potential, 5., 1e2, 1e-3, &atoms)
+                .iter()
+                .map(|x| x - 0.5)
+                .collect();
 
-fn wkb(pot: &impl MatPotential, r_min: f64, r_max: f64, prec: f64, particles: &Particles) -> Vec<f64> {
-    let mut r = r_min;
-    let m = particles.red_mass();
-    let e = particles.get::<Energy<Au>>().unwrap().value();
-
-    let mut k_prev = Mat::zeros(pot.size(), pot.size());
-    let mut k_max = calc_k(pot, r, m, e, &mut k_prev);
-
-    let mut k_now = k_prev.clone();
-
-    let mut in_well = false;
-    let mut cumulative = Mat::zeros(pot.size(), pot.size());
-    while r < r_max {
-        let dr = if k_max == 0. && in_well {
-            break
-        } else if k_max == 0. {
-            f64::min(0.1, 2. * PI / (k_max + 1e-10) * prec)
-        } else {
-            in_well = true;
-            2. * PI / (k_max + 1e-10) * prec
-        };
-
-        r += dr;
-        k_max = calc_k(pot, r, m, e, &mut k_now);
-        if k_max == 0. && in_well {
-            break
+            data.push(integral);
         }
 
-        cumulative += 0.5 * dr * (&k_now + &k_prev) / PI;
-
-        swap(&mut k_now, &mut k_prev);
+        save_spectrum(
+            &format!("SrF_Rb_{pes_type}_wkb_{suffix}"),
+            "distance\tnu",
+            &energies,
+            &data,
+        )
+        .unwrap();
     }
 
-    cumulative.self_adjoint_eigenvalues(faer::Side::Lower).unwrap()
-}
+    fn non_adiabatic_coupling() {
+        let pes_type = PotentialType::Triplet;
+        let n_max = 10;
 
-fn calc_k(pot: &impl MatPotential, r: f64, m: f64, e: f64, out: &mut Mat<f64>) -> f64 {
-    pot.value_inplace(r, out);
+        let distances = linspace(5., 80., 804);
+        let dr = 1e-3;
 
-    let eig = out.self_adjoint_eigen(faer::Side::Lower).unwrap();
-    let mut diag: Diag<f64> = Diag::zeros(pot.size());
-    let transf = eig.U();
+        let [pot_array_singlet, pot_array_triplet] = read_extended(25);
+        let pes = match pes_type {
+            PotentialType::Singlet => pot_array_singlet,
+            PotentialType::Triplet => pot_array_triplet,
+        };
 
-    zip!(diag.column_vector_mut(), &eig.S().column_vector()).for_each(|unzip!(d, p)| {
-        *d = f64::sqrt(f64::max(0., 2. * m * (e - p)))
-    });
+        let pes = get_interpolated(&pes);
 
-    *out = &transf * &diag * transf.transpose();
+        let basis_recipe = RotorAtomBasisRecipe {
+            l_max: n_max,
+            n_max: n_max,
+            ..Default::default()
+        };
 
-    *diag.column_vector().iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap()
+        let atoms = get_particles(Energy(1e-7, Kelvin), hi32!(0));
+        let problem = RotorAtomProblemBuilder::new(pes.clone()).build(&atoms, &basis_recipe);
+
+        let mut data = vec![];
+        let mut buffer = vec![0.; problem.potential.size() * (problem.potential.size() - 1) / 2];
+        let mut buffer1 = Mat::zeros(problem.potential.size(), problem.potential.size());
+        let mut buffer2 = Mat::zeros(problem.potential.size(), problem.potential.size());
+        let ones: Mat<f64> = Mat::ones(problem.potential.size(), problem.potential.size());
+        for &r in &distances {
+            problem.potential.value_inplace(r, &mut buffer1);
+
+            let eigen = buffer1
+                .self_adjoint_eigen(faer::Side::Lower)
+                .unwrap();
+            let vecs = eigen.U();
+            let vals = eigen.S();
+
+            problem.potential.value_inplace(r - dr, &mut buffer1);
+            problem.potential.value_inplace(r + dr, &mut buffer2);
+            let d_pot = (&buffer2 - &buffer1) / (2. * dr);
+            let mut num = vecs.transpose() * d_pot * &vecs;
+
+            let denom = &vals * &ones - &ones * &vals;
+
+            zip!(&mut num, &denom).for_each(|unzip!(n, d)| {
+                if *d != 0. {
+                    *n = (*n / d).abs()
+                } else {
+                    *n = 0.
+                }
+            });
+
+            let mut k = 0;
+            for i in 0..num.ncols() {
+                for j in (i+1)..num.nrows() {
+                    buffer[k] = num[(i, j)];
+                    k += 1;
+                }
+            }
+
+            data.push(buffer.clone());
+        }
+
+        save_spectrum(
+            &format!("srf_rb_{}_non_adiabatic_n_{}", pes_type, basis_recipe.n_max),
+            "distance\tadiabat",
+            &distances,
+            &data,
+        )
+        .unwrap();
+    }
 }
 
 enum Config {
