@@ -1,6 +1,6 @@
-use std::time::Instant;
+use std::{f64::consts::PI, sync::{Arc, Mutex}, time::Instant};
 
-use argmin::{core::{CostFunction, Executor, State, observers::ObserverMode}, solver::neldermead::NelderMead};
+use argmin::{core::{CostFunction, Executor, State, observers::ObserverMode}, solver::{neldermead::NelderMead, simulatedannealing::{Anneal, SATempFunc, SimulatedAnnealing}}};
 use argmin_observer_slog::SlogLogger;
 use clebsch_gordan::hi32;
 use hhmmss::Hhmmss;
@@ -16,6 +16,8 @@ use quantum::{
     },
     utility::linspace,
 };
+use rand::{Rng, SeedableRng, distr::Uniform};
+use rand_xoshiro::Xoshiro256PlusPlus;
 use scattering_problems::{
     alkali_rotor_atom::{AlkaliRotorAtomProblemBuilder, TramBasisRecipe}, field_bound_states::{FieldBoundStates, FieldBoundStatesDependence, FieldProblemBuilder}, rotor_atom::{RotorAtomBasisRecipe, RotorAtomProblemBuilder}, FieldScatteringProblem
 };
@@ -46,7 +48,8 @@ problems_impl!(Problems, "CaF + Rb Bounds",
     "potential surface scaling field" => |_| Self::potential_surface_scaling_field(),
     "potential surface 2d scaling" => |_| Self::potential_surface_2d_scaling(),
     "singlet/triplet bound waves" => |_| Self::bound_waves(),
-    "bound states reconstruction" => |_| Self::bound_states_reconstruction(),
+    "bound states reconstruction stochastic" => |_| Self::bound_states_reconstruction_stochastic(),
+    "bound states reconstruction local" => |_| Self::bound_states_reconstruction_local(),
     "magnetic field bounds" => |_| Self::magnetic_field_bounds_scaling(),
 );
 
@@ -303,9 +306,9 @@ impl Problems {
     }
 
     fn potential_surface_2d_scaling() {
-        let potential_type = PotentialType::Singlet;
+        let potential_type = PotentialType::Triplet;
 
-        let energy_range = (Energy(-8., GHz), Energy(0., GHz));
+        let energy_range = (Energy(-13., GHz), Energy(0., GHz));
         let err = Energy(0.1, MHz);
 
         let basis_recipe = RotorAtomBasisRecipe {
@@ -313,9 +316,9 @@ impl Problems {
             n_max: 10,
             ..Default::default()
         };
-        let scalings1 = linspace(1.41, 1.45, 101);
+        let scalings1 = linspace(0.95, 1.05, 101);
         let scalings2 = linspace(0.85, 1., 81);
-        let suffix = "scaling_1_43";
+        let suffix = "scaling_1_00";
         let calc_wave = true;
 
         ///////////////////////////////////
@@ -392,10 +395,10 @@ impl Problems {
         let potential_type = PotentialType::Singlet;
         let scaling = Scalings {
             scaling_types: vec![ScalingType::Full, ScalingType::Anisotropic],
-            scalings: vec![1.0134369126941278, 1.0096475412543842],
+            scalings: vec![1.0841421301120646, 0.9100983303880654],
         };
         
-        let energy_range = (Energy(-10., GHz), Energy(0., GHz));
+        let energy_range = (Energy(-13., GHz), Energy(0., GHz));
         let err = Energy(0.1, MHz);
 
         let basis_recipe = RotorAtomBasisRecipe {
@@ -403,7 +406,7 @@ impl Problems {
             n_max: 10,
             ..Default::default()
         };
-        let suffix = "_scaling_1_01_1_00";
+        let suffix = "_scaling_1_08_0_91";
 
         ///////////////////////////////////
 
@@ -447,38 +450,169 @@ impl Problems {
         save_serialize(&filename, &data).unwrap()
     }
 
-    fn bound_states_reconstruction() {
-        // let potential_type = PotentialType::Triplet;
-        // let reconstructing_bound = vec![
-        //     (0, Energy(-0.04527481, GHz), [0.991638424564369, 0.0021309375745617734, 0.0005737144038586135]),
-        //     (1, Energy(-0.77267861, GHz), [0.9576243160041955, 0.01263385544804692, 0.0030237962482492827]),
-        //     (2, Energy(-3.09381825, GHz), [0.8636080850631245, 0.047039854616814814, 0.007340606157280014]),
-        //     (3, Energy(-4.64858425, GHz), [0.1694511839839671, 0.4358310518008622, 0.06061805142594878]),
-        //     (4, Energy(-7.685404814086, GHz), [0.04898737032785113, 0.28474037829590915, 0.02364966636062396]),
-        //     (5, Energy(-8.225306960348, GHz), [0.7305319020669387, 0.08230229641246066, 0.022186879150599075]),
-        //     (6, Energy(-9.907725416783, GHz), [0.11200047532253958, 0.04480037197787622, 0.04226070770022582]),
-        // ];
-
+    fn bound_states_reconstruction_stochastic() {
         let potential_type = PotentialType::Singlet;
-        let reconstructing_bound = vec![
-            (0, Energy(-0.13956298, GHz), [0.9521102770332074, 0.005000084345797367, 0.008731931540568756]),
-            (1, Energy(-1.15303618, GHz), [0.8829877255109269, 0.023721801610900935, 0.025887204644646177]),
-            (2, Energy(-1.56510323, GHz), [0.0476238044176934, 0.3247536135778192, 0.18387629094793698]),
-            (3, Energy(-3.78752205, GHz), [0.8189536928653838, 0.026488837868052114, 0.01707929422850362]),
-            (4, Energy(-6.327935219094, GHz), [0.05843930881412625, 0.09759951597507624, 0.0850313321453373]),
-            (5, Energy(-7.962288439908, GHz), [0.47397652910820515, 0.17791882445793714, 0.010912929190178784]),
-            (6, Energy(-10.26483438346, GHz), [0.40379875237332147, 0.2854688458287785, 0.04217334676609967]),
-            (7, Energy(-11.97014558676, GHz), [0.03459635689854624, 0.04614802295395822, 0.39359017460339235]),
-            
-        ];
 
         let scaling_types = vec![ScalingType::Full, ScalingType::Anisotropic];
-        let (center_0, center_1) = (1.0134369126941278, 1.0096475412543842);
-        let (d_0, d_1) = (0.01, 0.01);
+        let (center_0, center_1) = (1.0262636558798472, 0.8663308327900304);
+        let (d_0, d_1) = (0.1, 0.2);
+        let max_iter = 300;
+        let temp_max = 15.0;
 
+        let res = (0..12)
+            .into_par_iter()
+            .map(|i| {
+                let reconstructing_bound = match potential_type {
+                    PotentialType::Triplet => vec![
+                        (0, Energy(-0.04527481, GHz), [0.991638424564369, 0.0021309375745617734, 0.0005737144038586135]),
+                        (1, Energy(-0.77267861, GHz), [0.9576243160041955, 0.01263385544804692, 0.0030237962482492827]),
+                        (2, Energy(-3.09381825, GHz), [0.8636080850631245, 0.047039854616814814, 0.007340606157280014]),
+                        (3, Energy(-4.64858425, GHz), [0.1694511839839671, 0.4358310518008622, 0.06061805142594878]),
+                        (4, Energy(-7.685404814086, GHz), [0.04898737032785113, 0.28474037829590915, 0.02364966636062396]),
+                        (5, Energy(-8.225306960348, GHz), [0.7305319020669387, 0.08230229641246066, 0.022186879150599075]),
+                        (6, Energy(-9.907725416783, GHz), [0.11200047532253958, 0.04480037197787622, 0.04226070770022582]),
+                    ],
+                    PotentialType::Singlet => vec![
+                        (0, Energy(-0.1019540032144, GHz), [0.9836993, 0.00440876, 0.00204719]),
+                        (1, Energy(-1.059685046795, GHz), [0.93178297, 0.01416468, 0.00833176]),
+                        (2, Energy(-3.663536724117, GHz), [0.82649558, 0.02376356, 0.011734]),
+                        (3, Energy(-3.78752205, GHz), [0.05866517, 0.04675238, 0.25008782]),
+                        (4, Energy(-6.65379255529, GHz), [0.05548231, 0.44377141, 0.05224841]),
+                        (5, Energy(-8.19758056726, GHz), [0.66102461, 0.05570395, 0.09580309]),
+                    ]
+                };
+
+                let energy_range = (Energy(-13., GHz), Energy(0., GHz));
+                let err = Energy(0.1, MHz);
+        
+                let basis_recipe = RotorAtomBasisRecipe {
+                    l_max: 10,
+                    n_max: 10,
+                    ..Default::default()
+                };
+        
+                /////////////////////////////////////////////////////
+        
+                let energy_relative = Energy(1e-7, Kelvin);
+        
+                let [singlet, triplet] = read_extended(25);
+                let pes = match potential_type {
+                    PotentialType::Singlet => singlet,
+                    PotentialType::Triplet => triplet,
+                };
+                let pes = get_interpolated(&pes);
+        
+                let calculation = |scalings: Scalings| {
+                    let mut atoms = get_particles(energy_relative, hi32!(0));
+        
+                    let morphing = Scalings {
+                        scaling_types: scaling_types.clone(),
+                        scalings: scalings.scalings,
+                    };
+        
+                    let pes = morphing.scale(&pes);
+        
+                    let problem = RotorAtomProblemBuilder::new(pes).build(&atoms, &basis_recipe);
+        
+                    let asymptotic = problem.asymptotic;
+                    atoms.insert(asymptotic);
+                    let potential = problem.potential;
+        
+                    let bound_problem = BoundProblemBuilder::new(&atoms, &potential)
+                        .with_propagation(LocalWavelengthStepRule::new(4e-3, 10., 400.), Johnson)
+                        .with_range(5., 20., 500.)
+                        .build();
+        
+                    let mut bound_states = bound_problem
+                        .bound_states(energy_range, err);
+        
+                    let waves: Vec<Vec<f64>> = bound_problem.bound_waves(&bound_states)
+                        .map(|x| x.occupations())
+                        .collect();
+            
+                    bound_states.occupations = Some(waves);
+        
+                    bound_states
+                };
+        
+                let bound_reconstruction = BoundMinimizationProblem {
+                    reconstructing_bound,
+                    scaling_types: scaling_types.clone(),
+                    calculation,
+                    bounds: (vec![1. - d_0, 1. - d_1], vec![1. + d_0, 1.]),
+                    rng: Arc::new(Mutex::new(Xoshiro256PlusPlus::from_os_rng())),
+                    temp_max
+                };
+        
+                let solver = SimulatedAnnealing::new(temp_max).unwrap()
+                    .with_temp_func(SATempFunc::Boltzmann)
+                    .with_reannealing_best(30)
+                    .with_reannealing_accepted(30)
+                    .with_reannealing_fixed(100);
+        
+                let res = Executor::new(bound_reconstruction, solver)
+                    .configure(|state| 
+                        state.param(vec![center_0, center_1])
+                            .max_iters(max_iter)
+                            .target_cost(0.)
+                )
+                .add_observer(
+                    SlogLogger::term_noblock(), 
+                    ObserverMode::NewBest
+                )
+                .run()
+                .unwrap();
+        
+                let best = res.state().get_best_param().unwrap();
+                let chi2 = res.state().get_best_cost();
+        
+                println!("{i} {res}");
+                println!("best scalings: {best:?}");
+                println!("scaling types: {scaling_types:?}");
+                println!("chi2: {chi2}");
+
+                (best.clone(), chi2)
+            }
+        )
+        .collect::<Vec<(Vec<f64>, f64)>>();
+
+        let best_res = res.iter().min_by(|x, y| x.1.partial_cmp(&y.1).unwrap()).unwrap();
+
+        println!("best overall");
+        println!("best scalings: {:?}", best_res.0);
+        println!("scaling types: {scaling_types:?}");
+        println!("chi2: {}", best_res.1);
+    }
+
+    fn bound_states_reconstruction_local() {
+        let potential_type = PotentialType::Singlet;
+
+        let scaling_types = vec![ScalingType::Full, ScalingType::Anisotropic];
+        let (center_0, center_1) = (1.0262636558798472, 0.8663308327900304);
+        let (d_0, d_1) = (0.02, 0.01);
         let max_iter = 30;
 
-        let energy_range = (Energy(-6., GHz), Energy(0., GHz));
+        let reconstructing_bound = match potential_type {
+            PotentialType::Triplet => vec![
+                (0, Energy(-0.04527481, GHz), [0.991638424564369, 0.0021309375745617734, 0.0005737144038586135]),
+                (1, Energy(-0.77267861, GHz), [0.9576243160041955, 0.01263385544804692, 0.0030237962482492827]),
+                (2, Energy(-3.09381825, GHz), [0.8636080850631245, 0.047039854616814814, 0.007340606157280014]),
+                (3, Energy(-4.64858425, GHz), [0.1694511839839671, 0.4358310518008622, 0.06061805142594878]),
+                (4, Energy(-7.685404814086, GHz), [0.04898737032785113, 0.28474037829590915, 0.02364966636062396]),
+                (5, Energy(-8.225306960348, GHz), [0.7305319020669387, 0.08230229641246066, 0.022186879150599075]),
+                (6, Energy(-9.907725416783, GHz), [0.11200047532253958, 0.04480037197787622, 0.04226070770022582]),
+            ],
+            PotentialType::Singlet => vec![
+                (0, Energy(-0.1019540032144, GHz), [0.9836993, 0.00440876, 0.00204719]),
+                (1, Energy(-1.059685046795, GHz), [0.93178297, 0.01416468, 0.00833176]),
+                (2, Energy(-3.663536724117, GHz), [0.82649558, 0.02376356, 0.011734]),
+                (3, Energy(-3.78752205, GHz), [0.05866517, 0.04675238, 0.25008782]),
+                (4, Energy(-6.65379255529, GHz), [0.05548231, 0.44377141, 0.05224841]),
+                (5, Energy(-8.19758056726, GHz), [0.66102461, 0.05570395, 0.09580309]),
+            ]
+        };
+        
+        let energy_range = (Energy(-13., GHz), Energy(0., GHz));
         let err = Energy(0.1, MHz);
 
         let basis_recipe = RotorAtomBasisRecipe {
@@ -532,34 +666,38 @@ impl Problems {
             bound_states
         };
 
-        let bound_reconstruction = BoundMinimizationProblem {
-            reconstructing_bound,
-            scaling_types: scaling_types.clone(),
-            calculation,
-        };
-
-        let init_simplex = vec![
-            vec![center_0, center_1], 
-            vec![center_0 + d_0, center_1], 
-            vec![center_0, center_1 + d_1], 
-        ];
-        let solver = NelderMead::new(init_simplex);
-
         // let solver = ParticleSwarm::new(
         //     (
-        //         vec![center_0 - d_0, center_1 - d_1],
-        //         vec![center_0 + d_0, center_1 + d_1]
+        //         vec![1. - d_0, 1. - d_1],
+        //         vec![1. + d_0, 1.]
         //     ), 
         //     32
         // );
 
+        let init_simplex = vec![
+            vec![center_0, center_1], 
+            vec![center_0 + d_0, center_1], 
+            vec![center_0 - d_0, center_1 + d_1], 
+        ];
+        let solver = NelderMead::new(init_simplex);
+
+        let bound_reconstruction = BoundMinimizationProblem {
+            reconstructing_bound,
+            scaling_types: scaling_types.clone(),
+            calculation,
+            bounds: (vec![1. - d_0, 1. - d_1], vec![1. + d_0, 1.]),
+            rng: Arc::new(Mutex::new(Xoshiro256PlusPlus::from_os_rng())),
+            temp_max: 0.
+        };
+
         let res = Executor::new(bound_reconstruction, solver)
             .configure(|state| 
-                state.max_iters(max_iter)
+                state.param(vec![center_0, center_1])
+                    .max_iters(max_iter)
                     .target_cost(0.)
         )
         .add_observer(
-            SlogLogger::term(), 
+            SlogLogger::term_noblock(), 
             ObserverMode::Always
         )
         .run()
@@ -568,7 +706,7 @@ impl Problems {
         let best = res.state().get_best_param().unwrap();
         let chi2 = res.state().get_best_cost();
 
-        println!("{}", res);
+        println!("{res}");
         println!("best scalings: {best:?}");
         println!("scaling types: {scaling_types:?}");
         println!("chi2: {chi2}");
@@ -680,7 +818,10 @@ impl Problems {
 struct BoundMinimizationProblem<F: Fn(Scalings) -> BoundStates> {
     reconstructing_bound: Vec<(u32, Energy<GHz>, [f64; 3])>,
     scaling_types: Vec<ScalingType>,
-    calculation: F
+    calculation: F,
+    bounds: (Vec<f64>, Vec<f64>),
+    rng: Arc<Mutex<Xoshiro256PlusPlus>>,
+    temp_max: f64,
 }
 
 impl<F: Fn(Scalings) -> BoundStates> CostFunction for BoundMinimizationProblem<F> {
@@ -697,21 +838,53 @@ impl<F: Fn(Scalings) -> BoundStates> CostFunction for BoundMinimizationProblem<F
 
         let chi2: f64 = self.reconstructing_bound.iter()
             .map(|(index, x, occupation)| {
-                let bound_state = bound_states.energies.get(*index as usize).map_or(2. * x.value(), |x| *x);
+                if *index as usize >= bound_states.energies.len() {
+                    1.
+                } else {
+                    let bound_state = bound_states.energies.get(*index as usize).unwrap();
+    
+                    let b_occupation = &bound_states.occupations.as_ref().unwrap()[*index as usize];
+                    let occupation_chi2 = (occupation[0] - b_occupation[0]).powi(2)
+                        + (occupation[1] - b_occupation[1]).powi(2)
+                        + (occupation[2] - b_occupation[2]).powi(2);
+    
+                    (x.value() / bound_state).log2().powi(2) + occupation_chi2 / 10.
+                }
 
-                let b_occupation = &bound_states.occupations.as_ref().unwrap()[*index as usize];
-                let occupation_chi2 = (occupation[0] - b_occupation[0]).powi(2)
-                    + (occupation[1] - b_occupation[1]).powi(2)
-                    + (occupation[2] - b_occupation[2]).powi(2);
-
-                (x.value() / bound_state).log2().powi(2) + occupation_chi2 / 10.
             })
             .sum();
 
-        Ok(chi2 / self.reconstructing_bound.len() as f64)
+        Ok(chi2 / (1.3 * self.reconstructing_bound.len() as f64) * 100.)
     }
 
     fn parallelize(&self) -> bool {
         true
+    }
+}
+
+impl<F: Fn(Scalings) -> BoundStates> Anneal for BoundMinimizationProblem<F> {
+    type Param = Vec<f64>;
+    type Output = Vec<f64>;
+    type Float = f64;
+
+    fn anneal(&self, param: &Self::Param, extent: Self::Float) -> Result<Self::Output, argmin_math::Error> {
+        let mut param_n = param.clone();
+        let mut rng = self.rng.lock().unwrap();
+        let direction = Uniform::new_inclusive(0., 2. * PI)?;
+        let val_distr = Uniform::new_inclusive(-0.2, 0.2)?;
+
+        let dir = rng.sample(direction);
+        let val = rng.sample(val_distr) * extent / self.temp_max;
+
+        let width_x = self.bounds.1[0] - self.bounds.0[0];
+        let width_y = self.bounds.1[1] - self.bounds.0[1];
+
+        param_n[0] += dir.cos() * width_x * val;
+        param_n[1] += dir.sin() * width_y * val;
+
+        param_n[0] = param_n[0].clamp(self.bounds.0[0], self.bounds.1[0]);
+        param_n[1] = param_n[1].clamp(self.bounds.0[1], self.bounds.1[1]);
+
+        Ok(param_n)
     }
 }
