@@ -83,6 +83,43 @@ impl Problems {
         )
         .unwrap();
 
+            let scalings = Scalings {
+            scaling_types: vec![ScalingType::Full, ScalingType::Anisotropic],
+            scalings: vec![2., 1.0],
+        };
+
+        let data = RawRKHSLegendre::new(25);
+        let pot_array_singlet = data.get_scaled(PotentialType::Singlet, Some(&scalings));
+        let pot_array_triplet = data.get_scaled(PotentialType::Triplet, Some(&scalings));
+
+        let interpolated = get_interpolated(&pot_array_triplet);
+        let mut data = vec![distances.clone()];
+        for (_, p) in &interpolated {
+            let values = distances.iter().map(|&x| p.value(x)).collect();
+
+            data.push(values);
+        }
+        save_data(
+            "SrF_Rb_triplet_dec_scaled",
+            "distances\tpotential_decomposition",
+            &data,
+        )
+        .unwrap();
+
+        let interpolated = get_interpolated(&pot_array_singlet);
+        let mut data = vec![distances.clone()];
+        for (_, p) in &interpolated {
+            let values = distances.iter().map(|&x| p.value(x)).collect();
+
+            data.push(values);
+        }
+        save_data(
+            "SrF_Rb_singlet_dec_scaled",
+            "distances\tpotential_decomposition",
+            &data,
+        )
+        .unwrap();
+
         let [pot_array_singlet, pot_array_triplet] = read_extended(25);
         let interpolated = get_interpolated(&pot_array_triplet);
         let mut data = vec![distances.clone()];
@@ -542,14 +579,14 @@ impl Problems {
         };
 
         let scaling_triplet = Scalings {
-            scaling_types: vec![ScalingType::Isotropic, ScalingType::Anisotropic],
-            scalings: vec![1.0069487290287622, 0.8152177020075073],
+            scaling_types: vec![ScalingType::Full, ScalingType::Anisotropic],
+            scalings: vec![1.11114264265224, 0.989117739325556],
         };
         let scaling_singlet = Scalings {
             scaling_types: vec![ScalingType::Full, ScalingType::Anisotropic],
-            scalings: vec![0.9389302523757846, 0.976730434834512],
+            scalings: vec![1.0262636558798472, 0.8663308327900304],
         };
-        let suffix = "scaled_0_94_0_98";
+        let suffix = "scaled_1_11_0_99_1_02_0_87";
 
         ///////////////////////////////////
 

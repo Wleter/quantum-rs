@@ -39,6 +39,8 @@ use scattering_solver::potentials::{
     composite_potential::Composite, dispersion_potential::Dispersion, potential::{SimplePotential, SubPotential},
 };
 
+use crate::common::{PotentialType, Scalings};
+
 pub fn get_particles(energy: Energy<impl EnergyUnit>, projection: HalfI32) -> Particles {
     let rb = create_atom("Rb87").unwrap();
     let srf = Particle::new("SrF", Mass(88. + 19., Dalton));
@@ -420,6 +422,256 @@ pub fn read_extended(max_degree: u32) -> [PotentialArray; 2] {
     };
 
     [singlets, triplets]
+}
+
+pub struct RawRKHSLegendre {
+    max_degree: u32,
+    distances: Vec<f64>,
+    triplet_data: Vec<(u32, Vec<f64>)>,
+    exch_data: Vec<(u32, Vec<f64>)>,
+}
+
+impl RawRKHSLegendre {
+    pub fn new(max_degree: u32) -> Self {
+        let filename = "Rb_SrF/pot.data.txt";
+        let mut path = std::env::current_dir().unwrap();
+        path.push("data");
+        path.push(filename);
+        let f = File::open(&path).expect(&format!(
+            "couldn't find potential in provided path {path:?}"
+        ));
+        let f = BufReader::new(f);
+
+        let filename = "Rb_SrF/casscf_ex.txt";
+        let mut path = std::env::current_dir().unwrap();
+        path.push("data");
+        path.push(filename);
+        let f2 = File::open(&path).expect(&format!(
+            "couldn't find potential in provided path {path:?}"
+        ));
+        let f2 = BufReader::new(f2);
+
+        let angle_count = 1 + 180 / 5;
+        let r_count = 30;
+        let mut values_triplet = Mat::zeros(r_count, angle_count);
+        let mut values_exch = Mat::zeros(r_count, angle_count);
+        let mut distances = vec![0.; r_count];
+        let angles: Vec<f64> = (0..=180).step_by(5).map(|x| x as f64 / 180. * PI).collect();
+
+        for ((i, line_triplet), line_diff) in f.lines().skip(1).enumerate().zip(f2.lines().skip(1)) {
+            let line_triplet = line_triplet.unwrap();
+            let splitted_triplet: Vec<&str> = line_triplet.trim().split_whitespace().collect();
+
+            let r: f64 = splitted_triplet[0].parse().unwrap();
+            let value: f64 = splitted_triplet[1].parse().unwrap();
+
+            let angle_index = i / r_count;
+            let r_index = i % r_count;
+
+            if angle_index > 0 {
+                assert!(distances[r_index] == Distance(r, Angstrom).to_au())
+            }
+
+            let line_diff = line_diff.unwrap();
+            let splitted_diff: Vec<&str> = line_diff.trim().split_whitespace().collect();
+
+            let r_diff: f64 = splitted_diff[0].parse().unwrap();
+            let value_diff: f64 = splitted_diff[1].parse().unwrap();
+
+            assert!(r_diff == r);
+
+            distances[r_index] = Distance(r, Angstrom).to_au();
+            values_triplet[(r_index, angle_index)] = Energy(value, CmInv).to_au();
+            values_exch[(r_index, angle_index)] = Energy(value_diff, CmInv).to_au();
+        }
+
+        let rkhs_triplet = values_triplet
+            .col_iter()
+            .map(|col| RKHSInterpolation::new(&distances, &col.iter().copied().collect::<Vec<f64>>()))
+            .collect::<Vec<RKHSInterpolation>>();
+
+        let rkhs_exch = values_exch
+            .col_iter()
+            .map(|col| RKHSInterpolation::new(&distances, &col.iter().copied().collect::<Vec<f64>>()))
+            .collect::<Vec<RKHSInterpolation>>();
+
+        let filename = "weights.txt";
+        path.pop();
+        path.push(filename);
+        let f = File::open(&path).expect(&format!(
+            "couldn't find potential in provided path {path:?}"
+        ));
+        let mut f = BufReader::new(f);
+
+        let mut weights = String::new();
+        f.read_line(&mut weights).unwrap();
+        let weights: Vec<f64> = weights
+            .trim()
+            .split_whitespace()
+            .map(|s| s.parse().unwrap())
+            .collect();
+
+        let distances_extended = linspace(distances[0], 50., 500);
+        let mut potentials_exch = Vec::new();
+        let mut potentials_triplet = Vec::new();
+        let polynomials: Vec<Vec<f64>> = angles
+            .iter()
+            .map(|x| legendre_polynomials(max_degree, x.cos()))
+            .collect();
+
+        for lambda in 0..=max_degree {
+            let values_triplet = distances_extended
+                .par_iter()
+                .map(|x| {
+                    weights
+                        .iter()
+                        .zip(rkhs_triplet.iter())
+                        .zip(polynomials.iter().map(|ps| ps[lambda as usize]))
+                        .map(|((w, rkhs), p)| (lambda as f64 + 0.5) * w * p * rkhs.value(*x))
+                        .sum()
+                })
+                .collect::<Vec<f64>>();
+            potentials_triplet.push((lambda as u32, values_triplet));
+
+            let values_exch = distances_extended
+                .par_iter()
+                .map(|x| {
+                    weights
+                        .iter()
+                        .zip(rkhs_exch.iter())
+                        .zip(polynomials.iter().map(|ps| ps[lambda as usize]))
+                        .map(|((w, rkhs), p)| (lambda as f64 + 0.5) * w * p * rkhs.value(*x))
+                        .sum()
+                })
+                .collect::<Vec<f64>>();
+            potentials_exch.push((lambda as u32, values_exch));
+        }
+
+        Self {
+            max_degree,
+            distances: distances_extended,
+            triplet_data: potentials_triplet,
+            exch_data: potentials_exch,
+        }
+    }
+
+    pub fn get_scaled(&self, potential_type: PotentialType, scalings: Option<&Scalings>) -> PotentialArray {
+        let mut tail_far = Vec::new();
+        for _ in 0..=self.max_degree {
+            tail_far.push(Composite::new(Dispersion::new(0., 0)));
+        }
+
+        tail_far[0]
+            .add_potential(Dispersion::new(-3495.30040855597, -6))
+            .add_potential(Dispersion::new(-516911.950541056, -8));
+        tail_far[1]
+            .add_potential(Dispersion::new(17274.8363457991, -7))
+            .add_potential(Dispersion::new(4768422.32042577, -9));
+        tail_far[2]
+            .add_potential(Dispersion::new(-288.339392609436, -6))
+            .add_potential(Dispersion::new(-341345.136436851, -8));
+        tail_far[3]
+            .add_potential(Dispersion::new(-12287.2175217778, -7))
+            .add_potential(Dispersion::new(-1015530.4019772, -9));
+        tail_far[4]
+            .add_potential(Dispersion::new(-51933.9885816, -8))
+            .add_potential(Dispersion::new(-3746260.46991, -10));
+
+        let mut exch_far = Vec::new();
+        for _ in 0..=self.max_degree {
+            exch_far.push((0., 0.));
+        }
+
+        let b_exch = Energy(f64::exp(15.847688), CmInv).to_au();
+        let a_exch = -1.5090630 / Angstrom::TO_AU_MUL;
+        exch_far[0] = (b_exch, a_exch);
+
+        let b_exch = Energy(-f64::exp(16.3961123), CmInv).to_au();
+        let a_exch = -1.508641657417 / Angstrom::TO_AU_MUL;
+        exch_far[1] = (b_exch, a_exch);
+
+        let b_exch = Energy(f64::exp(15.14425644), CmInv).to_au();
+        let a_exch = -1.44547680 / Angstrom::TO_AU_MUL;
+        exch_far[2] = (b_exch, a_exch);
+
+        let b_exch = Energy(-f64::exp(12.53830479), CmInv).to_au();
+        let a_exch = -1.33404298 / Angstrom::TO_AU_MUL;
+        exch_far[3] = (b_exch, a_exch);
+
+        let b_exch = Energy(f64::exp(9.100058), CmInv).to_au();
+        let a_exch = -1.251990 / Angstrom::TO_AU_MUL;
+        exch_far[4] = (b_exch, a_exch);
+
+        let transition = |r, r_min, r_max| {
+            if r <= r_min {
+                1.
+            } else if r >= r_max {
+                0.
+            } else {
+                let x = ((r - r_max) - (r_min - r)) / (r_max - r_min);
+                0.5 - 0.25 * f64::sin(PI / 2. * x) * (3. - f64::sin(PI / 2. * x).powi(2))
+            }
+        };
+
+        let data = self.triplet_data.iter()
+            .map(|(lambda, pot)| {
+                let tail = &tail_far[*lambda as usize];
+                let exch = exch_far[*lambda as usize];
+
+                let values = self.distances.iter()
+                    .zip(pot)
+                    .zip(&self.exch_data[*lambda as usize].1)
+                    .map(|((&x, &value_rkhs), &exch_rkhs)| {
+                        let value_far = tail.value(x);
+                        let value = if let Some(scalings) = scalings {
+                            scalings.scale_value(*lambda, value_rkhs)
+                        } else {
+                            value_rkhs
+                        };
+
+                        let r_min = Distance(9., Angstrom).to_au();
+                        let r_max = Distance(11., Angstrom).to_au();
+                        
+                        let contrib = transition(x, r_min, r_max);
+                        let mut value = contrib * value + (1. - contrib) * value_far;
+
+                        if let PotentialType::Singlet = potential_type {
+                            let exch_far = exch.0 * f64::exp(exch.1 * x);
+
+                            let r_min = Distance(4.5, Angstrom).to_au();
+                            let r_max = if *lambda == 0 {
+                                Distance(6.5, Angstrom).to_au()
+                            } else if *lambda < 4 {
+                                Distance(7.5, Angstrom).to_au()
+                            } else {
+                                Distance(5.5, Angstrom).to_au()
+                            };
+
+                            let exch_value = if let Some(scalings) = scalings {
+                                scalings.scale_value(*lambda, exch_rkhs)
+                            } else {
+                                value_rkhs
+                            };
+
+                            let contrib = transition(x, r_min, r_max);
+                            let exch_contrib = contrib * exch_value + (1. - contrib) * exch_far;
+
+                            value -= exch_contrib
+                        }
+
+                        value
+                    })
+                    .collect::<Vec<f64>>();
+
+                (*lambda, values)
+            })
+            .collect();
+
+        PotentialArray {
+            distances: self.distances.clone(),
+            potentials: data,
+        }
+    }
 }
 
 pub fn get_interpolated(

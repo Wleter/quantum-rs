@@ -165,8 +165,9 @@ def wavefunction_json(path: str, take: int | None = None) -> dict[int, WaveFunct
             values_sqr[:, -1] = values_sqr_1
 
             values = values[:, :take]
-
+            occupations_1 = np.sum(occupations[take:])
             occupations = occupations[:take]
+            occupations[-1] = occupations_1
 
         wave = WaveFunction(e / GHZ, np.array(w["distances"]), values, values_sqr, occupations)
         waves[n] = wave

@@ -155,6 +155,14 @@ impl Scalings {
             })
             .collect()
     }
+
+    pub fn scale_value(&self, lambda: u32, value: f64) -> f64 {
+        value * self.scaling_types
+            .iter()
+            .zip(self.scalings.iter())
+            .map(|(t, s)| t.scaling(lambda, *s))
+            .fold(1., |acc, x| acc * x)
+    }
 }
 
 pub struct Morphing {
