@@ -9,10 +9,10 @@ use hhmmss::Hhmmss;
 use indicatif::{ParallelProgressIterator, ProgressIterator};
 
 use quantum::{
-    problem_selector::{get_args, ProblemSelector},
+    problem_selector::{ProblemSelector, get_args},
     problems_impl,
     units::{
-        energy_units::{Energy, GHz, Kelvin}, Au, MHz
+        Au, CmInv, MHz, energy_units::{Energy, GHz, Kelvin}
     },
     utility::linspace,
 };
@@ -25,7 +25,7 @@ use scattering_solver::{
     log_derivatives::johnson::Johnson,
     numerovs::LocalWavelengthStepRule,
     observables::bound_states::{BoundProblemBuilder, BoundStates, BoundStatesDependence, WaveFunctions},
-    utility::save_serialize,
+    utility::{save_data, save_serialize},
 };
 
 use rayon::prelude::*;
@@ -49,7 +49,7 @@ problems_impl!(Problems, "CaF + Rb Bounds",
     "bound states reconstruction stochastic" => |_| Self::bound_states_reconstruction_stochastic(),
     "bound states reconstruction local" => |_| Self::bound_states_reconstruction_local(),
     "bound states reconstruction random" => |_| Self::bound_states_reconstruction_random(),
-    "magnetic field bounds" => |_| Self::magnetic_field_bounds_scaling(),
+    "states density" => |_| Self::states_density(),
 );
 
 impl Problems {
@@ -829,106 +829,65 @@ impl Problems {
         println!("{:?}", best.lock().unwrap().as_ref());
     }
 
-    fn magnetic_field_bounds_scaling() {
-        let mag_fields = linspace(0., 1000., 500);
+    fn states_density() {
+        let potential_type = PotentialType::Triplet;
 
-        let potential_type = PotentialType::Singlet;
-        let scaling_type = ScalingType::Full;
-        let scalings = linspace(1., 1.02, 50);
+        let energies = linspace(-3000., -0.5, 96);
 
-        let other_scaling: Option<Scalings> = Some(Scalings {
-            scaling_types: vec![ScalingType::Full],
-            scalings: vec![1.0151],
-        });
-
-        let energy_range = (Energy(-1., GHz), Energy(0., GHz));
-        let err = Energy(0.1, MHz);
-
-        let basis_recipe = TramBasisRecipe {
-            l_max: 0,
-            n_max: 0,
+        let basis_recipe = RotorAtomBasisRecipe {
+            l_max: 10,
+            n_max: 10,
             ..Default::default()
         };
+        let scalings = Scalings {
+            scaling_types: vec![ScalingType::Full],
+            scalings: vec![1.0],
+        };
+        let suffix = "";
 
         ///////////////////////////////////
 
-        let projection = hi32!(1);
         let energy_relative = Energy(1e-7, Kelvin);
-
-        let atoms = get_particles(energy_relative, projection);
+        let mut atoms = get_particles(energy_relative, hi32!(0));
 
         let [singlet, triplet] = read_extended(25);
-        let singlet = get_interpolated(&singlet);
-        let triplet = get_interpolated(&triplet);
+        let pes = match potential_type {
+            PotentialType::Singlet => singlet,
+            PotentialType::Triplet => triplet,
+        };
+        let pes = get_interpolated(&pes);
+        let pes = scalings.scale(&pes);
 
-        let scaling_field: Vec<(f64, f64)> = scalings
-            .iter()
-            .flat_map(|s1| mag_fields.iter().map(|s2| (*s1, *s2)))
-            .collect();
+        let problem = RotorAtomProblemBuilder::new(pes.clone()).build(&atoms, &basis_recipe);
+        let asymptotic = problem.asymptotic;
+        atoms.insert(asymptotic);
+        let potential = problem.potential;
+
+        let bound_problem = BoundProblemBuilder::new(&atoms, &potential)
+            .with_propagation(LocalWavelengthStepRule::new(4e-3, 10., 400.), Johnson)
+            .with_range(5., 20., 50.)
+            .build();
 
         let start = Instant::now();
-        let bound_states = scaling_field
+        let data: Vec<Vec<f64>> = energies
             .par_iter()
             .progress()
-            .map_with(atoms, |atoms, (scaling, mag_field)| {
-                let mut atoms = atoms.clone();
+            .map(|&energy| {
+                let energy = Energy(energy, CmInv);
+                let mismatch = bound_problem.bound_mismatch(energy);
 
-                let singlet = match potential_type {
-                    PotentialType::Singlet => scaling_type.scale(&singlet, *scaling),
-                    PotentialType::Triplet => {
-                        if let Some(scaling) = &other_scaling {
-                            scaling.scale(&singlet)
-                        } else {
-                            ScalingType::Full.scale(&singlet, 1.)
-                        }
-                    }
-                };
-
-                let triplet = match potential_type {
-                    PotentialType::Triplet => scaling_type.scale(&triplet, *scaling),
-                    PotentialType::Singlet => {
-                        if let Some(scaling) = &other_scaling {
-                            scaling.scale(&triplet)
-                        } else {
-                            ScalingType::Full.scale(&triplet, 1.)
-                        }
-                    }
-                };
-
-                let alkali_problem = AlkaliRotorAtomProblemBuilder::new(triplet, singlet)
-                    .build(&atoms, &basis_recipe);
-
-                let alkali_problem = alkali_problem.scattering_for(*mag_field);
-
-                let asymptotic = alkali_problem.asymptotic;
-                atoms.insert(asymptotic);
-                let potential = &alkali_problem.potential;
-
-                let bound_problem = BoundProblemBuilder::new(&atoms, potential)
-                    .with_propagation(LocalWavelengthStepRule::new(4e-3, 10., 400.), Johnson)
-                    .with_range(5., 20., 500.)
-                    .build();
-
-                bound_problem
-                    .bound_states(energy_range, err)
-                    .with_energy_units(GHz)
+                vec![energy.value(), mismatch.nodes as f64]
             })
-            .collect::<Vec<BoundStates>>();
+            .collect();
 
         let elapsed = start.elapsed();
         println!("calculated in {}", elapsed.hhmmssxxx());
 
-        let data = BoundStatesDependence {
-            parameters: scaling_field,
-            bound_states,
-        };
-
         let filename = format!(
-            "SrF_Rb_bound_states_n_max_{}_{potential_type}_scaling_{scaling_type}",
+            "srf_rb_nodes_{potential_type}_n_max_{}{suffix}",
             basis_recipe.n_max
         );
-
-        save_serialize(&filename, &data).unwrap()
+        save_data(&filename, "energy\tnodes", &data).unwrap()
     }
 }
 
