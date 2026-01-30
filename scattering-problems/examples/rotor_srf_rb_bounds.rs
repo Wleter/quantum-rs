@@ -223,79 +223,87 @@ impl Problems {
         let potential_type = PotentialType::Singlet;
         let scaling_type = ScalingType::Full;
 
-        let scaling_range = (2.8 - 0.3, 2.8 + 0.3);
-        let err = 1e-6;
+        for n_max in [33, 34, 35, 36, 37, 38] {
+            let scaling_range = (1., 1.05);
+            let err = 1e-6;
 
-        let basis_recipe = RotorAtomBasisRecipe {
-            l_max: 10,
-            n_max: 10,
-            ..Default::default()
-        };
-        let energies: Vec<Energy<GHz>> = linspace(-2.3, 0., 201)
-            .iter()
-            .map(|x| Energy(x.powi(3), GHz))
-            .collect();
-        let calc_wave = true;
-        let suffix = "scaling_sr_2_80";
-        let lambda_aniso = 1.;
+            let basis_recipe = RotorAtomBasisRecipe {
+                l_max: n_max,
+                n_max: n_max,
+                ..Default::default()
+            };
+            let energies: Vec<Energy<GHz>> = linspace(-2.3, 0., 201)
+                .iter()
+                .map(|x| Energy(x.powi(3), GHz))
+                .collect();
+            let calc_wave = true;
+            let suffix = "scaling";
+            let lambda_aniso = 1.;
 
-        ///////////////////////////////////
+            ///////////////////////////////////
 
-        let energy_relative = Energy(1e-7, Kelvin);
-        let atoms = get_particles(energy_relative, hi32!(0));
-        let potentials = RawRKHSLegendre::new(25);
+            let energy_relative = Energy(1e-7, Kelvin);
+            let atoms = get_particles(energy_relative, hi32!(0));
 
-        let start = Instant::now();
-        let bounds: Vec<FieldBoundStates> = energies
-            .par_iter()
-            .progress()
-            .map(|&energy| {
-                let mut atoms = atoms.clone();
-                atoms.insert(energy.to(Au));
+            let [singlet, triplet] = read_extended(25);
+            let pes = match potential_type {
+                PotentialType::Singlet => singlet,
+                PotentialType::Triplet => triplet,
+            };
+            let pes = get_interpolated(&pes);
 
-                let morphed_problem = |scaling| {
-                    let scalings = Scalings {
-                        scalings: vec![scaling, lambda_aniso],
-                        scaling_types: vec![ScalingType::Full, ScalingType::Anisotropic],
+            let start = Instant::now();
+            let bounds: Vec<FieldBoundStates> = energies
+                .par_iter()
+                .progress()
+                .map(|&energy| {
+                    let mut atoms = atoms.clone();
+                    atoms.insert(energy.to(Au));
+
+                    let morphed_problem = |scaling| {
+                        let scalings = Scalings {
+                            scalings: vec![scaling, lambda_aniso],
+                            scaling_types: vec![ScalingType::Full, ScalingType::Anisotropic],
+                        };
+                        let pes = scalings.scale(&pes);
+        
+                        RotorAtomProblemBuilder::new(pes).build(&atoms, &basis_recipe)
                     };
-                    let pes = get_interpolated(&potentials.get_scaled(potential_type, Some(&scalings)));
-    
-                    RotorAtomProblemBuilder::new(pes).build(&atoms, &basis_recipe)
-                };
 
-                let bound_problem = FieldProblemBuilder::new(&atoms, &morphed_problem)
-                    .with_propagation(LocalWavelengthStepRule::new(4e-3, 10., 400.), Johnson)
-                    .with_range(5., 20., 500.)
-                    .build();
+                    let bound_problem = FieldProblemBuilder::new(&atoms, &morphed_problem)
+                        .with_propagation(LocalWavelengthStepRule::new(4e-3, 10., 400.), Johnson)
+                        .with_range(5., 20., 500.)
+                        .build();
 
-                let mut bounds = bound_problem
-                    .bound_states(scaling_range, err);
+                    let mut bounds = bound_problem
+                        .bound_states(scaling_range, err);
 
-                if calc_wave {
-                    let waves: Vec<Vec<f64>> = bound_problem.bound_waves(&bounds)
-                        .map(|x| x.occupations())
-                        .collect();
-    
-                    bounds.occupations = Some(waves);
-                }
+                    if calc_wave {
+                        let waves: Vec<Vec<f64>> = bound_problem.bound_waves(&bounds)
+                            .map(|x| x.occupations())
+                            .collect();
+        
+                        bounds.occupations = Some(waves);
+                    }
 
-                bounds
-            })
-            .collect();
+                    bounds
+                })
+                .collect();
 
-        let elapsed = start.elapsed();
-        println!("calculated in {}", elapsed.hhmmssxxx());
+            let elapsed = start.elapsed();
+            println!("calculated in {}", elapsed.hhmmssxxx());
 
-        let data = FieldBoundStatesDependence {
-            energies: energies.iter().map(|x| x.value()).collect(),
-            bound_states: bounds,
-        };
-        let filename = format!(
-            "SrF_Rb_field_{potential_type}_scaling_{scaling_type}_n_max_{}_{suffix}",
-            basis_recipe.n_max
-        );
+            let data = FieldBoundStatesDependence {
+                energies: energies.iter().map(|x| x.value()).collect(),
+                bound_states: bounds,
+            };
+            let filename = format!(
+                "SrF_Rb_field_{potential_type}_scaling_{scaling_type}_n_max_{}_{suffix}",
+                basis_recipe.n_max
+            );
 
-        save_serialize(&filename, &data).unwrap();
+            save_serialize(&filename, &data).unwrap();
+        }
     }
 
     fn potential_surface_2d_scaling() {
